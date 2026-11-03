@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { bytes, clock, day, pct, when } from '../format';
+  import { bytes, clock, dash, day, pct, when, zero, blank } from '../format';
   import { t } from '../i18n.svelte';
   import type { IconName } from '../icons';
   import Header from '../layout/Header.svelte';
@@ -30,7 +30,7 @@
   const iosTargets = $derived(store.devices.filter((d) => d.kind === 'ios'));
   const target = $derived(f.target);
   const needsPhone = $derived(f.plan ? f.plan.needs_phone : target?.kind === 'android' && !(target.root && store.settings?.root_mode !== 'never'));
-  const backupOn = $derived(store.settings?.backup_before_write ?? true);
+  const backupOn = $derived(store.settings!.backup_before_write);
 
   const steps = $derived([t('tr.step.choose'), t('tr.step.review'), t('tr.step.backup'), ...(needsPhone ? [t('tr.step.phone')] : []), t('tr.step.write')]);
   const stage = $derived(f.progress?.stage);
@@ -47,14 +47,14 @@
   const icon = (d: Device): IconName => (d.kind === 'pc' ? 'laptop' : d.kind === 'ios' ? 'archive' : 'phone');
   const via = (d: Device) => (d.connection === 'wifi' ? 'Wi-Fi' : 'USB');
   function fromHint(d: Device): string {
-    if (d.kind === 'pc') return t('tr.pcHint', { n: d.world_count ?? 0 });
-    if (d.kind === 'ios') return t('tr.iosHint', { date: day(d.backup_date ?? 0) });
+    if (d.kind === 'pc') return t('tr.pcHint', { n: zero(d.world_count) });
+    if (d.kind === 'ios') return t('tr.iosHint', { date: day(zero(d.backup_date)) });
     return t('tr.phoneHint', { via: via(d) });
   }
   function toHint(d: Device): string {
     if (d.status === 'unauthorized') return t('dev.unauth');
-    if (d.kind === 'pc') return t('tr.pcTo', { v: d.game_version ?? '-' });
-    return t('tr.phoneTo', { os: d.os_version ?? '-', v: d.game_version ?? '-', via: via(d) });
+    if (d.kind === 'pc') return t('tr.pcTo', { v: dash(d.game_version) });
+    return t('tr.phoneTo', { os: dash(d.os_version), v: dash(d.game_version), via: via(d) });
   }
 
   const S = $derived(f.summary);
@@ -126,21 +126,22 @@
       <span class="sp"></span>
       <Button variant="primary" icon="chevr" disabled={!f.to || f.picked.length === 0 || !Array.isArray(f.available)} onclick={() => void f.review()}>{t('tr.nextReview')}</Button>
     </div>
-  {:else if f.stage === 'review' && f.plan}
+  {:else if f.stage === 'review'}
+    {@const plan = f.plan!}
     <div class="grid2 wide">
       <div class="card">
-        <h2 class="ph">{t('tr.after', { name: f.plan.target, n: S.total })}</h2>
+        <h2 class="ph">{t('tr.after', { name: plan.target, n: S.total })}</h2>
         <div class="scroll">
           <table class="tbl">
             <thead><tr><th>{t('read.world')}</th><th>{t('tr.whereFrom')}</th><th>{t('read.size')}</th><th>{t('tr.result')}</th></tr></thead>
             <tbody>
-              {#each f.plan.items as i (i.key)}
+              {#each plan.items as i (i.key)}
                 <tr class={[i.result === 'conflict' && 'rsel']}>
-                  <td><b>{i.name}</b>{#if i.result === 'conflict' && f.choices[i.key] === 'keep_both'}<br /><span class="hint">{t('tr.copyNamed', { name: i.copy_name ?? '' })}</span>{/if}</td>
+                  <td><b>{i.name}</b>{#if i.result === 'conflict' && f.choices[i.key] === 'keep_both'}<br /><span class="hint">{t('tr.copyNamed', { name: blank(i.copy_name) })}</span>{/if}</td>
                   <td>
                     {#if i.result === 'stays'}{t('tr.already')}
                     {:else if i.result === 'added'}{t('tr.new')}
-                    {:else}{t('tr.both')} <Badge tone="warn" icon="alert">{i.conflict === 'same_id' ? t('tr.sameId') : t('tr.sameName')}</Badge>{/if}
+                    {:else}{`${t('tr.both')} `}<Badge tone="warn" icon="alert">{i.conflict === 'same_id' ? t('tr.sameId') : t('tr.sameName')}</Badge>{/if}
                   </td>
                   <td class="mono">{bytes(i.size)}</td>
                   <td>
@@ -163,7 +164,7 @@
           <dt>{t('tr.added')}</dt><dd>{S.added}</dd>
           <dt>{t('tr.stay')}</dt><dd>{S.stay}</dd>
           {#if S.conflicts}<dt>{t('tr.sameName')}</dt><dd>{t('tr.conflictsN', { n: S.conflicts, replaced: S.replaced, skipped: S.skipped })}</dd>{/if}
-          <dt>{t('read.size')}</dt><dd>{bytes(f.plan.size)}</dd>
+          <dt>{t('read.size')}</dt><dd>{bytes(plan.size)}</dd>
         </dl>
         <p class="hint">{t('tr.reviewHint')}</p>
         <div class="kpi">
@@ -172,14 +173,15 @@
         </div>
       </div>
     </div>
-  {:else if f.stage === 'before' && f.plan}
+  {:else if f.stage === 'before'}
+    {@const plan = f.plan!}
     <div class="grid2">
       <div class="card pad">
         <h2>{t('tr.beforeTitle')}</h2>
         <Notice tone="bad" role="alert" title={target?.kind === 'pc' ? t('tr.replacesPc') : t('tr.replaces')}>{t('tr.replacesText', { n: S.total })}</Notice>
         <ul class="ol">
           {#if target?.kind === 'android'}
-            <li>{t('tr.installed')} <b>{target.game_version ?? '-'} ✓</b></li>
+            <li>{t('tr.installed')} <b>{dash(target.game_version)} ✓</b></li>
             <li>{t('tr.closeGame')}</li>
             <li>{t('tr.keepCable')}</li>
           {:else}
@@ -197,8 +199,8 @@
           <div class="res"><span class="ri"><Icon name="shield" size={28} /></span><span><h2>{t('tr.autoBackup')}</h2><span class="muted">{t('tr.autoBackupText')}</span></span></div>
           <dl class="kv">
             <dt>{t('tr.savedTo')}</dt><dd>{t('nav.backups')}</dd>
-            <dt>{t('tr.name')}</dt><dd>{f.plan.backup_name} · {when(Date.now(), Date.now(), true)}</dd>
-            <dt>{t('read.size')}</dt><dd>{t('tr.about', { size: bytes(f.plan.backup_size) })}</dd>
+            <dt>{t('tr.name')}</dt><dd>{`${plan.backup_name} · ${when(Date.now(), Date.now(), true)}`}</dd>
+            <dt>{t('read.size')}</dt><dd>{t('tr.about', { size: bytes(plan.backup_size) })}</dd>
           </dl>
           <p class="hint"><b>{t('tr.undo')}</b> {needsPhone ? t('tr.undoTextPhone') : t('tr.undoText')}</p>
         </div>
@@ -208,7 +210,7 @@
     </div>
   {:else if f.stage === 'running'}
     {#if stage === 'phone_backup' || stage === 'phone_restore'}
-      <PhoneWait screen={stage === 'phone_backup' ? 'backup' : 'restore'} elapsed={f.progress?.elapsed ?? 0}
+      <PhoneWait screen={stage === 'phone_backup' ? 'backup' : 'restore'} elapsed={zero(f.progress?.elapsed)}
         title={stage === 'phone_backup' ? t('tr.phoneBackupTitle') : t('tr.phoneRestoreTitle')}
         text={stage === 'phone_backup' ? t('tr.phoneBackupText') : t('tr.phoneRestoreText')}>
         {#snippet before()}{#if stage === 'phone_restore' && f.seen.includes('backing_up')}<p class="muted ok"><Icon name="check" size={18} />{t('tr.backupSaved')}</p>{/if}{/snippet}
@@ -217,8 +219,8 @@
     {:else}
       <div class="grid2">
         <div class="card pad">
-          <Progress title={t('tr.writingTo', { n: S.total, name: f.plan?.target ?? '' })} value={stage === 'writing' || stage === 'backing_up' ? pct(f.progress?.done, f.progress?.total) : null}
-            detail={stage === 'writing' && f.progress?.total ? t('tr.writingDetail', { done: bytes(f.progress.done ?? 0), total: bytes(f.progress.total) }) : ''}>
+          <Progress title={t('tr.writingTo', { n: S.total, name: f.plan!.target })} value={stage === 'writing' || stage === 'backing_up' ? pct(f.progress?.done, f.progress?.total) : null}
+            detail={stage === 'writing' ? t('tr.writingDetail', { done: bytes(zero(f.progress!.done)), total: bytes(zero(f.progress!.total)) }) : ''}>
             {#snippet actions()}<Button size="sm" onclick={() => void f.cancel()}>{t('common.cancel')}</Button>{/snippet}
           </Progress>
         </div>
@@ -235,8 +237,8 @@
         </div>
       </div>
     {/if}
-  {:else if f.stage === 'done' && f.result}
-    {@const r = f.result}
+  {:else}
+    {@const r = f.result!}
     <div class="card pad" role="status">
       <div class="res">
         <span class="ri"><Icon name="check" size={28} /></span>
@@ -252,7 +254,7 @@
       </div>
       {#if r.backup_id}
         <Notice icon="history" title={t('tr.wrong')}>
-          {t('tr.wrongText', { time: clock(r.backup_time ?? 0) })}
+          {t('tr.wrongText', { time: clock(zero(r.backup_time)) })}
           {#snippet actions()}<Button size="sm" icon="history" onclick={() => { store.restoreId = r.backup_id; store.go('backups'); }}>{t('tr.restoreBackup')}</Button>{/snippet}
         </Notice>
       {/if}

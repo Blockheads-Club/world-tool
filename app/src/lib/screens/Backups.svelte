@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { bytes, pct, when } from '../format';
+  import { bytes, clock, dash, pct, when, zero } from '../format';
   import { t } from '../i18n.svelte';
   import Header from '../layout/Header.svelte';
   import { store } from '../store.svelte';
@@ -14,7 +14,6 @@
   import PhoneWait from '../ui/PhoneWait.svelte';
   import Progress from '../ui/Progress.svelte';
   import { toast } from '../ui/toast.svelte';
-  import { clock } from '../format';
   import { opId } from '../util';
 
   let list = $state<Backup[] | null>(null);
@@ -25,6 +24,7 @@
   let running = $state<P | null | 'start'>(null);
   let deleting = $state<Backup | null>(null);
   let op = '';
+  const folder = $derived(`${store.settings!.worlds_folder}/Backups`);
 
   async function load() {
     list = await store.api.listBackups();
@@ -37,9 +37,9 @@
     void load();
   });
 
-  const devices = $derived([...new Map((list ?? []).map((b) => [b.device_id, b.device])).entries()]);
-  const shown = $derived((list ?? []).filter((b) => !device || b.device_id === device));
-  const total = $derived((list ?? []).reduce((s, b) => s + b.size, 0));
+  const devices = $derived([...new Map(list!.map((b) => [b.device_id, b.device])).entries()]);
+  const shown = $derived(list!.filter((b) => !device || b.device_id === device));
+  const total = $derived(list!.reduce((s, b) => s + b.size, 0));
   const targets = $derived(store.devices.filter((d) => d.kind !== 'ios' && d.status === 'ready'));
 
   function open(b: Backup | null) {
@@ -50,7 +50,7 @@
   }
 
   function reason(b: Backup): string {
-    if (b.reason === 'before_write') return t('bk.beforeWrite', { n: b.reason_count ?? 0 });
+    if (b.reason === 'before_write') return t('bk.beforeWrite', { n: zero(b.reason_count) });
     if (b.reason === 'read') return t('bk.read');
     return t('bk.beforeRestore');
   }
@@ -83,7 +83,7 @@
 </script>
 
 <Header title={t('nav.backups')} sub={list && list.length ? t('bk.sub', { n: list.length, size: bytes(total) }) : t('bk.subEmpty')}>
-  {#snippet actions()}<Button variant="ghost" icon="folder" onclick={() => void store.api.showInFolder(`${store.settings?.worlds_folder ?? ''}/Backups`)}>{t('worlds.openFolder')}</Button>{/snippet}
+  {#snippet actions()}<Button variant="ghost" icon="folder" onclick={() => void store.api.showInFolder(folder)}>{t('worlds.openFolder')}</Button>{/snippet}
 </Header>
 <div class="main">
   {#if list && list.length === 0}
@@ -92,7 +92,7 @@
     <div class="chips" role="group" aria-label={t('bk.filter')}>
       <button class="chip" aria-pressed={device === null} onclick={() => (device = null)}>{t('bk.allDevices')} <span class="n">{list.length}</span></button>
       {#each devices as [id, name] (id)}
-        <button class="chip" aria-pressed={device === id} onclick={() => (device = id)}>{name} <span class="n">{list.filter((b) => b.device_id === id).length}</span></button>
+        <button class="chip" aria-pressed={device === id} onclick={() => (device = id)}>{`${name} `}<span class="n">{list.filter((b) => b.device_id === id).length}</span></button>
       {/each}
     </div>
     <div class="card scroll">
@@ -109,7 +109,7 @@
               <td class="acts">
                 <Button size="sm" variant={i === 0 ? 'primary' : 'default'} icon="history" onclick={() => open(b)}>{t('bk.restore')}</Button>
                 <Menu label={t('bk.more', { name: b.device })} items={[
-                  { label: t('common.showInFolder'), icon: 'folder', run: () => void store.api.showInFolder(`${store.settings?.worlds_folder ?? ''}/Backups`) },
+                  { label: t('common.showInFolder'), icon: 'folder', run: () => void store.api.showInFolder(folder) },
                   { label: t('common.delete'), icon: 'trash', danger: true, run: () => (deleting = b) }
                 ]} />
               </td>
@@ -118,7 +118,7 @@
         </tbody>
       </table>
     </div>
-    <p class="hint">{t('bk.keep', { n: store.settings?.backups_to_keep ?? 5 })}</p>
+    <p class="hint">{t('bk.keep', { n: store.settings!.backups_to_keep })}</p>
   {/if}
 </div>
 
@@ -126,19 +126,19 @@
   {@const b = restoring}
   <Dialog title={t('bk.restoreTitle')} icon="history" busy={running !== null} wide={prog?.stage === 'phone_backup' || prog?.stage === 'phone_restore'} onclose={() => (restoring = null)}>
     {#if prog && (prog.stage === 'phone_backup' || prog.stage === 'phone_restore')}
-      <PhoneWait screen={prog.stage === 'phone_backup' ? 'backup' : 'restore'} elapsed={prog.elapsed ?? 0}
+      <PhoneWait screen={prog.stage === 'phone_backup' ? 'backup' : 'restore'} elapsed={zero(prog.elapsed)}
         title={prog.stage === 'phone_backup' ? t('tr.phoneBackupTitle') : t('tr.phoneRestoreTitle')}
         text={prog.stage === 'phone_backup' ? t('bk.phoneBackupText') : t('tr.phoneRestoreText')}>
         {#snippet actions()}<Button icon="x" onclick={() => void store.api.cancel(op)}>{t('common.cancel')}</Button>{/snippet}
       </PhoneWait>
     {:else if running}
-      <Progress title={t('bk.restoring')} value={prog ? pct(prog.done, prog.total) : null} />
+      <Progress title={t('bk.restoring')} value={pct(prog?.done, prog?.total)} />
     {:else}
-      <dl class="kv"><dt>{t('bk.backup')}</dt><dd>{b.device} · {when(b.time)} · {bytes(b.size)}</dd></dl>
+      <dl class="kv"><dt>{t('bk.backup')}</dt><dd>{`${b.device} · ${when(b.time)} · ${bytes(b.size)}`}</dd></dl>
       <div class="ffield">
         <label for="rt">{t('bk.restoreTo')}</label>
-        <select id="rt" class="sel" bind:value={target}>
-          {#each targets as d (d.id)}<option value={d.id}>{d.name}{d.kind === 'android' ? ` · ${d.connection === 'wifi' ? 'Wi-Fi' : 'USB'}` : ''} · {t('read.gameV', { v: d.game_version ?? '-' })}</option>{/each}
+        <select id="rt" class="sel" onchange={(e) => (target = targets[e.currentTarget.selectedIndex].id)}>
+          {#each targets as d (d.id)}<option selected={d.id === target}>{`${d.name}${d.kind === 'android' ? ` · ${d.connection === 'wifi' ? 'Wi-Fi' : 'USB'}` : ''} · ${t('read.gameV', { v: dash(d.game_version) })}`}</option>{/each}
         </select>
         {#if targets.length === 0}<span class="hint">{t('bk.noTarget')}</span>{/if}
       </div>

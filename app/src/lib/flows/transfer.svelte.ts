@@ -16,7 +16,6 @@ export class TransferFlow {
   /** Worlds the source offers; null while loading, 'unread' for a phone that was not read yet. */
   available = $state<DeviceWorld[] | 'unread' | null>(null);
   picked = $state<string[]>([]);
-  picking = $state(false);
   plan = $state<TransferPlan | null>(null);
   choices = $state<Record<string, Choice>>({});
   gameClosed = $state(false);
@@ -107,7 +106,7 @@ export class TransferFlow {
 
   /** Counts for the review summary with the current choices. */
   get summary() {
-    const items = this.plan?.items ?? [];
+    const items = this.plan!.items;
     const conflicts = items.filter((i) => i.result === 'conflict');
     const skipped = conflicts.filter((i) => this.choices[i.key] === 'skip').length;
     const replaced = conflicts.filter((i) => this.choices[i.key] === 'replace').length;

@@ -148,8 +148,11 @@ describe('tauri backend', () => {
     expect(f).toHaveBeenCalledWith(false);
     expect(h.win.minimize).toHaveBeenCalled();
     expect(inTauri()).toBe(false);
+    const { chooseBackend, MockBackend } = await import('./mock-api');
+    expect(chooseBackend('')).toBeInstanceOf(MockBackend);
     (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__ = {};
     expect(inTauri()).toBe(true);
+    expect(chooseBackend('')).toBe(b);
     delete (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__;
   });
 });

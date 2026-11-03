@@ -1,5 +1,5 @@
 import type { AppStore } from '../store.svelte';
-import type { AppError, ErrorCode, GameFiles, Progress, World } from '../types';
+import type { AppError, GameFiles, Progress, World } from '../types';
 import { opId } from '../util';
 import { toAppError } from '../errors';
 
@@ -85,9 +85,5 @@ export class GameFilesFlow {
     const w = this.world as World;
     this.isOpen = false;
     this.app.openEditor(w);
-  }
-
-  errorCode(): ErrorCode {
-    return (this.error as AppError).code;
   }
 }

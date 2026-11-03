@@ -1,9 +1,9 @@
 <script lang="ts">
-  import { bytes, when } from '../format';
+  import { blank, bytes, dash, when } from '../format';
   import { LANGUAGES, i18n, t } from '../i18n.svelte';
   import Header from '../layout/Header.svelte';
   import { store } from '../store.svelte';
-  import type { Lang, PairedDevice, RootMode, Settings, ThemeChoice } from '../types';
+  import type { PairedDevice, RootMode, Settings, ThemeChoice } from '../types';
   import Badge from '../ui/Badge.svelte';
   import Button from '../ui/Button.svelte';
   import Dialog from '../ui/Dialog.svelte';
@@ -90,7 +90,7 @@
           <Button size="sm" variant="ghost" icon="trash" onclick={() => (clearing = true)}>{t('set.clear')}</Button>
         </div>
       {:else if g?.state === 'unsupported' || g?.state === 'damaged'}
-        <p class="muted">{g.state === 'unsupported' ? t('set.unsupportedText', { name: g.apk_name ?? '', v: g.version ?? '?' }) : t('gf.damagedText')}</p>
+        <p class="muted">{g.state === 'unsupported' ? t('set.unsupportedText', { name: blank(g.apk_name), v: dash(g.version) }) : t('gf.damagedText')}</p>
         <div class="kpi">
           <Button size="sm" variant="primary" icon="folder" onclick={() => store.gameFiles.open()}>{t('set.replace')}</Button>
           <Button size="sm" variant="ghost" icon="trash" onclick={() => (clearing = true)}>{t('set.clear')}</Button>
@@ -111,8 +111,8 @@
     {#snippet bw()}<Toggle hideLabel label={t('set.backupWrite')} checked={s.backup_before_write} onchange={(v) => void store.saveSettings({ backup_before_write: v })} />{/snippet}
     {@render row(t('set.backupWrite'), t('set.backupWriteHint'), bw)}
     {#snippet keep()}
-      <select class="sel" aria-label={t('set.keep')} value={String(s.backups_to_keep)} onchange={(e) => void store.saveSettings({ backups_to_keep: Number(e.currentTarget.value) })}>
-        {#each [1, 2, 3, 5, 10, 20] as n (n)}<option value={String(n)}>{n}</option>{/each}
+      <select class="sel" aria-label={t('set.keep')} onchange={(e) => void store.saveSettings({ backups_to_keep: Number(e.currentTarget.value) })}>
+        {#each [1, 2, 3, 5, 10, 20] as n (n)}<option selected={n === s.backups_to_keep}>{`${n}`}</option>{/each}
       </select>
     {/snippet}
     {@render row(t('set.keep'), t('set.keepHint'), keep)}
@@ -137,8 +137,8 @@
     {/snippet}
     {@render row(t('set.theme'), t('set.themeHint'), th)}
     {#snippet lang()}
-      <select class="sel" aria-label={t('set.language')} value={i18n.lang} onchange={(e) => void store.saveSettings({ lang: e.currentTarget.value as Lang })}>
-        {#each LANGUAGES as l (l.code)}<option value={l.code}>{l.label}</option>{/each}
+      <select class="sel" aria-label={t('set.language')} onchange={(e) => void store.saveSettings({ lang: LANGUAGES[e.currentTarget.selectedIndex].code })}>
+        {#each LANGUAGES as l (l.code)}<option selected={l.code === i18n.lang}>{`${l.label}`}</option>{/each}
       </select>
     {/snippet}
     {@render row(t('set.language'), 'English, Türkçe, Русский, Қазақша', lang)}

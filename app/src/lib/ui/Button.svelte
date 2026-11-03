@@ -4,7 +4,7 @@
   import Icon from './Icon.svelte';
 
   interface Props {
-    variant?: 'default' | 'primary' | 'danger' | 'ghost' | 'ok' | 'quiet-bad';
+    variant?: 'default' | 'primary' | 'danger' | 'ghost' | 'quiet-bad';
     size?: 'sm' | 'md' | 'lg';
     icon?: IconName;
     /** Accessible name; required for icon-only buttons. */
@@ -12,62 +12,26 @@
     loading?: boolean;
     disabled?: boolean;
     type?: 'button' | 'submit';
-    href?: string;
-    pressed?: boolean;
-    expanded?: boolean;
-    haspopup?: boolean;
-    block?: boolean;
-    title?: string;
     /** The dialog puts the focus here first. */
     autofocus?: boolean;
     onclick?: (e: MouseEvent) => void;
     children?: Snippet;
   }
-  let {
-    variant = 'default',
-    size = 'md',
-    icon,
-    label,
-    loading = false,
-    disabled = false,
-    type = 'button',
-    href,
-    pressed,
-    expanded,
-    haspopup,
-    block = false,
-    title,
-    autofocus = false,
-    onclick,
-    children
-  }: Props = $props();
-  const iconOnly = $derived(!children);
+  let { variant = 'default', size = 'md', icon, label, loading = false, disabled = false, type = 'button', autofocus = false, onclick, children }: Props = $props();
 </script>
 
-{#if href}
-  <a class={["btn", variant, size, iconOnly && "icon-only", block && "block"]} {href} {title} aria-label={label} target="_blank" rel="noopener noreferrer">
-    {#if icon}<Icon name={icon} size={size === 'sm' ? 18 : 20} />{/if}
-    {@render children?.()}
-  </a>
-{:else}
-  <button
-    class={["btn", variant, size, iconOnly && "icon-only", block && "block"]}
-    {type}
-    {title}
-    {onclick}
-    disabled={disabled || loading}
-    aria-label={label}
-    aria-busy={loading || undefined}
-    aria-pressed={pressed}
-    aria-expanded={expanded}
-    aria-haspopup={haspopup ? 'menu' : undefined}
-    data-autofocus={autofocus || undefined}
-  >
-    {#if loading}<span class="spin" aria-hidden="true"></span>{:else if icon}<Icon name={icon} size={size === 'sm' ? 18 : 20} />{/if}
-    {@render children?.()}
-  </button>
-{/if}
-
+<button
+  class={['btn', variant, size, !children && 'icon-only']}
+  {type}
+  {onclick}
+  disabled={disabled || loading}
+  aria-label={label}
+  aria-busy={loading || undefined}
+  data-autofocus={autofocus || undefined}
+>
+  {#if loading}<span class="spin" aria-hidden="true"></span>{:else if icon}<Icon name={icon} size={size === 'sm' ? 18 : 20} />{/if}
+  {@render children?.()}
+</button>
 <style>
   .btn {
     --edge-color: var(--line-strong);
@@ -94,7 +58,6 @@
   .btn.lg { min-height: 52px; padding: 0 24px; font-size: 16.5px; }
   .btn.icon-only { width: 44px; padding: 0; }
   .btn.icon-only.sm { width: 40px; }
-  .btn.block { width: 100%; }
   .btn.primary {
     --edge-color: var(--primary-edge);
     background: var(--primary);
@@ -117,8 +80,6 @@
   .btn.ghost:active:not(:disabled) { box-shadow: none; }
   .btn:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; }
   /* A done state (e.g. the loaded world): green with a tick, readable while disabled. */
-  .btn.ok { --edge-color: var(--ok); background: var(--ok-soft); border-color: var(--ok); color: var(--ok); }
-  .btn.ok:disabled { opacity: 1; cursor: default; }
   .spin {
     width: 20px;
     height: 20px;

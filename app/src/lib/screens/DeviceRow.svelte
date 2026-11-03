@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { day } from '../format';
+  import { blank, dash, day, zero } from '../format';
   import { t } from '../i18n.svelte';
   import { store } from '../store.svelte';
   import type { Device } from '../types';
@@ -12,11 +12,11 @@
   let { device: d, onforget, ondiag }: { device: Device; onforget: () => void; ondiag: () => void } = $props();
 
   const icon = $derived(d.kind === 'pc' ? 'laptop' : d.kind === 'ios' ? 'archive' : 'phone');
-  const ago = $derived(d.last_seen ? Math.max(1, Math.round((Date.now() - d.last_seen) / 86_400_000)) : 0);
+  const ago = $derived(Math.max(1, Math.round((Date.now() - zero(d.last_seen)) / 86_400_000)));
   const model = $derived(
-    d.kind === 'pc' ? (d.path ?? '') : d.kind === 'ios' ? t('dev.iosModel', { model: d.model, v: d.os_version ?? '', date: day(d.backup_date ?? 0) }) : t('dev.androidModel', { model: d.model, v: d.os_version ?? '' })
+    d.kind === 'pc' ? blank(d.path) : d.kind === 'ios' ? t('dev.iosModel', { model: d.model, v: dash(d.os_version), date: day(zero(d.backup_date)) }) : t('dev.androidModel', { model: d.model, v: dash(d.os_version) })
   );
-  const guide = $derived(d.kind === 'pc' ? 'pc' : d.kind === 'ios' ? 'ios' : d.connection === 'wifi' ? 'wifi' : 'usb');
+  const guide = $derived(d.kind === 'ios' ? 'ios' : d.connection === 'wifi' ? 'wifi' : 'usb');
   const more = $derived([
     { label: t('dev.guide'), icon: 'info' as const, run: () => store.openGuide(guide) },
     ...(d.connection === 'wifi' ? [{ label: t('dev.forget'), icon: 'trash' as const, danger: true, run: onforget }] : []),
@@ -42,11 +42,11 @@
       {#if d.status === 'unauthorized'}
         <span class="warn"><Icon name="alert" size={16} />{t('dev.tapAllow')}</span>
       {:else if d.status === 'offline'}
-        <span><Icon name="clock" size={16} />{t('dev.lastSeen', { n: ago })}</span>
+        {#if d.last_seen}<span><Icon name="clock" size={16} />{t('dev.lastSeen', { n: ago })}</span>{/if}
       {:else}
         {#if d.game_version}<span><Icon name="box" size={16} />{t('dev.game', { v: d.game_version })}</span>{:else}<span class="warn"><Icon name="alert" size={16} />{t('dev.noGame')}</span>{/if}
         {#if d.kind === 'android'}<span><Icon name={d.root ? 'root' : 'shield'} size={16} />{d.root ? t('dev.root') : t('dev.noRoot')}</span>{/if}
-        {#if d.kind === 'pc'}<span><Icon name="check" size={16} />{t('dev.found', { n: d.world_count ?? 0 })}</span>{/if}
+        {#if d.kind === 'pc'}<span><Icon name="check" size={16} />{t('dev.found', { n: zero(d.world_count) })}</span>{/if}
       {/if}
     </span>
   </div>

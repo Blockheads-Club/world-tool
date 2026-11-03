@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { bytes } from '../format';
+  import { blank, bytes, dash } from '../format';
   import { t } from '../i18n.svelte';
   import { store } from '../store.svelte';
   import type { Choice } from '../types';
@@ -34,9 +34,9 @@
               <b>{i.name}</b><br />
               <span class="hint">
                 {#if i.status === 'invalid'}{t('imp.notWorld')}
-                {:else if i.status === 'conflict'}{i.conflict === 'same_id' ? t('imp.sameId', { name: i.existing ?? '' }) : t('imp.sameName', { name: i.existing ?? '' })}
-                {:else if i.kind === 'server'}{t('imp.serverFolder', { size: bytes(i.size), v: i.game_version ?? '-' })}
-                {:else}{t('imp.fromFile', { size: bytes(i.size), v: i.game_version ?? '-' })}{/if}
+                {:else if i.status === 'conflict'}{i.conflict === 'same_id' ? t('imp.sameId', { name: blank(i.existing) }) : t('imp.sameName', { name: blank(i.existing) })}
+                {:else if i.kind === 'server'}{t('imp.serverFolder', { size: bytes(i.size), v: dash(i.game_version) })}
+                {:else}{t('imp.fromFile', { size: bytes(i.size), v: dash(i.game_version) })}{/if}
               </span>
             </td>
             <td class="r">

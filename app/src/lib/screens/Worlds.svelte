@@ -32,7 +32,7 @@
     if (store.worlds === null) void store.loadWorlds();
   });
 
-  const all = $derived(store.worlds ?? []);
+  const all = $derived(store.worlds!);
   const count = (o: Origin) => all.filter((w) => w.origin === o).length;
   const FILTERS: { id: Filter; label: () => string }[] = [
     { id: 'all', label: () => t('worlds.all') },
@@ -90,7 +90,7 @@
       const r = await store.api.exportWorlds(opId('export'), { read_id: null, world_ids: [w.id], format, folder }, (p) => {
         if (exporting) exporting.progress = p;
       });
-      toast(t('worlds.exported', { name: r.files[0]?.name ?? w.name }), { label: t('common.showInFolder'), run: () => void store.api.showInFolder(r.folder) });
+      toast(t('worlds.exported', { name: r.files[0].name }), { label: t('common.showInFolder'), run: () => void store.api.showInFolder(r.folder) });
     } catch (e) {
       const damaged = toAppError(e).code === 'world_damaged';
       store.fail(e, () => void (damaged ? store.api.deleteWorld(w.id).then(() => store.loadWorlds()) : exportOne(w, format)));
@@ -113,7 +113,7 @@
 <Header title={t('nav.worlds')} sub={store.worlds ? t('worlds.sub', { n: all.length, size: bytes(total) }) : t('worlds.subEmpty')}>
   {#snippet actions()}
     <Button icon="download" onclick={() => void store.importer.open()}>{t('worlds.import')}</Button>
-    <Button variant="ghost" icon="folder" onclick={() => void store.api.showInFolder(store.settings?.worlds_folder ?? '')}>{t('worlds.openFolder')}</Button>
+    <Button variant="ghost" icon="folder" onclick={() => void store.api.showInFolder(store.settings!.worlds_folder)}>{t('worlds.openFolder')}</Button>
   {/snippet}
 </Header>
 <div class="main">
@@ -175,7 +175,7 @@
           <div class="ph"><Thumb src={sel.preview} name={sel.name} large /><Button variant="ghost" size="sm" icon="x" label={t('common.close')} onclick={() => (selId = null)} /></div>
           <div><h2>{sel.name}</h2><span class="hint">{t('read.gameV', { v: sel.game_version })} · {sel.mode === 'expert' ? t('mode.expert') : t('mode.normal')}</span></div>
           <dl class="kv">
-            <dt>{t('worlds.from')}</dt><dd>{sel.source}{sel.source_detail && sel.source_detail !== 'server' ? ` · ${sel.source_detail}` : ''}</dd>
+            <dt>{t('worlds.from')}</dt><dd>{`${sel.source}${sel.source_detail && sel.source_detail !== 'server' ? ` · ${sel.source_detail}` : ''}`}</dd>
             <dt>{t('worlds.read')}</dt><dd>{when(sel.added, Date.now(), true)}</dd>
             <dt>{t('read.lastPlayed')}</dt><dd>{sel.last_played ? when(sel.last_played, Date.now(), true) : t('read.never')}</dd>
             <dt>{t('read.created')}</dt><dd>{when(sel.created)}</dd>
@@ -189,9 +189,9 @@
             <Button icon="server" onclick={() => void exportOne(sel, 'server')}>{t('worlds.asServer')}</Button>
           </div>
           <div class="kpi">
-            <Button size="sm" variant="ghost" icon="pencil" onclick={() => { renaming = sel; newName = sel?.name ?? ''; }}>{t('worlds.rename')}</Button>
+            <Button size="sm" variant="ghost" icon="pencil" onclick={() => { renaming = sel; newName = sel!.name; }}>{t('worlds.rename')}</Button>
             <Button size="sm" variant="ghost" icon="copy" onclick={() => void duplicate(sel)}>{t('worlds.duplicate')}</Button>
-            <Button size="sm" variant="ghost" icon="folder" onclick={() => void store.api.showInFolder(store.settings?.worlds_folder ?? '')}>{t('common.showInFolder')}</Button>
+            <Button size="sm" variant="ghost" icon="folder" onclick={() => void store.api.showInFolder(store.settings!.worlds_folder)}>{t('common.showInFolder')}</Button>
             <Button size="sm" variant="quiet-bad" icon="trash" onclick={() => (deleting = sel)}>{t('common.delete')}</Button>
           </div>
         </aside>
@@ -222,7 +222,7 @@
   </Dialog>
 {/if}
 {#if exporting}
-  <Dialog title={t('worlds.exportingTitle', { name: exporting.name })} icon="upload" busy onclose={() => {}}>
+  <Dialog title={t('worlds.exportingTitle', { name: exporting.name })} icon="upload" busy>
     <Progress title={t('worlds.exportingTitle', { name: exporting.name })} value={pct(exporting.progress?.done, exporting.progress?.total)} />
   </Dialog>
 {/if}

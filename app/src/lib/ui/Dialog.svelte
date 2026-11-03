@@ -11,7 +11,8 @@
    */
   interface Props {
     title: string;
-    onclose: () => void;
+    /** Required unless `busy` for the dialog's whole life. */
+    onclose?: () => void;
     icon?: IconName;
     tone?: 'p' | 'ok' | 'bad' | 'warn' | 'info';
     alert?: boolean;
@@ -34,7 +35,7 @@
   });
 
   function close() {
-    if (!busy) onclose();
+    if (!busy) (onclose as () => void)();
   }
 
   function keydown(e: KeyboardEvent) {

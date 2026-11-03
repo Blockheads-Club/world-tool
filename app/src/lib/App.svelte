@@ -38,7 +38,7 @@
     if (u.stage === 'ready')
       return { label: t('upd.chip.restart'), aria: t('upd.chip.restartAria'), icon: 'refresh' as const, tone: 'ok' as const, pct: null, onclick: () => u.openChip() };
     if (u.stage === 'available')
-      return { label: t('upd.chip.available', { v: u.info?.version ?? '' }), aria: t('upd.chip.availableAria', { v: u.info?.version ?? '' }), icon: 'upd' as const, tone: 'primary' as const, pct: null, onclick: () => u.openChip() };
+      return { label: t('upd.chip.available', { v: u.info!.version }), aria: t('upd.chip.availableAria', { v: u.info!.version }), icon: 'upd' as const, tone: 'primary' as const, pct: null, onclick: () => u.openChip() };
     return { label: t('upd.chip.updates'), aria: t('upd.chip.updates'), icon: 'upd' as const, tone: 'plain' as const, pct: null, expanded: u.popover, onclick: () => u.openChip() };
   });
 </script>

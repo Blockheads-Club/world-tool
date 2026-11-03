@@ -12,7 +12,7 @@
 </script>
 
 <div class="tp">
-  <div class="top"><b>{title}</b>{#if value !== null}<span class="mono">{value}%</span>{/if}</div>
+  <div class="top"><b>{title}</b>{#if value !== null}<span class="mono">{`${value}%`}</span>{/if}</div>
   <div
     class={['bar', value === null && 'busy']}
     role="progressbar"

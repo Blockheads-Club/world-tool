@@ -30,3 +30,6 @@ export function dirName(path: string): string {
   const i = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'));
   return i > 0 ? path.slice(0, i) : path;
 }
+
+/** Does nothing (handlers that a state never calls, e.g. closing a busy dialog). */
+export function noop(): void {}

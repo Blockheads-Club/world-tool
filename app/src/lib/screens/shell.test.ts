@@ -21,9 +21,9 @@ describe('First run', () => {
     expect(document.documentElement.dataset.theme).toBe('dark');
     await fireEvent.click(screen.getByRole('button', { name: 'Light mode' }));
     expect(document.documentElement.dataset.theme).toBe('light');
-    await fireEvent.change(screen.getByRole('combobox', { name: 'Language' }), { target: { value: 'ru' } });
+    await fireEvent.change(screen.getByRole('combobox', { name: 'Language' }), { target: { selectedIndex: 2 } });
     expect(i18n.lang).toBe('ru');
-    await fireEvent.change(screen.getByRole('combobox'), { target: { value: 'en' } });
+    await fireEvent.change(screen.getByRole('combobox'), { target: { selectedIndex: 0 } });
     await fireEvent.click(screen.getByLabelText('I understand'));
     await fireEvent.click(go);
     expect(await screen.findByRole('navigation', { name: 'Main' })).toBeInTheDocument();
@@ -86,7 +86,7 @@ describe('Shell', () => {
     await fireEvent.click(within(d).getByRole('button', { name: 'Try again' }));
     d = await show({ code: 'unsupported_version' });
     expect(d).toHaveTextContent('On the phone');
-    expect(d).toHaveTextContent('The Blockheads ?');
+    expect(d).toHaveTextContent('The Blockheads -');
     const retry = vi.fn();
     d = await show({ code: 'wrong_password', attempt: 1 }, retry);
     expect(d).toHaveTextContent('Doesn’t match · try 2');

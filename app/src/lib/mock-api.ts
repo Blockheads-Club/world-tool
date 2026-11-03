@@ -1,4 +1,4 @@
-import type { Backend, DragDrop, OnProgress } from './api';
+import { inTauri, tauriBackend, type Backend, type DragDrop, type OnProgress } from './api';
 import type {
   Activity,
   AppError,
@@ -310,7 +310,7 @@ export class MockBackend implements Backend {
   }
 
   async wifiDiscover() {
-    return this.devices.filter((d) => d.connection === 'wifi' && d.status === 'ready').map((d) => ({ name: d.name, address: d.address as string }));
+    return this.devices.filter((d) => d.connection === 'wifi' && d.status === 'ready' && d.address).map((d) => ({ name: d.name, address: d.address as string }));
   }
 
   async wifiPair(address: string, code: string) {
@@ -709,6 +709,11 @@ export class MockBackend implements Backend {
   drag(e: DragDrop): void {
     for (const cb of this.dropCbs) cb(e);
   }
+}
+
+/** The backend for this page: Tauri inside the app, else the mock (dev server, e2e). */
+export function chooseBackend(search: string): Backend {
+  return inTauri() ? tauriBackend : mockFromUrl(search);
 }
 
 /** Dev options from the page URL: `?scenario=empty&tick=50&fail=read:declined&update=0.3.0`. */

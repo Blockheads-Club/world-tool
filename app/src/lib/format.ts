@@ -53,3 +53,8 @@ export function eta(s: number): string {
 export function pct(done = 0, total = 0): number {
   return total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0;
 }
+
+/** Display helpers for values the backend may not know: "-" / 0 / "". */
+export const dash = (v: string | null | undefined): string => v ?? '-';
+export const zero = (v: number | null | undefined): number => v ?? 0;
+export const blank = (v: string | null | undefined): string => v ?? '';

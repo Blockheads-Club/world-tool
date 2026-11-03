@@ -158,6 +158,16 @@ describe('mock backend', () => {
     expect(b.phoneWorlds.redmi.length).toBe(1);
   });
 
+  it('writes to a phone that has no worlds yet', async () => {
+    const b = m();
+    const d = await b.wifiPair('10.0.0.7:5555', '123456');
+    const lib = await b.listWorlds();
+    const plan = await b.transferPlan({ kind: 'library' }, [lib[0].id], d.id);
+    const r = await b.transfer('o', { plan_id: plan.plan_id, choices: {} }, () => {});
+    expect(r.total).toBe(1);
+    expect((await b.listBackups())[0]).toMatchObject({ device_id: d.id, worlds: 0 });
+  });
+
   it('keeps only the newest backups per device', async () => {
     const b = m();
     await b.setSettings({ backups_to_keep: 1 });
@@ -200,7 +210,7 @@ describe('mock backend', () => {
     await expect(b.sourceWorlds({ kind: 'library' })).rejects.toMatchObject({ code: 'io' });
     // a world id clash (same world, other name) → same_id
     const w = (await b.sourceWorlds({ kind: 'library' }))[0];
-    b.phoneWorlds.pc = [{ ...w, name: 'Renamed', id: (w as { world_id: string }).world_id }];
+    b.phoneWorlds.pc = [{ ...w, name: 'Renamed', id: (w as unknown as { world_id: string }).world_id }];
     const plan = await b.transferPlan({ kind: 'library' }, [w.id], 'pc');
     expect(plan.items[0].conflict).toBe('same_id');
   });

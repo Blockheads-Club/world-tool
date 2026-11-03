@@ -9,7 +9,7 @@
   }: { checked?: boolean; mixed?: boolean; label: string; hideLabel?: boolean; onchange?: (v: boolean) => void } = $props();
   let input: HTMLInputElement | undefined = $state();
   $effect(() => {
-    if (input) input.indeterminate = mixed;
+    (input as HTMLInputElement).indeterminate = mixed;
   });
 </script>
 

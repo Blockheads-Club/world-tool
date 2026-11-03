@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { day } from '../format';
+  import { dash, day, zero } from '../format';
   import { t, type Params } from '../i18n.svelte';
   import type { IconName } from '../icons';
   import type { Key } from '../messages';
@@ -159,7 +159,7 @@
         </div>
         {#if arrived}
           <Notice tone="ok" icon="check" role="status" title={t('usb.found', { name: arrived.name })}>
-            {t('dev.game', { v: arrived.game_version ?? '-' })}
+            {t('dev.game', { v: dash(arrived.game_version) })}
             {#snippet actions()}<Button size="sm" variant="primary" icon="download" onclick={() => store.read.start(arrived)}>{t('dev.read')}</Button>{/snippet}
           </Notice>
         {:else}
@@ -199,7 +199,7 @@
         ], 1)}
         <div class="card sub">
           <b id="ur">{t('set.root')}</b>
-          <Seg label={t('set.root')} value={store.settings?.root_mode ?? 'auto'} onchange={(v: RootMode) => void store.saveSettings({ root_mode: v })}
+          <Seg label={t('set.root')} value={store.settings!.root_mode} onchange={(v: RootMode) => void store.saveSettings({ root_mode: v })}
             options={[{ value: 'auto', label: t('root.auto') }, { value: 'always', label: t('root.always') }, { value: 'never', label: t('root.never') }]} />
           <p class="hint">{t('root.autoHint')}</p>
         </div>
@@ -207,7 +207,7 @@
       {:else if store.guide === 'pc'}
         {#if pc}
           <Notice tone="ok" icon="check" role="status" title={t('pc.found')}>
-            {t('pc.foundText', { n: pc.world_count ?? 0, v: pc.game_version ?? '-' })}
+            {t('pc.foundText', { n: zero(pc.world_count), v: dash(pc.game_version) })}
             {#snippet actions()}
               <Button size="sm" variant="primary" icon="download" onclick={() => store.read.start(pc)}>{t('dev.read')}</Button>
               <Button size="sm" onclick={() => store.go('devices')}>{t('con.back')}</Button>

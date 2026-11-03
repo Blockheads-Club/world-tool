@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { bytes, eta, pct } from '../format';
+  import { blank, bytes, eta, pct, zero } from '../format';
   import { t } from '../i18n.svelte';
   import type { Key } from '../messages';
   import { store } from '../store.svelte';
@@ -33,7 +33,7 @@
   const SWATCH = ['#5FB548', '#8A5A36', '#7A7068', '#E9C46A', '#F2F6FA', '#3A7BD5', '#B5651D', '#9AD6F7', '#4E944F', '#C2410C', '#6E625A', '#FFD27A'];
   const checks: Key[] = ['gf.c1', 'gf.c2', 'gf.c3'];
   async function details() {
-    toast((await copyText(f.error?.detail ?? f.error?.code ?? '')) ? t('common.copied') : t('common.copyFailed'));
+    toast((await copyText(f.error!.detail ?? f.error!.code)) ? t('common.copied') : t('common.copyFailed'));
   }
 </script>
 
@@ -61,7 +61,7 @@
   {#if f.stage === 'ask'}
     {#if f.missing}
       <p>{t('gf.missingText')}</p>
-      <p class="mono path">{store.game?.apk_path ?? ''}</p>
+      <p class="mono path">{blank(store.game?.apk_path)}</p>
     {:else}
       <p>{t('gf.askText1')} <b>{t('gf.askOwn')}</b> {t('gf.askText2')}</p>
       <ul class="ol">
@@ -77,9 +77,9 @@
     {/if}
   {:else if f.stage === 'checking'}
     {#if p?.stage === 'apk_pulling'}
-      <Progress title={t('gf.pulling', { name: p.item ?? '' })} value={pct(p.done, p.total)} />
+      <Progress title={t('gf.pulling', { name: blank(p.item) })} value={pct(p.done, p.total)} />
     {:else}
-      {@render file(p?.item ?? '', p ? t('gf.fileLine', { size: bytes(p.total ?? 0), folder: dirName(p.path ?? '') }) : '')}
+      {@render file(blank(p?.item), t('gf.fileLine', { size: bytes(zero(p?.total)), folder: dirName(blank(p?.path)) }))}
       <ul class="checks">
         {#each checks as c, i (c)}
           {#if i < (p?.index ?? 0)}<li><Icon name="check" />{t(c)}</li>
@@ -97,7 +97,7 @@
   {:else if f.stage === 'ready'}
     <div class="res" role="status">
       <span class="ri"><Icon name="check" size={28} /></span>
-      <div><b>{t('gf.readyTitle')}</b><p class="muted">{t('gf.readyText', { v: store.game?.version ?? '', n: store.game?.images ?? 0, size: bytes(store.game?.size ?? 0) })}</p></div>
+      <div><b>{t('gf.readyTitle')}</b><p class="muted">{t('gf.readyText', { v: blank(store.game!.version), n: zero(store.game!.images), size: bytes(zero(store.game!.size)) })}</p></div>
     </div>
   {:else}
     {@render file(f.error?.name ?? baseName(store.game?.apk_path ?? 'TheBlockheads.apk'), code === 'apk_unsupported' ? t('gf.versionLine', { v: f.error?.version ?? '?' }) : code === 'apk_damaged' ? t('gf.damagedLine') : '')}

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { bytes, day } from '../format';
+  import { bytes, day, pct } from '../format';
   import { t } from '../i18n.svelte';
   import { store } from '../store.svelte';
   import Button from '../ui/Button.svelte';
@@ -10,7 +10,7 @@
   /** Update popup, "ready" notice, "restart after the transfer?" and the small result popover (WT-Update). */
   const u = store.update;
   let hideReady = $state(false);
-  const pctRunning = $derived(store.transfer.progress?.total ? Math.round(((store.transfer.progress.done ?? 0) / store.transfer.progress.total) * 100) : 0);
+  const pctRunning = $derived(pct(store.transfer.progress?.done, store.transfer.progress?.total));
 </script>
 
 {#if u.popup && u.info}
@@ -32,7 +32,7 @@
 
 {#if u.stage === 'ready' && !u.restartWhenDone && !hideReady}
   <div class="toastbox">
-    <Notice tone="ok" icon="check" role="status" title={t('upd.readyTitle', { v: u.info?.version ?? '' })}>
+    <Notice tone="ok" icon="check" role="status" title={t('upd.readyTitle', { v: u.info!.version })}>
       {t('upd.readyText')}
       {#snippet actions()}
         <Button size="sm" variant="primary" icon="refresh" onclick={() => void u.restart()}>{t('upd.restartNow')}</Button>

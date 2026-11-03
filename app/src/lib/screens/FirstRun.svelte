@@ -27,8 +27,8 @@
     <div class="top">
       <img src="/wt-icon.svg" alt="" width="72" height="72" />
       <div class="tt"><span class="hint">Blockheads Club</span><h1 id="fr-t">{t('fr.title')}</h1></div>
-      <select class="sel" aria-label={t('set.language')} value={i18n.lang} onchange={(e) => lang(e.currentTarget.value)}>
-        {#each LANGUAGES as l (l.code)}<option value={l.code}>{l.label}</option>{/each}
+      <select class="sel" aria-label={t('set.language')} onchange={(e) => lang(LANGUAGES[e.currentTarget.selectedIndex].code)}>
+        {#each LANGUAGES as l (l.code)}<option selected={l.code === i18n.lang}>{`${l.label}`}</option>{/each}
       </select>
     </div>
     <p class="muted lead">{t('fr.lead')}</p>

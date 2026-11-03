@@ -8,7 +8,7 @@ import { ru } from './messages-ru';
 import { tr } from './messages-tr';
 import { effectiveDark, setReduceMotion, setTheme, theme } from './theme.svelte';
 import { isAppError } from './types';
-import { baseName, copyText, dirName, opId, shortId } from './util';
+import { baseName, copyText, dirName, noop, opId, shortId } from './util';
 
 describe('format', () => {
   beforeEach(() => setLang('en'));
@@ -114,6 +114,7 @@ describe('util and errors', () => {
   it('helps with ids, paths and the clipboard', async () => {
     expect(opId('x')).not.toBe(opId('x'));
     expect(opId()).toMatch(/^op-/);
+    expect(noop()).toBeUndefined();
     expect(shortId('a41f000000009c2')).toBe('a41f…09c2');
     expect(shortId('short')).toBe('short');
     expect(baseName('C:\\a\\b.bhworld')).toBe('b.bhworld');

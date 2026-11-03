@@ -3,6 +3,7 @@ import type { AppStore } from '../store.svelte';
 import type { Device, DeviceWorld, ExportFormat, ExportResult, Progress, ReadResult } from '../types';
 import { toast } from '../ui/toast.svelte';
 import { opId } from '../util';
+import { blank } from '../format';
 
 export type ReadStage = 'prepare' | 'phone' | 'reading' | 'choose' | 'options' | 'exporting' | 'done';
 
@@ -53,12 +54,12 @@ export class ReadFlow {
 
   get shown(): DeviceWorld[] {
     const q = this.query.trim().toLocaleLowerCase();
-    const all = this.result?.worlds ?? [];
+    const all = this.result!.worlds;
     return q ? all.filter((w) => w.name.toLocaleLowerCase().includes(q)) : all;
   }
 
   get selectedWorlds(): DeviceWorld[] {
-    return (this.result?.worlds ?? []).filter((w) => this.selected.includes(w.id));
+    return this.result!.worlds.filter((w) => this.selected.includes(w.id));
   }
 
   get selectedSize(): number {
@@ -106,7 +107,7 @@ export class ReadFlow {
   }
 
   toggleAll(on: boolean) {
-    this.selected = on ? (this.result?.worlds ?? []).map((w) => w.id) : [];
+    this.selected = on ? this.result!.worlds.map((w) => w.id) : [];
   }
 
   async saveOnly() {
@@ -118,7 +119,7 @@ export class ReadFlow {
 
   async options() {
     this.stage = 'options';
-    if (!this.folder) this.folder = (await this.app.api.pickFolder(null)) ?? '';
+    if (!this.folder) this.folder = blank(await this.app.api.pickFolder(null));
     this.free = await this.app.api.freeSpace(this.folder);
   }
 

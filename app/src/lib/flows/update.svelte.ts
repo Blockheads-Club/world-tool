@@ -1,6 +1,7 @@
 import type { AppStore } from '../store.svelte';
 import type { UpdateInfo } from '../types';
 import { opId } from '../util';
+import { pct } from '../format';
 
 export type UpdateStage = 'idle' | 'checking' | 'available' | 'downloading' | 'ready' | 'latest' | 'failed';
 
@@ -66,7 +67,7 @@ export class UpdateFlow {
     this.percent = 0;
     try {
       await this.app.api.downloadUpdate(opId('update'), (p) => {
-        this.percent = Math.round(((p.done ?? 0) / (p.total ?? 1)) * 100);
+        this.percent = pct(p.done, p.total);
       });
       this.stage = 'ready';
     } catch {

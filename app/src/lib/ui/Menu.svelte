@@ -6,7 +6,7 @@
   /** "More actions" button with a small menu (arrow keys move, Esc closes and returns focus). */
   interface Item {
     label: string;
-    icon?: IconName;
+    icon: IconName;
     danger?: boolean;
     run: () => void;
   }
@@ -50,7 +50,7 @@
     <div class="menu" role="menu" aria-label={label} bind:this={list} onkeydown={key}>
       {#each items as it (it.label)}
         <button role="menuitem" class:danger={it.danger} onclick={() => { open = false; it.run(); }}>
-          {#if it.icon}<Icon name={it.icon} size={18} />{/if}{it.label}
+          <Icon name={it.icon} size={18} />{it.label}
         </button>
       {/each}
     </div>

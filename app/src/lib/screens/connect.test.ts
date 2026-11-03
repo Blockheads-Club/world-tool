@@ -43,6 +43,7 @@ describe('Add a device (guides)', () => {
     await screen.findByText('Galaxy Tab S6 Lite (192.168.1.42) is ready to pair.');
     const pair = screen.getByRole('button', { name: 'Pair' });
     expect(pair).toBeDisabled();
+    await fireEvent.input(screen.getByLabelText('IP address and port'), { target: { value: '10.0.0.2:1' } });
     await fireEvent.click(screen.getByRole('button', { name: 'Use this' }));
     expect(screen.getByLabelText('IP address and port')).toHaveValue('192.168.1.42:37115');
     await fireEvent.input(screen.getByLabelText('Pairing code'), { target: { value: '12' } });

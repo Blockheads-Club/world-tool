@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { bytes, eta, pct, when } from '../format';
+  import { bytes, eta, pct, when, zero } from '../format';
   import { t } from '../i18n.svelte';
   import Header from '../layout/Header.svelte';
   import { store } from '../store.svelte';
@@ -22,7 +22,7 @@
       .filter(Boolean)
       .join(' · ')
   );
-  const all = $derived((f.result?.worlds.length ?? 0) > 0 && f.selected.length === f.result?.worlds.length);
+  const all = $derived(f.selected.length > 0 && f.selected.length === f.result!.worlds.length);
   const some = $derived(f.selected.length > 0 && !all);
   const p = $derived(f.progress);
 </script>
@@ -77,7 +77,7 @@
   {:else if f.stage === 'reading'}
     <div class="card pad">
       <Progress title={t('read.reading')} value={pct(p?.done, p?.total)}
-        detail={p?.total ? t('read.readingDetail', { done: bytes(p.done ?? 0), total: bytes(p.total), eta: eta(p.eta ?? 0) }) : ''}>
+        detail={p ? t('read.readingDetail', { done: bytes(zero(p.done)), total: bytes(zero(p.total)), eta: eta(zero(p.eta)) }) : ''}>
         {#snippet actions()}<Button size="sm" onclick={() => void f.cancel()}>{t('common.cancel')}</Button>{/snippet}
       </Progress>
     </div>
@@ -86,7 +86,7 @@
     <div class="tools">
       <div class="srch"><Icon name="search" /><input class="input" type="search" placeholder={t('worlds.search')} aria-label={t('worlds.search')} bind:value={f.query} /></div>
       <Seg label={t('read.view')} size="sm" value={f.view} onchange={(v) => (f.view = v)} options={[{ value: 'list', label: t('read.list'), icon: 'list' }, { value: 'grid', label: t('read.grid'), icon: 'grid' }]} />
-      <span class="hint">{t('read.count', { n: f.result?.worlds.length ?? 0 })} · {t('read.justNow')}</span>
+      <span class="hint">{t('read.count', { n: f.result!.worlds.length })} · {t('read.justNow')}</span>
     </div>
     {#if f.view === 'list'}
       <div class="card scroll">
@@ -137,7 +137,7 @@
           <label class={['radio', f.format === o.v && 'on']}>
             <input type="radio" name="fmt" value={o.v} checked={f.format === o.v} onchange={() => (f.format = o.v as 'bhworld' | 'server')} />
             <span class="rd" aria-hidden="true"></span>
-            <span class="rt"><b>{o.title} {#if o.rec}<Badge tone="ok">{t('read.recommended')}</Badge>{/if}</b><span class="muted">{o.text}</span></span>
+            <span class="rt"><b>{`${o.title} `}{#if o.rec}<Badge tone="ok">{t('read.recommended')}</Badge>{/if}</b><span class="muted">{o.text}</span></span>
           </label>
         {/each}
       </div>
@@ -148,7 +148,7 @@
         </div>
         <b>{t('read.files')}</b>
         <ul class="files">{#each f.selectedWorlds as w (w.id)}<li class="mono">{f.fileName(w)}</li>{/each}</ul>
-        <span class="hint">{bytes(f.selectedSize)}{#if f.free !== null} · {t('read.free', { size: bytes(f.free) })}{/if}</span>
+        <span class="hint">{`${bytes(f.selectedSize)}${f.free !== null ? ` · ${t('read.free', { size: bytes(f.free) })}` : ''}`}</span>
         <div class="kpi">
           <Button variant="primary" size="lg" icon="upload" disabled={!f.folder.trim()} onclick={() => void f.exportNow()}>{t('read.export')}</Button>
           <Button variant="ghost" size="lg" onclick={() => (f.stage = 'choose')}>{t('common.back')}</Button>
@@ -158,23 +158,24 @@
   {:else if f.stage === 'exporting'}
     <div class="card pad">
       <Progress title={t('read.exporting', { n: f.selected.length })} value={pct(p?.done, p?.total)}
-        detail={p?.item ? t(p.stage === 'preview' ? 'read.exportDetailPreview' : 'read.exportDetail', { item: p.item, i: p.index ?? 1, n: p.count ?? 1 }) : ''}>
+        detail={p?.item ? t(p.stage === 'preview' ? 'read.exportDetailPreview' : 'read.exportDetail', { item: p.item, i: zero(p.index), n: zero(p.count) }) : ''}>
         {#snippet actions()}<Button size="sm" onclick={() => void f.cancel()}>{t('common.cancel')}</Button>{/snippet}
       </Progress>
     </div>
-  {:else if f.exported}
+  {:else}
+    {@const ex = f.exported!}
     <div class="card pad" role="status">
       <div class="res">
         <span class="ri"><Icon name="check" size={28} /></span>
-        <div><h2>{t('read.doneTitle', { n: f.exported.files.length })}</h2><p class="muted">{t('read.doneText', { folder: f.exported.folder })}</p></div>
+        <div><h2>{t('read.doneTitle', { n: ex.files.length })}</h2><p class="muted">{t('read.doneText', { folder: ex.folder })}</p></div>
       </div>
       <ul class="done">
-        {#each f.exported.files as x (x.name)}
+        {#each ex.files as x (x.name)}
           <li>{#if f.format === 'bhworld'}<img src="/bhworld-file.svg" alt="" width="32" height="32" />{:else}<Icon name="server" />{/if}<span class="mono">{x.name}</span><span class="hint">{bytes(x.size)}</span></li>
         {/each}
       </ul>
       <div class="kpi">
-        <Button variant="primary" icon="folder" onclick={() => void store.api.showInFolder(f.exported?.folder ?? '')}>{t('common.showInFolder')}</Button>
+        <Button variant="primary" icon="folder" onclick={() => void store.api.showInFolder(ex.folder)}>{t('common.showInFolder')}</Button>
         <Button icon="library" onclick={() => store.go('worlds')}>{t('read.openWorlds')}</Button>
         <Button variant="ghost" onclick={() => store.go('devices')}>{t('common.done')}</Button>
       </div>

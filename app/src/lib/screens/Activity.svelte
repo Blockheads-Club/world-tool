@@ -33,7 +33,7 @@
     backups: (a) => a.kind === 'backup' || a.kind === 'restore',
     errors: (a) => a.result !== 'done'
   };
-  const shown = $derived((list ?? []).filter(MATCH[filter]));
+  const shown = $derived(list!.filter(MATCH[filter]));
   const ICON: Record<Activity['kind'], IconName> = { read: 'download', copy: 'upload', backup: 'shield', restore: 'history', import: 'download', export: 'file' };
 
   function what(a: Activity): string {
@@ -48,7 +48,7 @@
   }
 
   async function copyLog() {
-    const text = (list ?? []).map((a) => `${new Date(a.time).toISOString()}\t${a.result}\t${what(a)}\t${line(a)}${a.detail ? `\t${a.detail}` : ''}`).join('\n');
+    const text = list!.map((a) => `${new Date(a.time).toISOString()}\t${a.result}\t${what(a)}\t${line(a)}${a.detail ? `\t${a.detail}` : ''}`).join('\n');
     toast((await copyText(text)) ? t('common.copied') : t('common.copyFailed'));
   }
 

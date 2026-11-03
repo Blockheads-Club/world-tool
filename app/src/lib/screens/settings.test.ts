@@ -27,9 +27,9 @@ describe('Settings', () => {
     await fireEvent.click(screen.getByRole('switch', { name: 'Reduce motion' }));
     await waitFor(() => expect(document.documentElement.dataset.motion).toBe('reduce'));
     await fireEvent.click(screen.getByRole('switch', { name: 'Check for updates automatically' }));
-    await fireEvent.change(screen.getByRole('combobox', { name: 'Language' }), { target: { value: 'tr' } });
+    await fireEvent.change(screen.getByRole('combobox', { name: 'Language' }), { target: { selectedIndex: 1 } });
     await waitFor(() => expect(i18n.lang).toBe('tr'));
-    await fireEvent.change(screen.getByRole('combobox', { name: 'Dil' }), { target: { value: 'en' } });
+    await fireEvent.change(screen.getByRole('combobox', { name: 'Dil' }), { target: { selectedIndex: 0 } });
     await waitFor(() => expect(i18n.lang).toBe('en'));
     expect(screen.getByText('2 devices')).toBeInTheDocument();
     // paired devices

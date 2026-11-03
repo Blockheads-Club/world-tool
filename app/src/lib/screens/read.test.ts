@@ -55,6 +55,7 @@ describe('Read worlds', () => {
     await waitFor(() => expect(screen.getByLabelText('Save to')).toHaveValue('/tmp/out'));
     mock.picks.folder = null;
     await fireEvent.click(screen.getByRole('button', { name: 'Browse…' }));
+    await fireEvent.input(screen.getByLabelText('Save to'), { target: { value: '/tmp/out' } });
     await fireEvent.click(screen.getByRole('button', { name: 'Back' }));
     await fireEvent.click(await screen.findByRole('button', { name: 'Export 2 worlds…' }));
     await fireEvent.click(await screen.findByRole('button', { name: 'Export' }));

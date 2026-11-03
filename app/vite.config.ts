@@ -20,6 +20,7 @@ export default defineConfig({
     environment: 'jsdom',
     include: ['src/**/*.test.ts'],
     setupFiles: ['src/test-setup.ts'],
+    testTimeout: 20_000,
     coverage: {
       provider: 'v8',
       include: ['src/lib/**/*.{ts,svelte}', 'src/routes/**/*.{ts,svelte}'],

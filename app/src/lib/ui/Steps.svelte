@@ -11,7 +11,7 @@
     {#if i > 0}<span class="sep" aria-hidden="true"></span>{/if}
     <span class={['s', i < current && 'done', i === current && 'cur']} aria-current={i === current ? 'step' : undefined}>
       <i>{#if i < current}<Icon name="check" size={14} /><span class="sr">{t('common.stepDone')}</span>{:else}{i + 1}{/if}</i>
-      {s}
+      {`${s}`}
     </span>
   {/each}
 </nav>

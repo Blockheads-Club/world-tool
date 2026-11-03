@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { bytes } from '../format';
+  import { bytes, dash } from '../format';
   import { t } from '../i18n.svelte';
   import type { IconName } from '../icons';
   import type { Key } from '../messages';
@@ -35,7 +35,7 @@
   }
 
   function restore() {
-    const id = e.backup_id ?? null;
+    const id = e.backup_id as string;
     onclose();
     store.restoreId = id;
     store.go('backups');
@@ -60,7 +60,7 @@
     <p>{t('err.game_not_installed.text')}</p>
     <p class="hint">{t('err.game_not_installed.hint')}</p>
   {:else if e.code === 'unsupported_version'}
-    <dl class="kv"><dt>{t('err.onDevice', { device: dev })}</dt><dd>The Blockheads {e.version ?? '?'}</dd><dt>{t('err.supported')}</dt><dd>1.7.4 – 1.7.6</dd></dl>
+    <dl class="kv"><dt>{t('err.onDevice', { device: dev })}</dt><dd>The Blockheads {dash(e.version)}</dd><dt>{t('err.supported')}</dt><dd>1.7.4 – 1.7.6</dd></dl>
     <p>{t('err.unsupported_version.text')}</p>
   {:else if e.code === 'declined'}
     <p>{t('err.declined.text', { device: dev })}</p>
