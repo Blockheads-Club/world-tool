@@ -40,9 +40,9 @@ export function num(n: number, digits?: number): string {
 
 /** Resolve `{n, plural, one {# world} other {# worlds}}` with the language's plural rules. */
 function plural(s: string, params: Params): string {
-  return s.replace(/\{(\w+), plural,((?:\s*\w+ \{[^{}]*\})+)\s*\}/g, (_, k: string, body: string) => {
+  return s.replace(/\{(\w+), plural,((?:\s*\w+ \{(?:[^{}]|\{\w+\})*\})+)\s*\}/g, (_, k: string, body: string) => {
     const n = Number(params[k]);
-    const cases = Object.fromEntries([...body.matchAll(/(\w+) \{([^{}]*)\}/g)].map((m) => [m[1], m[2]]));
+    const cases = Object.fromEntries([...body.matchAll(/(\w+) \{((?:[^{}]|\{\w+\})*)\}/g)].map((m) => [m[1], m[2]]));
     const rule = new Intl.PluralRules(i18n.lang).select(n);
     return (cases[rule] ?? cases.other).replace(/#/g, num(n));
   });

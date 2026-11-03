@@ -54,7 +54,7 @@
 {/if}
 
 {#if u.popover && (u.stage === 'latest' || u.stage === 'failed')}
-  <section class="card pop" role="dialog" aria-label={t('upd.chip.updates')}>
+  <div class="card pop" role="dialog" aria-label={t('upd.chip.updates')}>
     {#if u.stage === 'latest'}
       <span class="ok"><Icon name="check" /></span>
       <b>{t('upd.latest')}</b>
@@ -69,7 +69,7 @@
       {#if u.stage === 'latest'}<Button size="sm" variant="ghost" onclick={() => { u.popover = false; store.go('settings'); }}>{t('upd.settings')}</Button>{/if}
       <Button size="sm" variant="ghost" icon="x" label={t('common.close')} onclick={() => (u.popover = false)} />
     </div>
-  </section>
+  </div>
 {/if}
 
 <style>
