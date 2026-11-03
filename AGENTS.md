@@ -28,4 +28,9 @@ extracted from the user's own APK. GPL-3.0-or-later. Not affiliated with Majic J
 - Game saves (Android, Blockheads PC): `.../saves/<32-hex id>/world_db/data.mdb` + `map/` dir; LMDB meta magic
   `0xBEEFC0DE` at offset 12 ⇒ 32-bit layout. Blockheads Server saves: magic at offset 16 (64-bit) and also have
   `server_db/`, `lightBlocks/`.
+- Android saves inside `adb backup`: `apps/com.noodlecake.blockheads/f/Library/Application Support/` with `saves/<id>/`,
+  `game_db/` (world list; a world must be registered there to show in the game) and `game/`. Verified on an API 30
+  emulator, including restore of an injected world that then loaded in the game.
+- `adb backup` skips apps in Android's "stopped" state (after `am force-stop` or never launched) and returns a
+  header-only file. Never force-stop before a backup; send the game to the background and use `am kill`.
 - Android APK: package `com.noodlecake.blockheads`, targetSdk 27, allowBackup default true, armeabi-v7a only.
