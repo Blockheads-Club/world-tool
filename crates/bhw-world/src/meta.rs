@@ -123,10 +123,7 @@ pub fn unique_name(name: &str, taken: &[&str]) -> String {
         return name.to_string();
     }
     let (base, n) = split_counter(name);
-    (n + 1..)
-        .map(|i| format!("{base} ({i})"))
-        .find(|c| !keys.contains(&name_key(c)))
-        .expect("an unused counter exists")
+    (n + 1..).map(|i| format!("{base} ({i})")).find(|c| !keys.contains(&name_key(c))).expect("an unused counter exists")
 }
 
 /// "Keep both": a new random id that is not in `existing` and a unique name (`"Name (2)"`).

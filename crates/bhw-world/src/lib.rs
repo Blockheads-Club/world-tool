@@ -17,7 +17,9 @@ pub use bhw_backup::Payload;
 pub use bhworld::{BhWorld, ExportInfo, Limits, Manifest, Source, SourceKind};
 pub use files::{WorldFile, WorldFiles};
 pub use library::{BackupMeta, Library, LibraryBackup, LibraryWorld};
-pub use meta::{keep_both, new_world_id, unique_name, Conflicts, WorldMeta, WorldMetaEditor, WorldMetaSource, WorldSummary};
+pub use meta::{
+    keep_both, new_world_id, unique_name, Conflicts, WorldMeta, WorldMetaEditor, WorldMetaSource, WorldSummary,
+};
 
 use std::path::PathBuf;
 
