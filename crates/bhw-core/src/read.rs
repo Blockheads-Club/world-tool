@@ -147,7 +147,6 @@ impl Core {
         let adb = self.adb()?;
         let game = adb.game_info(serial)?;
         game.check_supported()?;
-        progress(Progress { elapsed: Some(0), ..Progress::stage(Stage::PhoneBackup) });
         let mut last = 0;
         let opts = AbOptions { method: AbMethod::AdbCommand, if_running: IfRunning::Stop };
         let mut on = |p: bhw_device::Progress| match p.phase {

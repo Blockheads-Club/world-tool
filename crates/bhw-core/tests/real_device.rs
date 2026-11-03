@@ -77,7 +77,10 @@ fn ensure_launched(serial: &str) {
     let pkg = adb_out(serial, &["shell", "dumpsys", "package", "com.noodlecake.blockheads"]);
     if pkg.contains("stopped=true") {
         eprintln!("game is in the stopped state; launching it once");
-        adb_out(serial, &["shell", "monkey", "-p", "com.noodlecake.blockheads", "-c", "android.intent.category.LAUNCHER", "1"]);
+        adb_out(
+            serial,
+            &["shell", "monkey", "-p", "com.noodlecake.blockheads", "-c", "android.intent.category.LAUNCHER", "1"],
+        );
         std::thread::sleep(Duration::from_secs(12));
         adb_out(serial, &["shell", "input", "keyevent", "HOME"]);
         adb_out(serial, &["shell", "am", "kill", "com.noodlecake.blockheads"]);
@@ -123,7 +126,8 @@ fn read_copy_and_restore() {
     assert!(before.contains(&"ROCKY OCEAN".to_string()), "ROCKY OCEAN missing: {before:?}");
 
     // 2. Library + exports.
-    let ids: Vec<String> = core.source_worlds(&Source::Device { device_id: serial.clone() }).unwrap().into_iter().map(|w| w.id).collect();
+    let ids: Vec<String> =
+        core.source_worlds(&Source::Device { device_id: serial.clone() }).unwrap().into_iter().map(|w| w.id).collect();
     let saved = core.save_to_library(&read_id, &ids).unwrap();
     assert_eq!(saved.len(), before.len());
     for format in [ExportFormat::Bhworld, ExportFormat::Server] {
