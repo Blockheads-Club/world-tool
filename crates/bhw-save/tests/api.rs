@@ -314,7 +314,7 @@ fn game_db() {
     let mut empty = GameDb::new();
     empty.contents.named.clear();
     assert!(empty.world_ids().is_empty() && empty.entry(CID).is_none());
-    assert_eq!(empty.to_bytes().map(|b| b.len() > 0).unwrap(), true);
+    assert!(!empty.to_bytes().unwrap().is_empty());
 }
 
 #[test]
