@@ -735,6 +735,10 @@ export const ru: Record<Key, string> = {
   'err.offline': 'Похоже, вы не в сети.',
   'err.cancelled': 'Остановлено.',
   'err.not_found': 'Этого больше нет. Обновите и повторите.',
+  'err.game_running': 'The Blockheads запущена. Закройте игру и попробуйте снова.',
+  'err.game_stopped': 'Откройте The Blockheads на телефоне один раз, вернитесь на главный экран и попробуйте снова.',
+  'err.not_supported_yet': 'Это пока не поддерживается. Резервные копии iPhone и iPad можно только читать.',
+  'err.adb_missing': 'Не найден инструмент связи с телефоном (adb). Переустановите BH World Tool.',
   'err.not_implemented': 'В этой версии это пока недоступно.',
   'err.io': 'Что-то пошло не так. Подробности в журнале.'
 };

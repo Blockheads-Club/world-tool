@@ -35,7 +35,11 @@ export type ErrorCode =
   | 'cancelled'
   | 'not_found'
   | 'not_implemented'
-  | 'io';
+  | 'io'
+  | 'game_running' // Blockheads PC (or the game on the phone) is running
+  | 'game_stopped' // Android "stopped" state: open the game once, then retry
+  | 'not_supported_yet' // e.g. writing to an iPhone/iPad backup
+  | 'adb_missing';
 
 export interface AppError {
   code: ErrorCode;
