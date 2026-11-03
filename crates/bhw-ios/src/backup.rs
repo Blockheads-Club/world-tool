@@ -19,6 +19,10 @@ use crate::{Error, Result};
 pub const APP_DOMAIN: &str = "AppDomain-";
 /// The game's data directory inside its container.
 pub const APP_SUPPORT: &str = "Library/Application Support/";
+const ENTRIES_SQL: &str =
+    "SELECT fileID, domain, relativePath, flags, file FROM Files WHERE domain = ?1 ORDER BY relativePath";
+const APPS_SQL: &str = "SELECT DISTINCT domain, relativePath FROM Files WHERE domain LIKE 'AppDomain-%' \
+     AND relativePath LIKE 'Library/Application Support/saves/%/world_db/data.mdb'";
 /// `Files.flags` value of a regular file.
 const FLAG_FILE: i64 = 1;
 
@@ -135,18 +139,8 @@ impl IosBackup {
 
     /// Rows of `Files` in `domain` whose path starts with `prefix`, sorted by path.
     pub fn entries(&self, domain: &str, prefix: &str) -> Result<Vec<ManifestEntry>> {
-        let mut stmt = self.db.prepare(
-            "SELECT fileID, domain, relativePath, flags, file FROM Files WHERE domain = ?1 ORDER BY relativePath",
-        )?;
-        let rows = stmt.query_map([domain], |r| {
-            Ok(ManifestEntry {
-                file_id: r.get(0)?,
-                domain: r.get(1)?,
-                relative_path: r.get(2)?,
-                flags: r.get(3)?,
-                file: r.get::<_, Option<Vec<u8>>>(4)?.unwrap_or_default(),
-            })
-        })?;
+        let mut stmt = self.db.prepare(ENTRIES_SQL)?;
+        let rows = stmt.query_map([domain], entry_from_row)?;
         let mut out = Vec::new();
         for row in rows {
             let row = row?;
@@ -191,10 +185,7 @@ impl IosBackup {
     /// Bundle ids of apps whose container holds Blockheads saves (`Library/Application Support/saves/<32 hex>/
     /// world_db/data.mdb`), sorted.
     pub fn blockheads_apps(&self) -> Result<Vec<String>> {
-        let mut stmt = self.db.prepare(
-            "SELECT DISTINCT domain, relativePath FROM Files WHERE domain LIKE 'AppDomain-%' \
-             AND relativePath LIKE 'Library/Application Support/saves/%/world_db/data.mdb'",
-        )?;
+        let mut stmt = self.db.prepare(APPS_SQL)?;
         let rows = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?;
         let mut apps = BTreeSet::new();
         for row in rows {
@@ -236,6 +227,16 @@ impl IosBackup {
             worlds.into_iter().map(|(id, files)| WorldFiles::new(id, files)).collect::<std::result::Result<_, _>>()?;
         Ok(BlockheadsData { bundle_id: bundle_id.to_string(), worlds, game_db })
     }
+}
+
+fn entry_from_row(r: &rusqlite::Row) -> rusqlite::Result<ManifestEntry> {
+    Ok(ManifestEntry {
+        file_id: r.get(0)?,
+        domain: r.get(1)?,
+        relative_path: r.get(2)?,
+        flags: r.get(3)?,
+        file: r.get::<_, Option<Vec<u8>>>(4)?.unwrap_or_default(),
+    })
 }
 
 /// World id of a `.../saves/<32 hex>/world_db/data.mdb` path.
@@ -282,6 +283,8 @@ mod tests {
         out.push((DOM.into(), p(&format!("saves/{ID}/map")), 2, vec![]));
         out.push(("AppDomain-zzz.other".into(), "Library/x".into(), 1, b"x".to_vec()));
         out.push(("HomeDomain".into(), p(&format!("saves/{ID}/world_db/data.mdb")), 1, b"y".to_vec()));
+        // SQL LIKE is case-insensitive; this is not an app domain.
+        out.push(("APPDOMAIN-x".into(), p(&format!("saves/{ID}/world_db/data.mdb")), 1, b"y".to_vec()));
         out
     }
 

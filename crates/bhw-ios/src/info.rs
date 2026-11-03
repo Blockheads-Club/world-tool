@@ -86,7 +86,7 @@ pub fn list_backups(root: &Path) -> Result<Vec<BackupInfo>> {
 
 /// Candidate backup roots for an OS (`std::env::consts::OS` values) given an environment lookup. Linux and other
 /// systems have no default (the user chooses a folder, e.g. one copied from a Mac or Windows PC).
-pub fn candidate_backup_dirs(os: &str, env: impl Fn(&str) -> Option<OsString>) -> Vec<PathBuf> {
+pub fn candidate_backup_dirs(os: &str, env: &dyn Fn(&str) -> Option<OsString>) -> Vec<PathBuf> {
     let under = |var: &str, rel: &[&str]| env(var).map(|base| rel.iter().fold(PathBuf::from(base), |p, c| p.join(c)));
     match os {
         "windows" => [
@@ -103,7 +103,15 @@ pub fn candidate_backup_dirs(os: &str, env: impl Fn(&str) -> Option<OsString>) -
 
 /// Default backup roots of this computer that exist.
 pub fn default_backup_dirs() -> Vec<PathBuf> {
-    candidate_backup_dirs(std::env::consts::OS, |v| std::env::var_os(v)).into_iter().filter(|p| p.is_dir()).collect()
+    existing(candidate_backup_dirs(std::env::consts::OS, &env_var))
+}
+
+fn env_var(name: &str) -> Option<OsString> {
+    std::env::var_os(name)
+}
+
+fn existing(dirs: Vec<PathBuf>) -> Vec<PathBuf> {
+    dirs.into_iter().filter(|p| p.is_dir()).collect()
 }
 
 #[cfg(test)]
@@ -155,7 +163,7 @@ mod tests {
         write(&b.join("Status.plist"), dict(vec![("Date", at(100))]), true);
         let c = root.path().join("cccc");
         fs::create_dir(&c).unwrap();
-        write(&c.join("Manifest.plist"), dict(vec![("Date", at(50))]), true);
+        write(&c.join("Manifest.plist"), dict(vec![("Date", at(100))]), true);
         fs::write(c.join("Info.plist"), b"garbage").unwrap();
         // Not backups: no manifest, broken manifest, a file.
         fs::create_dir(root.path().join("empty")).unwrap();
@@ -181,7 +189,7 @@ mod tests {
         assert_eq!(list[1].ios_version.as_deref(), Some("15.0"));
         assert_eq!(list[1].date, Some(100));
         assert!(!list[1].encrypted);
-        assert_eq!(list[2].date, Some(50));
+        assert_eq!(list[2].date, Some(100));
         assert_eq!(list[2].device_name, None);
 
         // A backup dir given directly.
@@ -205,20 +213,22 @@ mod tests {
     fn candidate_dirs() {
         let env = |v: &str| Some(OsString::from(format!("/{v}")));
         assert_eq!(
-            candidate_backup_dirs("windows", env),
+            candidate_backup_dirs("windows", &env),
             [
                 PathBuf::from("/APPDATA/Apple Computer/MobileSync/Backup"),
                 PathBuf::from("/USERPROFILE/Apple/MobileSync/Backup")
             ]
         );
         assert_eq!(
-            candidate_backup_dirs("macos", env),
+            candidate_backup_dirs("macos", &env),
             [PathBuf::from("/HOME/Library/Application Support/MobileSync/Backup")]
         );
-        assert!(candidate_backup_dirs("linux", env).is_empty());
-        assert!(candidate_backup_dirs("windows", |_| None).is_empty());
-        for p in default_backup_dirs() {
-            assert!(p.is_dir());
-        }
+        assert!(candidate_backup_dirs("linux", &env).is_empty());
+        assert!(candidate_backup_dirs("windows", &|_| None).is_empty());
+        let dir = tempfile::tempdir().unwrap();
+        let dirs = vec![dir.path().to_path_buf(), dir.path().join("missing")];
+        assert_eq!(existing(dirs), [dir.path().to_path_buf()]);
+        assert_eq!(env_var("BHW_IOS_SURELY_UNSET_VAR"), None);
+        assert_eq!(default_backup_dirs(), existing(candidate_backup_dirs(std::env::consts::OS, &env_var)));
     }
 }
