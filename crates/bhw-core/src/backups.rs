@@ -215,7 +215,7 @@ impl Core {
         let mut entry = Entry::new(ActivityKind::Restore, device_id);
         let r = (|| {
             let path = child(&self.lib()?.inner.backups_dir(), backup_id)?;
-            let d = self.ready_device(device_id)?;
+            let d = self.writable_device(device_id)?;
             entry.device = d.name.clone();
             entry.size = Some(fs::metadata(&path)?.len());
             match d.kind {

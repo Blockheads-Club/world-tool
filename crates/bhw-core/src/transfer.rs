@@ -265,7 +265,7 @@ impl Core {
 
     /// What copying `world_ids` of `source` to `target_id` would do.
     pub fn transfer_plan(&self, source: &Source, world_ids: &[String], target_id: &str) -> Result<TransferPlan> {
-        let target = self.ready_device(target_id)?;
+        let target = self.writable_device(target_id)?;
         let offered: Vec<Offered> =
             self.offered(source)?.into_iter().filter(|o| world_ids.contains(&o.world.id)).collect();
         let (existing, backup_size) = self.target_worlds(&target)?;

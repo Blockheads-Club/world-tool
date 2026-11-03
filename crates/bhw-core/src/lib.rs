@@ -13,6 +13,7 @@ mod devices;
 pub mod error;
 mod files;
 mod gamefiles;
+mod ios;
 pub mod library;
 mod read;
 pub mod settings;
@@ -54,6 +55,8 @@ pub struct CoreConfig {
     pub runner: Arc<dyn Runner>,
     /// Default Blockheads PC data folder (when the settings name none).
     pub pc_locator: PcLocator,
+    /// Folders with iPhone/iPad backups (Finder/iTunes defaults).
+    pub ios_locator: Arc<dyn Fn() -> Vec<PathBuf> + Send + Sync>,
     /// adb's user folder (`~/.android`) with the paired-hosts list.
     pub android_dir: Option<PathBuf>,
     /// App version and OS for the diagnostics.
@@ -69,6 +72,10 @@ pub struct Core {
     reads: Mutex<Vec<Arc<read::ReadSession>>>,
     plans: Mutex<HashMap<String, Arc<transfer::PlanState>>>,
     devices: Mutex<Vec<Device>>,
+    /// Opened iPhone/iPad backups (read-only devices).
+    ios: Mutex<Vec<Device>>,
+    /// Wrong password attempts per iOS backup.
+    ios_attempts: Mutex<HashMap<String, u32>>,
 }
 
 impl Core {
@@ -88,6 +95,8 @@ impl Core {
             reads: Mutex::new(Vec::new()),
             plans: Mutex::new(HashMap::new()),
             devices: Mutex::new(Vec::new()),
+            ios: Mutex::new(Vec::new()),
+            ios_attempts: Mutex::new(HashMap::new()),
         }
     }
 

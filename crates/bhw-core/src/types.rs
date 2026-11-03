@@ -69,6 +69,16 @@ pub struct PairedDevice {
     pub address: String,
 }
 
+/// An iPhone/iPad backup found on this computer.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct IosBackup {
+    pub id: String,
+    pub name: String,
+    pub model: String,
+    pub date: u64,
+    pub encrypted: bool,
+}
+
 /// Game mode.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]

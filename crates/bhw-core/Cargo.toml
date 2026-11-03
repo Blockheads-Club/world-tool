@@ -11,6 +11,8 @@ publish = false
 bhw-assets = { path = "../bhw-assets" }
 bhw-backup = { path = "../bhw-backup" }
 bhw-device = { path = "../bhw-device" }
+bhw-ios = { path = "../bhw-ios" }
+bhw-lmdb = { path = "../bhw-lmdb" }
 bhw-save = { path = "../bhw-save" }
 bhw-world = { path = "../bhw-world" }
 base64 = "0.22"
@@ -21,7 +23,6 @@ thiserror = { workspace = true }
 zip = { version = "4.6", default-features = false, features = ["deflate-flate2-zlib"] }
 
 [dev-dependencies]
-bhw-lmdb = { path = "../bhw-lmdb" }
 plist = "1.7"
 tempfile = "3"
 

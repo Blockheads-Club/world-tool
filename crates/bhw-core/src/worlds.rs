@@ -1,11 +1,12 @@
 //! World helpers on top of `bhw-save`: summaries for the UI, map previews, client/server conversion and identity.
 
 use base64::Engine;
+use bhw_lmdb::Layout;
 use bhw_save::convert::{server_to_client_files, ConvertOptions};
 use bhw_save::save::detect_kind_files;
 use bhw_save::world::{from_file_map, to_file_map, SaveMeta};
 use bhw_save::{render_map, summarize_any, AnySave, ClientSave, GameDb, MapOptions, SaveKind};
-use bhw_world::{WorldFiles, WorldMetaEditor};
+use bhw_world::{Payload, WorldFiles, WorldMetaEditor};
 
 use crate::error::{AppError, ErrorCode, Result};
 use crate::types::{DeviceWorld, GameMode};
@@ -83,14 +84,26 @@ pub fn inspect(world: &WorldFiles, game_db: Option<&GameDb>) -> Result<WorldInfo
 
 /// A world in the game client's format: server worlds are converted (`keep_extras`: keep the server-only files
 /// in the extras folder, for the library; leave them out when writing to a device).
+/// 64-bit LMDB files (iOS 64-bit builds) become 32-bit ones like Android's and Blockheads PC's.
 pub fn to_client(world: WorldFiles, keep_extras: bool) -> Result<WorldFiles> {
     let map = to_file_map(&world)?;
     if detect_kind_files(&map) != Some(SaveKind::Server) {
-        return Ok(world);
+        return to_32bit(world);
     }
     let opts = ConvertOptions { keep_extras, ..ConvertOptions::default() };
     let (out, _) = server_to_client_files(&map, &opts)?;
     Ok(from_file_map(&world.id, out)?)
+}
+
+/// Rewrites every 64-bit `data.mdb` of a client world in the 32-bit layout.
+pub fn to_32bit(mut world: WorldFiles) -> Result<WorldFiles> {
+    for f in world.files.iter_mut().filter(|f| f.path.ends_with("data.mdb")) {
+        let data = f.data.read_all()?;
+        if Layout::detect(&data) == Some(Layout::Bits64) {
+            f.data = Payload::Bytes(bhw_lmdb::convert(&data, Layout::Bits32)?);
+        }
+    }
+    Ok(world)
 }
 
 /// Sets the stored id and/or name of a world (in its `world_db`) and the folder id.

@@ -77,6 +77,7 @@ impl Core {
         let phones = self.adb().and_then(|a| Ok(a.discover(false)?)).unwrap_or_default();
         let mut out: Vec<Device> = phones.into_iter().map(|d| self.android_device(d)).collect();
         out.extend(self.pc_device());
+        out.extend(lock(&self.ios).iter().cloned());
         *lock(&self.devices) = out.clone();
         out
     }
@@ -90,7 +91,6 @@ impl Core {
     pub(crate) fn ready_device(&self, id: &str) -> Result<Device> {
         let d = self.device(id)?;
         let code = match (d.kind, d.status) {
-            (DeviceKind::Ios, _) => return Err(crate::read::ios_not_supported().device(&d.name)),
             (_, DeviceStatus::Unauthorized) => ErrorCode::NotAllowed,
             (_, DeviceStatus::Offline) => ErrorCode::Disconnected,
             _ => return Ok(d),
@@ -98,14 +98,13 @@ impl Core {
         Err(AppError::new(code).device(&d.name))
     }
 
-    /// iPhone/iPad backups (not readable yet).
-    pub fn ios_backups(&self, _folder: Option<&str>) -> Result<Vec<Device>> {
-        Err(crate::read::ios_not_supported())
-    }
-
-    /// Opens an iPhone/iPad backup (not readable yet).
-    pub fn ios_open(&self, _id: &str, _password: &str) -> Result<Device> {
-        Err(crate::read::ios_not_supported())
+    /// A device that can be written to.
+    pub(crate) fn writable_device(&self, id: &str) -> Result<Device> {
+        let d = self.ready_device(id)?;
+        if d.read_only {
+            return Err(AppError::with(ErrorCode::NotSupportedYet, "iPhone/iPad backups are read-only").device(&d.name));
+        }
+        Ok(d)
     }
 
     /// Phones offering wireless debugging (pairing screen open, or already paired).

@@ -11,7 +11,7 @@ use bhw_world::backup::{load_backup, BackupSaves};
 use bhw_world::{SourceKind, WorldFiles};
 
 use crate::activity::Entry;
-use crate::error::{AppError, ErrorCode, Result};
+use crate::error::{AppError, Result};
 use crate::library::AddMeta;
 use crate::types::{
     ActivityKind, Connection, Device, DeviceKind, DeviceWorld, Origin, Progress, ReadRequest, ReadResult, Stage, World,
@@ -225,29 +225,34 @@ impl Core {
             let d = self.ready_device(&req.device_id)?;
             entry.device = d.name.clone();
             let s = match d.kind {
-                DeviceKind::Pc => self.read_pc(&d, progress)?,
-                _ => self.read_android(&d, req, progress, &guard.cancel).map_err(|e| e.device(&d.name))?,
+                DeviceKind::Pc => self.add_session(self.read_pc(&d, progress)?),
+                DeviceKind::Ios => self.latest_session(&d.id).ok_or_else(|| AppError::not_found(&d.id))?,
+                DeviceKind::Android => self
+                    .add_session(self.read_android(&d, req, progress, &guard.cancel).map_err(|e| e.device(&d.name))?),
             };
             entry.worlds = s.worlds.iter().map(|w| w.info.name.clone()).collect();
             entry.size = Some(s.worlds.iter().map(|w| w.info.size).sum());
-            let s = self.add_session(s);
             Ok(ReadResult { read_id: s.id.clone(), worlds: s.device_worlds() })
         })();
         self.activity.record(&entry, r)
     }
 
     fn add_meta(device: &Device) -> AddMeta {
-        let pc = device.kind == DeviceKind::Pc;
+        let (origin, kind, source) = match device.kind {
+            DeviceKind::Pc => (Origin::Pc, SourceKind::BlockheadsPc, device.name.clone()),
+            DeviceKind::Ios => (Origin::Ios, SourceKind::IosBackup, format!("{} backup", device.name)),
+            DeviceKind::Android => (Origin::Phone, SourceKind::AndroidBackup, device.name.clone()),
+        };
         AddMeta {
-            origin: if pc { Origin::Pc } else { Origin::Phone },
-            source: device.name.clone(),
+            origin,
+            source,
             source_detail: match device.connection {
                 Connection::Usb => Some("USB".into()),
                 Connection::Wifi => Some("Wi-Fi".into()),
                 _ => None,
             },
             game_version: device.game_version.clone(),
-            kind: if pc { SourceKind::BlockheadsPc } else { SourceKind::AndroidBackup },
+            kind,
             device_name: Some(device.name.clone()),
         }
     }
@@ -265,9 +270,4 @@ impl Core {
             })
             .collect()
     }
-}
-
-/// `not_supported_yet` for iPhone/iPad backups.
-pub fn ios_not_supported() -> AppError {
-    AppError::with(ErrorCode::NotSupportedYet, "iPhone/iPad backups cannot be read yet")
 }

@@ -225,6 +225,29 @@ impl From<bhw_save::Error> for AppError {
     }
 }
 
+impl From<bhw_lmdb::Error> for AppError {
+    fn from(e: bhw_lmdb::Error) -> AppError {
+        AppError::with(ErrorCode::WorldDamaged, e)
+    }
+}
+
+impl From<bhw_ios::Error> for AppError {
+    fn from(e: bhw_ios::Error) -> AppError {
+        use bhw_ios::Error as I;
+        let detail = e.to_string();
+        let code = match e {
+            I::Io(e) => return e.into(),
+            I::World(e) => return e.into(),
+            I::PasswordRequired | I::WrongPassword => ErrorCode::WrongPassword,
+            I::NoBlockheads => ErrorCode::GameNotInstalled,
+            I::Unsupported(_) => ErrorCode::NotSupportedYet,
+            I::NotABackup(_) | I::MissingFile(_) => ErrorCode::NotFound,
+            _ => ErrorCode::Io,
+        };
+        AppError::with(code, detail)
+    }
+}
+
 impl From<bhw_assets::Error> for AppError {
     fn from(e: bhw_assets::Error) -> AppError {
         use bhw_assets::Error as A;

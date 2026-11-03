@@ -113,6 +113,7 @@ fn read_copy_and_restore() {
         adb: Some(adb),
         runner: Arc::new(SystemRunner),
         pc_locator: Arc::new(|| None),
+        ios_locator: Arc::new(Vec::new),
         android_dir: None,
         app_version: "test".into(),
     });
