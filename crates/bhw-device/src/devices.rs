@@ -181,6 +181,11 @@ pub fn parse_key_values(text: &str) -> BTreeMap<String, String> {
     map
 }
 
+/// How often [`Adb::stop_game`] tries `am kill`.
+pub const STOP_TRIES: usize = 5;
+/// Pause between the tries.
+pub const STOP_PAUSE: std::time::Duration = std::time::Duration::from_millis(600);
+
 impl Adb {
     /// `adb devices -l`.
     pub fn list_devices(&self) -> Result<Vec<ListedDevice>> {
@@ -231,13 +236,19 @@ impl Adb {
     /// Stops the game without setting Android's "stopped" flag (which would make `adb backup` skip it): sends it
     /// to the background (`input keyevent HOME`), then `am kill` (only kills background processes). Fails with
     /// [`DeviceError::GameRunning`] when it is still alive afterwards.
+    ///
+    /// The process can take a moment to leave the foreground and die, so `am kill` is retried a few times
+    /// ([`STOP_TRIES`] with [`STOP_PAUSE`] between them; seen on an API 30 emulator).
     pub fn stop_game(&self, serial: &str) -> Result<()> {
         self.shell_ok(serial, "input keyevent HOME")?;
-        self.shell_ok(serial, &format!("am kill {PACKAGE}"))?;
-        if self.game_running(serial)? {
-            return Err(DeviceError::GameRunning);
+        for _ in 0..STOP_TRIES {
+            self.shell_ok(serial, &format!("am kill {PACKAGE}"))?;
+            if !self.game_running(serial)? {
+                return Ok(());
+            }
+            std::thread::sleep(STOP_PAUSE);
         }
-        Ok(())
+        Err(DeviceError::GameRunning)
     }
 
     /// `am force-stop` the game. Sets the "stopped" flag, so only use it before a restore (never before a backup).
