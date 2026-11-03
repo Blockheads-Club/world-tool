@@ -27,6 +27,13 @@ pub fn adb(r: &ScriptedRunner) -> Adb {
     a
 }
 
+/// A runner whose phone has the game installed (not in the "stopped" state); add more rules after this.
+pub fn phone() -> ScriptedRunner {
+    let r = ScriptedRunner::new();
+    r.on("shell (echo", sh("    versionName=1.7.6\n    User 0: installed=true stopped=false\n", 0));
+    r
+}
+
 /// A device shell answer: stdout plus the exit-code marker.
 pub fn sh(stdout: &str, code: i32) -> Reply {
     Reply::ok(format!("{stdout}__BHW_RC={code}\n"))

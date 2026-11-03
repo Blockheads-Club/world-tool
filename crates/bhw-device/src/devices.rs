@@ -115,6 +115,9 @@ pub struct GameInfo {
     pub uid: Option<u32>,
     /// `/data/user/0/com.noodlecake.blockheads` or similar.
     pub data_dir: Option<String>,
+    /// Android's "stopped" flag for user 0 (`stopped=true` in `dumpsys package`): set by `am force-stop` or
+    /// when the app was never launched since install. `adb backup` skips stopped apps.
+    pub stopped: bool,
 }
 
 impl GameInfo {
@@ -194,7 +197,7 @@ impl Adb {
             "echo \"model=$(getprop ro.product.model | tr ' ' _)\"; \
              echo \"release=$(getprop ro.build.version.release)\"; \
              echo \"sdk=$(getprop ro.build.version.sdk)\"; \
-             dumpsys package {PACKAGE} | grep -E '(versionName|versionCode|userId|dataDir)='"
+             dumpsys package {PACKAGE} | grep -E '(versionName|versionCode|userId|dataDir|stopped)='"
         );
         let out = self.shell(serial, &cmd)?;
         let kv = parse_key_values(&out.stdout);
@@ -204,6 +207,7 @@ impl Adb {
             version_code: kv.get("versionCode").and_then(|c| c.parse().ok()),
             uid: kv.get("userId").and_then(|c| c.parse().ok()),
             data_dir: kv.get("dataDir").cloned(),
+            stopped: kv.get("stopped").is_some_and(|s| s == "true"),
         });
         Ok(DeviceDetails {
             model: get("model").replace('_', " "),
@@ -224,8 +228,20 @@ impl Adb {
         Ok(out.code == 0 && !out.stdout.trim().is_empty())
     }
 
-    /// `am force-stop` the game.
+    /// Stops the game without setting Android's "stopped" flag (which would make `adb backup` skip it): sends it
+    /// to the background (`input keyevent HOME`), then `am kill` (only kills background processes). Fails with
+    /// [`DeviceError::GameRunning`] when it is still alive afterwards.
     pub fn stop_game(&self, serial: &str) -> Result<()> {
+        self.shell_ok(serial, "input keyevent HOME")?;
+        self.shell_ok(serial, &format!("am kill {PACKAGE}"))?;
+        if self.game_running(serial)? {
+            return Err(DeviceError::GameRunning);
+        }
+        Ok(())
+    }
+
+    /// `am force-stop` the game. Sets the "stopped" flag, so only use it before a restore (never before a backup).
+    pub fn force_stop_game(&self, serial: &str) -> Result<()> {
         self.shell_ok(serial, &format!("am force-stop {PACKAGE}")).map(drop)
     }
 

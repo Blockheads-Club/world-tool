@@ -30,6 +30,10 @@ pub enum DeviceError {
     /// The game is running; its saves may change under us.
     #[error("The Blockheads is running")]
     GameRunning,
+    /// The game is in Android's "stopped" state (force-stopped, or never opened since install), so `adb backup`
+    /// would skip it and return an empty backup. Fix: open the game once, go back to the home screen, retry.
+    #[error("The Blockheads is stopped: open it once on the phone, go back to the home screen, then try again")]
+    GameStopped,
     /// The backup ended with no data at all: the user tapped "Do not back up" (or the phone refused silently).
     #[error("the backup was declined on the phone")]
     DeclinedOnPhone,

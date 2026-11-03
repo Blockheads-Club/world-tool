@@ -39,6 +39,10 @@ fn hints() {
     assert_eq!(hints_for(HostOs::Windows, &list[2..3]), vec![Hint::WindowsUsbDriver]);
     assert_eq!(hints_for(HostOs::Windows, &[]), vec![Hint::EnableUsbDebugging, Hint::WindowsUsbDriver]);
     assert_eq!(hints_for(HostOs::MacOs, &[]), vec![Hint::EnableUsbDebugging]);
+    assert_eq!(hint_for_error(&DeviceError::GameStopped), Some(Hint::OpenGameOnce));
+    assert_eq!(hint_for_error(&DeviceError::Unauthorized { serial: "S".into() }), Some(Hint::AcceptRsaPrompt));
+    assert_eq!(hint_for_error(&DeviceError::Offline { serial: "S".into() }), Some(Hint::ReconnectOffline));
+    assert_eq!(hint_for_error(&DeviceError::GameRunning), None);
     let _ = HostOs::current();
     assert!(is_server_version_conflict("adb server version (41) doesn't match this client (39); killing..."));
     assert!(!is_server_version_conflict("ok"));
