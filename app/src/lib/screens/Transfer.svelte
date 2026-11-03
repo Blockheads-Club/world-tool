@@ -71,7 +71,7 @@
 
 {#snippet radio(name: string, checked: boolean, onpick: () => void, ic: IconName, title: string, hint: string, disabled = false)}
   <label class={['radio', checked && 'on', disabled && 'dis']}>
-    <input type="radio" {name} {checked} {disabled} onchange={onpick} />
+    <input type="radio" {name} {checked} {disabled} onchange={(e) => { e.currentTarget.checked = checked; onpick(); }} />
     <span class="rd" aria-hidden="true"></span>
     <Icon name={ic} />
     <span class="rt"><b>{title}</b><span class="hint">{hint}</span></span>

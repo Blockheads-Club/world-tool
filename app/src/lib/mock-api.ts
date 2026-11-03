@@ -235,7 +235,7 @@ export class MockBackend implements Backend {
   }
 
   private log(a: Omit<Activity, 'id' | 'time'>): void {
-    this.activity.unshift({ id: this.id('a'), time: Date.now(), ...a });
+    this.activity.unshift({ id: this.id('act-'), time: Date.now(), ...a });
   }
 
   private emitDevices(): void {
@@ -250,7 +250,7 @@ export class MockBackend implements Backend {
   private makeBackup(d: Device, reason: Backup['reason'], count: number | null): Backup {
     const worlds = this.phoneWorlds[d.id] ?? [];
     const b: Backup = {
-      id: this.id('b'), device_id: d.id, device: d.name, reason, reason_count: count, time: Date.now(),
+      id: this.id('backup-'), device_id: d.id, device: d.name, reason, reason_count: count, time: Date.now(),
       worlds: worlds.length, size: worlds.reduce((s, w) => s + w.size, 0) + 20 * MB, automatic: true
     };
     this.backups.unshift(b);
