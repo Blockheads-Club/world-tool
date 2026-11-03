@@ -1,6 +1,7 @@
 //! What to tell the user when a phone does not show up or cannot be used. The app translates the hint ids.
 
 use crate::devices::{DeviceState, ListedDevice};
+use crate::error::DeviceError;
 
 /// The host OS, for OS-specific hints.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -40,6 +41,9 @@ pub enum Hint {
     ReconnectOffline,
     /// Another adb (Android Studio, a phone manager app) of a different version keeps restarting the server.
     ConflictingAdb,
+    /// The game is in Android's "stopped" state: open The Blockheads once on the phone, go back to the home screen,
+    /// then try again.
+    OpenGameOnce,
 }
 
 /// Hints for the current device list.
@@ -66,6 +70,16 @@ pub fn hints_for(os: HostOs, devices: &[ListedDevice]) -> Vec<Hint> {
         }
     }
     hints
+}
+
+/// The hint for an error, if there is one.
+pub fn hint_for_error(e: &DeviceError) -> Option<Hint> {
+    match e {
+        DeviceError::GameStopped => Some(Hint::OpenGameOnce),
+        DeviceError::Unauthorized { .. } => Some(Hint::AcceptRsaPrompt),
+        DeviceError::Offline { .. } => Some(Hint::ReconnectOffline),
+        _ => None,
+    }
 }
 
 /// Whether adb's output says another adb version is fighting over the server port.

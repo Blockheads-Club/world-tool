@@ -76,3 +76,17 @@ Open questions:
 - `adb restore` gives no signal when the user declines; callers should re-read the device to verify.
 - Restore via `bu` stream: when the phone never confirms, bytes already sit in the pipe buffer, so it surfaces
   as `Disconnected` (stall) rather than `ConfirmTimeout`.
+
+## 2026-11-03: never force-stop before a backup (`fix/device-stop`)
+
+Verified on an Android 11 emulator: `adb backup` skips an app in Android's "stopped" state (after `am force-stop`, or
+never launched since install) and returns a 47-byte header-only file (logcat: "Package ... is not eligible for
+backup, removing").
+- `Adb::stop_game` now sends `input keyevent HOME`, then `am kill` (does not set the stopped flag) and re-checks
+  `pidof`; still running ⇒ `DeviceError::GameRunning`. `Adb::force_stop_game` keeps `am force-stop` and is used only
+  by `restore` with `IfRunning::Stop` (the restore wipes the data anyway). `check_running` (backup, root) is safe.
+- `GameInfo.stopped` parsed from the same `dumpsys package` round trip (`stopped=` of the first `User` line).
+  `backup` checks it first and fails with `DeviceError::GameStopped`; `hints::hint_for_error` maps it to
+  `Hint::OpenGameOnce` ("Open The Blockheads once on the phone, go back to the home screen, then try again").
+  `check_backup`'s `EmptyBackup` stays for other cases.
+- Tests: `tests::phone()` scripts a non-stopped game for backup tests; line coverage 100%.

@@ -63,7 +63,7 @@ pub enum IfRunning {
     /// Fail with [`DeviceError::GameRunning`].
     #[default]
     Fail,
-    /// `am force-stop` it first.
+    /// Stop it first: background + `am kill` before a backup, `am force-stop` before a restore.
     Stop,
     /// Go ahead anyway.
     Ignore,
@@ -312,13 +312,21 @@ fn finish_error(code: i32, stderr: &[u8], serial: &str, moved: u64) -> Option<De
 }
 
 impl Adb {
-    /// Applies the running-game policy.
+    /// Applies the running-game policy (stopping with [`Adb::stop_game`], which keeps the app backup-eligible).
     pub fn check_running(&self, serial: &str, policy: IfRunning) -> Result<()> {
+        self.running_policy(serial, policy, false)
+    }
+
+    fn running_policy(&self, serial: &str, policy: IfRunning, force: bool) -> Result<()> {
         if policy == IfRunning::Ignore || !self.game_running(serial)? {
             return Ok(());
         }
         if policy == IfRunning::Stop {
-            self.stop_game(serial)
+            if force {
+                self.force_stop_game(serial)
+            } else {
+                self.stop_game(serial)
+            }
         } else {
             Err(DeviceError::GameRunning)
         }
@@ -334,6 +342,9 @@ impl Adb {
         progress: ProgressFn<'_>,
         cancel: &CancelToken,
     ) -> Result<BackupSummary> {
+        if self.game_info(serial)?.stopped {
+            return Err(DeviceError::GameStopped);
+        }
         self.check_running(serial, opts.if_running)?;
         let tmp = tempfile::tempdir()?;
         let file = tmp.path().join("backup.ab");
@@ -407,7 +418,8 @@ impl Adb {
         progress: ProgressFn<'_>,
         cancel: &CancelToken,
     ) -> Result<u64> {
-        self.check_running(serial, opts.if_running)?;
+        // Force-stop is fine here: the restore wipes the app's data anyway.
+        self.running_policy(serial, opts.if_running, true)?;
         let tmp = tempfile::tempdir()?;
         let (args, staged) = match opts.method {
             AbMethod::AdbCommand => {

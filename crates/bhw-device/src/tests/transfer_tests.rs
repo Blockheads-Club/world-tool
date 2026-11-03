@@ -1,4 +1,4 @@
-use super::{ab_of, adb, good_ab, sh, tar_of};
+use super::{ab_of, adb, good_ab, phone, sh, tar_of};
 use crate::error::DeviceError;
 use crate::fake::{Reply, ScriptedRunner};
 use crate::transfer::*;
@@ -59,7 +59,7 @@ fn checks_backup_streams() {
 
 #[test]
 fn backup_via_adb_command_tails_the_file() {
-    let r = ScriptedRunner::new();
+    let r = phone();
     r.on(
         "backup -f",
         Reply::ok("")
@@ -72,19 +72,19 @@ fn backup_via_adb_command_tails_the_file() {
     assert_eq!((s.bytes, s.encrypted), (good_ab().len() as u64, false));
     assert_eq!(seen.first().unwrap().phase, Phase::WaitingForPhone);
     assert_eq!(seen.last().unwrap().phase, Phase::Done);
-    assert!(r.lines()[0].ends_with("-noapk -noobb -noshared com.noodlecake.blockheads"));
+    assert!(r.lines()[1].ends_with("-noapk -noobb -noshared com.noodlecake.blockheads"));
 }
 
 #[test]
 fn backup_via_bu_streams_stdout() {
     let ab = good_ab();
-    let r = ScriptedRunner::new();
+    let r = phone();
     r.on("exec-out bu backup", Reply::chunks(vec![ab[..10].to_vec(), ab[10..].to_vec()], Duration::from_millis(5)));
     let (res, out, seen) = run_backup(&r, bu(), &CancelToken::new());
     assert_eq!(res.unwrap().bytes, ab.len() as u64);
     assert_eq!(out, ab);
     assert!(seen.iter().any(|p| p.phase == Phase::Transferring && p.bytes == 10));
-    let r = ScriptedRunner::new();
+    let r = phone();
     r.on("exec-out", Reply { read_error: Some(io::ErrorKind::Interrupted), ..Reply::ok(good_ab()) });
     assert!(run_backup(&r, bu(), &CancelToken::new()).0.is_ok());
 }
@@ -93,15 +93,15 @@ fn backup_via_bu_streams_stdout() {
 fn backup_failures() {
     let cancel = CancelToken::new();
     // Nobody confirms.
-    let r = ScriptedRunner::new();
+    let r = phone();
     r.on("backup -f", Reply::hang());
     assert!(matches!(run_backup(&r, cmd(), &cancel).0, Err(DeviceError::ConfirmTimeout)));
     // Stream stops halfway.
-    let r = ScriptedRunner::new();
+    let r = phone();
     r.on("exec-out", Reply::ok(&good_ab()[..20]).then_hang());
     assert!(matches!(run_backup(&r, bu(), &cancel).0, Err(DeviceError::Disconnected)));
     // Cancelled.
-    let r = ScriptedRunner::new();
+    let r = phone();
     r.on("exec-out", Reply::hang());
     let c = CancelToken::new();
     c.cancel();
@@ -124,7 +124,7 @@ fn backup_failures() {
         }),
     ];
     for (reply, check) in cases {
-        let r = ScriptedRunner::new();
+        let r = phone();
         r.on("exec-out", reply);
         let e = run_backup(&r, bu(), &cancel).0.unwrap_err();
         assert!(check(&e), "{e:?}");
@@ -147,7 +147,7 @@ impl Write for Full {
 
 #[test]
 fn backup_disk_full_and_running_game() {
-    let r = ScriptedRunner::new();
+    let r = phone();
     r.on("exec-out", Reply::ok(good_ab()));
     let a = adb(&r);
     let e = a.backup("S", &mut Full(io::ErrorKind::StorageFull, false), bu(), &mut |_| {}, &CancelToken::new());
@@ -160,9 +160,12 @@ fn backup_disk_full_and_running_game() {
         let e = a.backup("S", &mut full, bu(), &mut |_| {}, &CancelToken::new());
         assert!(matches!(e, Err(DeviceError::DiskFull)), "{e:?}");
     }
-    let r = ScriptedRunner::new();
-    r.on("pidof", sh("42\n", 0));
-    r.on("force-stop", sh("", 0));
+    let r = phone();
+    r.once("pidof", sh("42\n", 0));
+    r.once("pidof", sh("42\n", 0));
+    r.on("pidof", sh("", 1));
+    r.on("keyevent HOME", sh("", 0));
+    r.on("am kill", sh("", 0));
     r.on("exec-out", Reply::ok(good_ab()));
     let a = adb(&r);
     let fail = AbOptions { if_running: IfRunning::Fail, ..bu() };
@@ -172,6 +175,22 @@ fn backup_disk_full_and_running_game() {
     ));
     let stop = AbOptions { if_running: IfRunning::Stop, ..bu() };
     a.backup("S", &mut Vec::new(), stop, &mut |_| {}, &CancelToken::new()).unwrap();
+    assert!(r.lines().iter().any(|l| l.contains("am kill com.noodlecake.blockheads")));
+    assert!(r.lines().iter().all(|l| !l.contains("force-stop")));
+    // A stopped app would give a header-only backup: refuse before asking the phone.
+    let r = ScriptedRunner::new();
+    r.on("shell (echo", sh("    versionName=1.7.6\n    User 0: installed=true stopped=true\n", 0));
+    let e = adb(&r).backup("S", &mut Vec::new(), bu(), &mut |_| {}, &CancelToken::new());
+    assert!(matches!(e, Err(DeviceError::GameStopped)));
+    assert!(r.lines().iter().all(|l| !l.contains("backup")));
+    // Restore may force-stop: the restore wipes the app's data anyway.
+    let r = phone();
+    r.once("pidof", sh("42\n", 0));
+    r.on("force-stop", sh("", 0));
+    r.on("exec-out", Reply::ok(""));
+    r.on("restore", Reply::ok(""));
+    let stop = AbOptions { if_running: IfRunning::Stop, ..cmd() };
+    let _ = adb(&r).restore("S", &mut &b"x"[..], stop, &mut |_| {}, &CancelToken::new());
     assert!(r.lines().iter().any(|l| l.contains("am force-stop com.noodlecake.blockheads")));
     assert_eq!(AbOptions::default().if_running, IfRunning::Fail);
 }
@@ -179,7 +198,7 @@ fn backup_disk_full_and_running_game() {
 #[test]
 fn backup_to_file_cleans_up() {
     let dir = tempfile::tempdir().unwrap();
-    let r = ScriptedRunner::new();
+    let r = phone();
     r.once("exec-out", Reply::ok(good_ab()));
     r.on("exec-out", Reply::ok(""));
     let a = adb(&r);
@@ -206,7 +225,7 @@ impl Read for BadRead {
 fn restore_via_adb_command() {
     let staged = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
     let s2 = staged.clone();
-    let r = ScriptedRunner::new();
+    let r = phone();
     r.on(
         "restore",
         Reply::ok("Now unlock your device and confirm the restore operation.\n").on_spawn(move |a| {
@@ -221,7 +240,7 @@ fn restore_via_adb_command() {
     assert_eq!(seen[0].phase, Phase::Staging);
     assert!(seen.iter().any(|p| p.phase == Phase::WaitingForPhone && p.total == Some(n)));
     // Never finishes.
-    let r = ScriptedRunner::new();
+    let r = phone();
     r.on("restore", Reply::hang());
     let e = adb(&r).restore("S", &mut &b"x"[..], cmd(), &mut |_| {}, &CancelToken::new());
     assert!(matches!(e, Err(DeviceError::ConfirmTimeout)));
@@ -241,15 +260,15 @@ fn restore_via_adb_command() {
         adb(&r).restore("S", &mut BadRead(true), cmd(), &mut |_| {}, &CancelToken::new()),
         Err(DeviceError::Io(_))
     ));
-    let r = ScriptedRunner::new();
+    let r = phone();
     r.on("restore", Reply::fail(1, "error: device offline"));
     let e = adb(&r).restore("S", &mut &b"x"[..], cmd(), &mut |_| {}, &CancelToken::new());
     assert!(matches!(e, Err(DeviceError::Disconnected)), "{e:?}");
-    let r = ScriptedRunner::new();
+    let r = phone();
     r.on("pidof", sh("1", 0));
     let e = adb(&r).restore("S", &mut &b"x"[..], AbOptions::default(), &mut |_| {}, &CancelToken::new());
     assert!(matches!(e, Err(DeviceError::GameRunning)));
-    let r = ScriptedRunner::new();
+    let r = phone();
     r.on("restore", Reply { spawn_error: Some(io::ErrorKind::NotFound), ..Reply::default() });
     let e = adb(&r).restore("S", &mut &b"x"[..], cmd(), &mut |_| {}, &CancelToken::new());
     assert!(matches!(e, Err(DeviceError::AdbNotFound)));
@@ -257,7 +276,7 @@ fn restore_via_adb_command() {
 
 #[test]
 fn restore_via_bu_streams_stdin() {
-    let r = ScriptedRunner::new();
+    let r = phone();
     r.on("exec-in bu restore", Reply::default());
     let a = adb(&r);
     let mut seen = Vec::new();
@@ -266,13 +285,13 @@ fn restore_via_bu_streams_stdin() {
     assert_eq!(r.calls()[0].stdin_bytes(), good_ab());
     assert!(seen.iter().any(|p| p.phase == Phase::Transferring));
     // Phone never reads: confirm timeout; reads some then stops: disconnected.
-    let r = ScriptedRunner::new();
+    let r = phone();
     r.on("exec-in", Reply { stdin_limit: Some(0), ..Reply::hang() });
     assert!(matches!(
         adb(&r).restore("S", &mut &b"x"[..], bu(), &mut |_| {}, &CancelToken::new()),
         Err(DeviceError::ConfirmTimeout)
     ));
-    let r = ScriptedRunner::new();
+    let r = phone();
     r.on("exec-in", Reply { stdin_limit: Some(3), ..Reply::hang() });
     let big = [1u8; 100];
     assert!(matches!(
@@ -280,7 +299,7 @@ fn restore_via_bu_streams_stdin() {
         Err(DeviceError::Disconnected)
     ));
     // All sent but adb never exits.
-    let r = ScriptedRunner::new();
+    let r = phone();
     r.on("exec-in", Reply::hang());
     let mut a = adb(&r);
     a.timeouts.stall = Duration::from_secs(10);
@@ -289,7 +308,7 @@ fn restore_via_bu_streams_stdin() {
         Err(DeviceError::ConfirmTimeout)
     ));
     // Local read error.
-    let r = ScriptedRunner::new();
+    let r = phone();
     r.on("exec-in", Reply::default());
     assert!(matches!(
         adb(&r).restore("S", &mut BadRead(false), bu(), &mut |_| {}, &CancelToken::new()),

@@ -55,7 +55,7 @@ fn versions() {
     ] {
         assert_eq!(version_supported(v), ok, "{v}");
     }
-    let g = GameInfo { version_name: "1.7.2".into(), version_code: None, uid: None, data_dir: None };
+    let g = GameInfo { version_name: "1.7.2".into(), version_code: None, uid: None, data_dir: None, stopped: false };
     assert!(matches!(g.check_supported(), Err(DeviceError::UnsupportedVersion { found }) if found == "1.7.2"));
     assert!(GameInfo { version_name: "1.7.6".into(), ..g }.check_supported().is_ok());
 }
@@ -72,7 +72,6 @@ fn scripted() -> ScriptedRunner {
 fn details_and_game() {
     let r = scripted();
     r.on("pidof", sh("1234\n", 0));
-    r.on("force-stop", sh("", 0));
     let a = adb(&r);
     let d = a.device_details("R58M123").unwrap();
     assert_eq!(d.model, "SM G973F");
@@ -85,7 +84,28 @@ fn details_and_game() {
     assert!(matches!(a.game_info("192.168.1.5:5555"), Err(DeviceError::GameNotInstalled)));
     assert!(a.game_info("R58M123").is_ok());
     assert!(a.game_running("R58M123").unwrap());
-    a.stop_game("R58M123").unwrap();
+    assert!(!g.stopped);
+    r.on("keyevent HOME", sh("", 0));
+    r.on("am kill", sh("", 0));
+    r.on("force-stop", sh("", 0));
+    assert!(matches!(a.stop_game("R58M123"), Err(DeviceError::GameRunning)));
+    a.force_stop_game("R58M123").unwrap();
+    let s = ScriptedRunner::new();
+    s.on("keyevent HOME", sh("", 0));
+    s.on("am kill", sh("", 0));
+    s.once("pidof", sh("", 1));
+    adb(&s).stop_game("S").unwrap();
+    assert!(s.lines().iter().all(|l| !l.contains("force-stop")));
+    let s = ScriptedRunner::new();
+    s.on("keyevent", sh("", 1));
+    assert!(adb(&s).stop_game("S").is_err());
+    let s = ScriptedRunner::new();
+    s.on("keyevent", sh("", 0));
+    s.on("am kill", sh("", 1));
+    assert!(adb(&s).stop_game("S").is_err());
+    let s = ScriptedRunner::new();
+    s.on("shell (echo", sh("    versionName=1.7.6\n    User 0: installed=true stopped=true notLaunched=false\n", 0));
+    assert!(adb(&s).game_info("S").unwrap().stopped);
     let r = ScriptedRunner::new();
     r.on("pidof", sh("", 1));
     assert!(!adb(&r).game_running("S").unwrap());
