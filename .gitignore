@@ -1,0 +1,10 @@
+/target
+node_modules/
+/app/build
+/app/.svelte-kit
+/app/src-tauri/target
+/app/src-tauri/gen
+/design-ref/
+/test-results/
+*.profraw
+lcov.info

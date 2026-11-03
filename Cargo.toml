@@ -1,0 +1,18 @@
+[workspace]
+resolver = "2"
+members = ["crates/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.86"
+license = "GPL-3.0-or-later"
+
+[workspace.dependencies]
+anyhow = "1"
+thiserror = "2"
+flate2 = { version = "1", default-features = false, features = ["zlib"] }
+libz-sys = { version = "1", default-features = false, features = ["static"] }
+
+[workspace.lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(coverage)", "cfg(coverage_nightly)"] }
