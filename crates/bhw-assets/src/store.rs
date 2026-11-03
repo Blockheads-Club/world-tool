@@ -215,7 +215,7 @@ impl GameFiles {
     pub fn extract(
         &self,
         source: &Path,
-        mut progress: impl FnMut(&Progress),
+        progress: &mut dyn FnMut(&Progress),
         cancel: &CancelToken,
     ) -> Result<Manifest> {
         let mut set = ApkSet::open(source)?;
@@ -223,7 +223,7 @@ impl GameFiles {
         fs::create_dir_all(&self.root)?;
         let name = format!("{}-{}", info.version_name, &info.sha256[..12]);
         let tmp = self.root.join(format!(".tmp-{name}-{}", unique()));
-        let files = match Self::fill(&mut set, &tmp, &mut progress, cancel) {
+        let files = match Self::fill(&mut set, &tmp, progress, cancel) {
             Ok(f) => f,
             Err(e) => {
                 let _ = fs::remove_dir_all(&tmp);
@@ -264,7 +264,7 @@ impl GameFiles {
     fn fill(
         set: &mut ApkSet,
         tmp: &Path,
-        progress: &mut impl FnMut(&Progress),
+        progress: &mut dyn FnMut(&Progress),
         cancel: &CancelToken,
     ) -> Result<Vec<FileEntry>> {
         fs::create_dir_all(tmp)?;
@@ -298,7 +298,7 @@ impl GameFiles {
     }
 
     /// Extracts again from the active extraction's source APK.
-    pub fn reextract(&self, progress: impl FnMut(&Progress), cancel: &CancelToken) -> Result<Manifest> {
+    pub fn reextract(&self, progress: &mut dyn FnMut(&Progress), cancel: &CancelToken) -> Result<Manifest> {
         let Some((_, m)) = self.current()? else { return Err(Error::NotSet) };
         if !m.source.exists() {
             return Err(Error::MissingSource(m.source));
@@ -321,6 +321,8 @@ mod tests {
     use crate::apk::testutil::*;
     use crate::apk::PACKAGE;
 
+    fn noop(_: &Progress) {}
+
     fn setup() -> (tempfile::TempDir, PathBuf, GameFiles) {
         let d = tempfile::tempdir().unwrap();
         let apk_path = write(d.path(), "game.apk", &apk(PACKAGE, "1.7.6", true));
@@ -332,10 +334,10 @@ mod tests {
     fn extract_status_reextract_clear() {
         let (d, apk_path, gf) = setup();
         assert_eq!(gf.status(), Status::NotSet);
-        assert!(matches!(gf.reextract(|_| {}, &CancelToken::new()), Err(Error::NotSet)));
+        assert!(matches!(gf.reextract(&mut noop, &CancelToken::new()), Err(Error::NotSet)));
         assert_eq!(gf.file("TileMap.png").unwrap(), None);
         let mut seen = Vec::new();
-        let m = gf.extract(&apk_path, |p| seen.push(p.clone()), &CancelToken::new()).unwrap();
+        let m = gf.extract(&apk_path, &mut |p: &Progress| seen.push(p.clone()), &CancelToken::new()).unwrap();
         assert_eq!(m.files.len(), 7);
         assert_eq!(m.version_name, "1.7.6");
         assert_eq!(seen.len(), 8);
@@ -358,14 +360,14 @@ mod tests {
         // Re-extract the same APK: same directory, leftovers cleaned.
         fs::create_dir_all(gf.root().join(".tmp-stale")).unwrap();
         fs::write(gf.root().join("stray"), b"x").unwrap();
-        let m2 = gf.reextract(|_| {}, &CancelToken::new()).unwrap();
+        let m2 = gf.reextract(&mut noop, &CancelToken::new()).unwrap();
         assert_eq!(m2.files, m.files);
         let mut names: Vec<_> = fs::read_dir(gf.root()).unwrap().map(|e| e.unwrap().file_name()).collect();
         names.sort();
         assert_eq!(names, [std::ffi::OsString::from(&dir_name), CURRENT.into()]);
         // Another version replaces the old one.
         let other = write(d.path(), "old.apk", &apk(PACKAGE, "1.7.4", true));
-        gf.extract(&other, |_| {}, &CancelToken::new()).unwrap();
+        gf.extract(&other, &mut noop, &CancelToken::new()).unwrap();
         assert!(!gf.root().join(&dir_name).exists());
         assert!(matches!(gf.status(), Status::Ready { version, .. } if version == "1.7.4"));
         // Damage: a file disappears; the source is present → Damaged, gone → MissingSource.
@@ -373,7 +375,7 @@ mod tests {
         assert!(matches!(gf.status(), Status::Damaged { source: Some(_), .. }));
         fs::remove_file(&other).unwrap();
         assert!(matches!(gf.status(), Status::MissingSource { version, .. } if version == "1.7.4"));
-        assert!(matches!(gf.reextract(|_| {}, &CancelToken::new()), Err(Error::MissingSource(_))));
+        assert!(matches!(gf.reextract(&mut noop, &CancelToken::new()), Err(Error::MissingSource(_))));
         gf.clear().unwrap();
         gf.clear().unwrap();
         assert_eq!(gf.status(), Status::NotSet);
@@ -382,7 +384,7 @@ mod tests {
     #[test]
     fn ready_without_source_and_unsupported_manifest() {
         let (_d, apk_path, gf) = setup();
-        gf.extract(&apk_path, |_| {}, &CancelToken::new()).unwrap();
+        gf.extract(&apk_path, &mut noop, &CancelToken::new()).unwrap();
         fs::remove_file(&apk_path).unwrap();
         assert!(matches!(gf.status(), Status::Ready { source_present: false, .. }));
         let (dir, mut m) = gf.current().unwrap().unwrap();
@@ -398,7 +400,7 @@ mod tests {
         let c2 = c.clone();
         let r = gf.extract(
             &apk_path,
-            move |p| {
+            &mut move |p: &Progress| {
                 if p.files_done == 2 {
                     c2.cancel()
                 }
@@ -415,7 +417,7 @@ mod tests {
     fn invalid_sources_and_pointers() {
         let (d, _apk, gf) = setup();
         let bad = write(d.path(), "x.apk", b"nope");
-        assert!(matches!(gf.extract(&bad, |_| {}, &CancelToken::new()), Err(Error::NotAnApk)));
+        assert!(matches!(gf.extract(&bad, &mut noop, &CancelToken::new()), Err(Error::NotAnApk)));
         fs::create_dir_all(gf.root()).unwrap();
         for ptr in ["", ".tmp-x", "a/b", "a\\b"] {
             fs::write(gf.root().join(CURRENT), ptr).unwrap();
@@ -435,7 +437,7 @@ mod tests {
         let blocked = GameFiles::new(&bad);
         assert!(matches!(blocked.clear(), Err(Error::Io(_))));
         let apk_path = d.path().join("game.apk");
-        assert!(matches!(blocked.extract(&apk_path, |_| {}, &CancelToken::new()), Err(Error::Io(_))));
+        assert!(matches!(blocked.extract(&apk_path, &mut noop, &CancelToken::new()), Err(Error::Io(_))));
     }
 
     #[test]
@@ -450,7 +452,7 @@ mod tests {
         bytes[pos] = 0x56;
         let p = write(d.path(), "c.apk", &bytes);
         let gf = GameFiles::new(&d.path().join("cache"));
-        assert!(matches!(gf.extract(&p, |_| {}, &CancelToken::new()), Err(Error::Damaged(_))));
+        assert!(matches!(gf.extract(&p, &mut noop, &CancelToken::new()), Err(Error::Damaged(_))));
         assert_eq!(fs::read_dir(gf.root()).unwrap().count(), 0);
     }
 

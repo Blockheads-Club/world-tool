@@ -58,7 +58,7 @@ fn real_apks_validate_and_extract() {
         let cache = tempfile::tempdir().unwrap();
         let gf = GameFiles::new(cache.path());
         let mut calls = 0;
-        let m = gf.extract(&src, |_| calls += 1, &CancelToken::new()).unwrap();
+        let m = gf.extract(&src, &mut |_: &bhw_assets::Progress| calls += 1, &CancelToken::new()).unwrap();
         assert_eq!(calls, m.files.len() + 1);
         assert_eq!((m.files.len(), m.total_bytes), (info.files, info.bytes));
         for f in REQUIRED_FILES {

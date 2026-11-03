@@ -21,6 +21,8 @@ extracted from the user's own APK. GPL-3.0-or-later. Not affiliated with Majic J
   (Blockheads Server) on-disk layouts.
 - `crates/bhw-backup` — Android `adb backup` (.ab) read/write incl. encryption; tar handling.
 - `crates/bhw-world` — world discovery/metadata in game saves, `.bhworld` format, conversions.
+- `crates/bhw-assets` — validates the user's own APK (AXML manifest, `.apks`/`.xapk`, split folders) and extracts
+  its graphics into a local cache (`docs/game-files.md`).
 - `app/` — SvelteKit UI + `app/src-tauri` Tauri shell.
 - `docs/progress/*.md` — per-stream progress logs (resume points). Keep them current.
 

@@ -176,7 +176,7 @@ fn open_nested(outer: &mut ZipArchive<Box<dyn ReadSeek>>, path: &Path, index: us
 }
 
 /// Copies `r` into `w`; read failures (corrupt data, CRC mismatch) are [`Error::Damaged`], write failures I/O.
-pub(crate) fn copy(r: &mut impl Read, w: &mut impl io::Write, what: &str) -> Result<u64> {
+pub(crate) fn copy(r: &mut dyn Read, w: &mut dyn io::Write, what: &str) -> Result<u64> {
     let mut buf = vec![0u8; 64 * 1024];
     let mut total = 0u64;
     loop {
@@ -303,7 +303,7 @@ impl ApkSet {
     }
 
     /// Copies one game file (a path from [`Self::files`]) into `w`; returns the number of bytes.
-    pub fn copy_file(&mut self, rel: &str, w: &mut impl io::Write) -> Result<u64> {
+    pub fn copy_file(&mut self, rel: &str, w: &mut dyn io::Write) -> Result<u64> {
         let Some(&(pi, i, _)) = self.assets.get(rel) else {
             return Err(Error::Io(io::Error::new(io::ErrorKind::NotFound, rel.to_owned())));
         };
@@ -387,6 +387,27 @@ pub(crate) mod testutil {
             ],
             true,
         )
+    }
+
+    /// Rewrites the compression method of entry `name` (local + central header) to `method`.
+    pub fn patch_method(zip: &mut [u8], name: &str, method: u16) {
+        patch(zip, name, b"PK\x03\x04", 26, 30, 8, &method.to_le_bytes());
+        patch(zip, name, b"PK\x01\x02", 28, 46, 10, &method.to_le_bytes());
+    }
+
+    /// Breaks the local header signature of entry `name`.
+    pub fn break_local_header(zip: &mut [u8], name: &str) {
+        patch(zip, name, b"PK\x03\x04", 26, 30, 0, b"XX");
+    }
+
+    fn patch(zip: &mut [u8], name: &str, sig: &[u8], len_at: usize, name_at: usize, at: usize, val: &[u8]) {
+        let pos = (0..zip.len() - name_at)
+            .find(|&i| {
+                let n = u16::from_le_bytes([zip[i + len_at], zip[i + len_at + 1]]) as usize;
+                zip[i..].starts_with(sig) && zip.get(i + name_at..i + name_at + n) == Some(name.as_bytes())
+            })
+            .unwrap();
+        zip[pos + at..pos + at + val.len()].copy_from_slice(val);
     }
 
     pub fn write(dir: &Path, name: &str, bytes: &[u8]) -> std::path::PathBuf {
@@ -548,6 +569,29 @@ mod tests {
         // A truncated zip in the folder.
         write(e.path(), "a.apk", b"PK\x03\x04");
         assert!(matches!(inspect(e.path()), Err(Error::Damaged(_))));
+    }
+
+    #[test]
+    fn unreadable_entries_are_damaged() {
+        let d = tempfile::tempdir().unwrap();
+        let mut e = vec![("AndroidManifest.xml", build::manifest(PACKAGE, "1.7.6", 1, None))];
+        e.extend(game_entries());
+        let ok = zip(&e, true);
+        // Unsupported compression method (bzip2) on a game file: validation passes, reading it fails.
+        let mut b = ok.clone();
+        patch_method(&mut b, "assets/GameResources/TileMap.png", 12);
+        let mut set = ApkSet::open(&write(d.path(), "a.apk", &b)).unwrap();
+        assert!(
+            matches!(set.copy_file("TileMap.png", &mut Vec::new()), Err(Error::Damaged(m)) if m.contains("TileMap"))
+        );
+        // Broken local header of a game file.
+        let mut b = ok.clone();
+        break_local_header(&mut b, "assets/GameResources/TileMap.png");
+        assert!(matches!(inspect(&write(d.path(), "b.apk", &b)), Err(Error::Damaged(_))));
+        // Bundle whose nested APK uses an unsupported method.
+        let mut b = zip(&[("base.apk", ok)], true);
+        patch_method(&mut b, "base.apk", 12);
+        assert!(matches!(inspect(&write(d.path(), "c.apks", &b)), Err(Error::Damaged(m)) if m.contains("c.apks")));
     }
 
     #[test]

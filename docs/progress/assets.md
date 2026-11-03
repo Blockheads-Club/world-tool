@@ -17,7 +17,8 @@ Done:
   MissingSource), `reextract`, `clear`, `file(rel)`.
 - Gated real test `tests/real_apk.rs` (`BHW_APK`, `BHW_APK_DIR`): all three user APKs pass; other apps' APKs in the
   folder are rejected with `WrongApp`.
-- Coverage `cargo llvm-cov -p bhw-assets`: 100 % lines.
+- Coverage `cargo llvm-cov -p bhw-assets`: 100 % lines (1119/1119), 100 % functions, 97.3 % regions. Progress
+  callbacks are `&mut dyn FnMut` and copies use `dyn Read/Write` so no uncovered generic instantiations remain.
 
 Next (other streams):
 - Tauri commands + settings UI ("Game files from your APK": pick file/folder, progress, cancel, status, clear).

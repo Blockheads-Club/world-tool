@@ -75,7 +75,7 @@ layouts. The only frame descriptions are the 5 BMFont text files in `Fonts/*.fnt
 ## What the editor still needs (not in the APK as data)
 
 The mapping *tile type (+ sub-type, neighbours, damage, ownership…) → TileMap cell(s)* and *item type → Items cell*
-lives in the game's native render code (`libblockheads*.so`, armeabi-v7a), together with the per-type rules for edge
+lives in the game's native render code (`lib/armeabi-v7a`), together with the per-type rules for edge
 and corner variants, foreground/background layers, contents (ore, water levels) and how `TileReflect` /
 `TileDestruct` / `light` are combined. It has to be written down as a hand-made table (cell coordinates per tile
 type and variant) from clean-room observation of the running game, not copied from decompiled code. Creature
