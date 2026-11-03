@@ -1,0 +1,23 @@
+[package]
+name = "bhw-device"
+description = "Moves The Blockheads saves to and from Android devices (adb backup/restore, root) and Blockheads PC"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+thiserror = { workspace = true }
+flate2 = { workspace = true }
+libz-sys = { workspace = true }
+dirs = "6"
+tar = { version = "0.4", default-features = false }
+tempfile = "3"
+toml = { version = "0.8", default-features = false, features = ["parse"] }
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+tar = { version = "0.4", default-features = false }
