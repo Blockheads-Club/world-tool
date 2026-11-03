@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-wifi-pair"
+description = "Enables the wifi_pair command without any pre-configured scope."
+commands.allow = ["wifi_pair"]
+
+[[permission]]
+identifier = "deny-wifi-pair"
+description = "Denies the wifi_pair command without any pre-configured scope."
+commands.deny = ["wifi_pair"]

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-transfer-plan"
+description = "Enables the transfer_plan command without any pre-configured scope."
+commands.allow = ["transfer_plan"]
+
+[[permission]]
+identifier = "deny-transfer-plan"
+description = "Denies the transfer_plan command without any pre-configured scope."
+commands.deny = ["transfer_plan"]

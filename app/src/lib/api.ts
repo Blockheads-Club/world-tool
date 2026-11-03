@@ -177,7 +177,12 @@ export const tauriBackend: Backend = {
   downloadUpdate: (op, onProgress) => invoke('download_update', { op, onProgress: channel(onProgress) }),
   restartApp: () => invoke('restart_app'),
 
-  onOpenFiles: (cb) => listen<string[]>('open-files', (e) => cb(e.payload)),
+  onOpenFiles: async (cb) => {
+    const off = await listen<string[]>('open-files', (e) => cb(e.payload));
+    const first = await invoke<string[]>('take_open_files');
+    if (first.length) cb(first);
+    return off;
+  },
   onDragDrop: (cb) =>
     getCurrentWindow().onDragDropEvent((e) => {
       const p = e.payload;
@@ -199,7 +204,7 @@ export const COMMANDS = [
   'list_activity', 'clear_activity',
   'game_files', 'use_apk', 'apk_from_device', 'reextract', 'clear_game_files',
   'pick_folder', 'pick_import', 'pick_apk',
-  'check_update', 'download_update', 'restart_app'
+  'check_update', 'download_update', 'restart_app', 'take_open_files'
 ] as const;
 
 /** True inside the Tauri webview. */

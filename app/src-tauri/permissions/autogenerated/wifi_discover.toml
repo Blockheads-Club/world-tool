@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-wifi-discover"
+description = "Enables the wifi_discover command without any pre-configured scope."
+commands.allow = ["wifi_discover"]
+
+[[permission]]
+identifier = "deny-wifi-discover"
+description = "Denies the wifi_discover command without any pre-configured scope."
+commands.deny = ["wifi_discover"]

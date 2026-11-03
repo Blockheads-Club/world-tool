@@ -1,0 +1,55 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "BH World Tool",
+  "version": "0.1.0",
+  "identifier": "club.blockheads.worldtool",
+  "build": {
+    "beforeDevCommand": "bun run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "bun run build",
+    "frontendDist": "../build"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "BH World Tool",
+        "width": 1280,
+        "height": 800,
+        "minWidth": 1024,
+        "minHeight": 640,
+        "center": true,
+        "decorations": false,
+        "dragDropEnabled": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: asset: http://asset.localhost; font-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "category": "Utility",
+    "publisher": "Blockheads Club",
+    "copyright": "Blockheads Club contributors. GPL-3.0-or-later.",
+    "shortDescription": "Copy The Blockheads worlds between phones, Blockheads PC and this computer",
+    "longDescription": "BH World Tool copies your own The Blockheads worlds between Android phones, Blockheads PC, iPhone backups (read-only) and files on this computer, with an automatic backup before every write. It contains no part of the game and uploads nothing. Unofficial fan project, not affiliated with Majic Jungle or Noodlecake.",
+    "license": "GPL-3.0-or-later",
+    "licenseFile": "../../LICENSE",
+    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.icns", "icons/icon.ico"],
+    "fileAssociations": [
+      {
+        "ext": ["bhworld"],
+        "name": "BH World",
+        "description": "The Blockheads world",
+        "role": "Editor",
+        "mimeType": "application/x-bhworld",
+        "rank": "Owner"
+      }
+    ],
+    "macOS": { "minimumSystemVersion": "11.0" },
+    "windows": { "nsis": { "installMode": "currentUser" } }
+  },
+  "mainBinaryName": "bh-world-tool"
+}
