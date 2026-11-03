@@ -114,8 +114,8 @@ fn take_extras(other: &FileMap, extras_dir: &str) -> (FileMap, FileMap) {
     let mut restored = FileMap::new();
     let mut rest = FileMap::new();
     for (p, v) in other {
-        if is_lock(p) {
-            continue;
+        if is_lock(p) || p.ends_with('/') {
+            continue; // lock files are recreated by LMDB; empty-directory markers carry no data
         }
         match p.strip_prefix(&prefix) {
             Some(inner) => restored.insert(inner.to_string(), v.clone()),
