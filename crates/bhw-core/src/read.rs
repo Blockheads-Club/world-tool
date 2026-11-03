@@ -16,7 +16,7 @@ use crate::library::AddMeta;
 use crate::types::{
     ActivityKind, Connection, Device, DeviceKind, DeviceWorld, Origin, Progress, ReadRequest, ReadResult, Stage, World,
 };
-use crate::util::{lock, unique_id, Cancel, TempPath};
+use crate::util::{lock, unique_id, Cancel, TempPath, Throttle};
 use crate::worlds::{inspect, WorldInfo};
 use crate::Core;
 
@@ -24,8 +24,6 @@ use crate::Core;
 pub const SUPPORT_PREFIX: &str = "apps/com.noodlecake.blockheads/f/Library/Application Support/";
 /// Read sessions kept (older ones are dropped with their files).
 pub const MAX_SESSIONS: usize = 4;
-/// Progress events while bytes move: at most one per this many bytes.
-pub const PROGRESS_STEP: u64 = 1 << 20;
 
 /// One world of a read.
 #[derive(Debug, Clone)]
@@ -147,15 +145,15 @@ impl Core {
         let adb = self.adb()?;
         let game = adb.game_info(serial)?;
         game.check_supported()?;
-        let mut last = 0;
+        let mut t = Throttle::default();
         let opts = AbOptions { method: AbMethod::AdbCommand, if_running: IfRunning::Stop };
         let mut on = |p: bhw_device::Progress| match p.phase {
             Phase::WaitingForPhone => progress(Progress { elapsed: Some(0), ..Progress::stage(Stage::PhoneBackup) }),
-            _ if p.phase == Phase::Done || p.bytes >= last + PROGRESS_STEP => {
-                last = p.bytes;
-                progress(Progress::bytes(stage, p.bytes, p.total.or(total)));
+            _ => {
+                if t.pass(p.bytes, p.phase == Phase::Done) {
+                    progress(Progress::bytes(stage, p.bytes, p.total.or(total)));
+                }
             }
-            _ => {}
         };
         Ok(adb.backup_to_file(serial, path, opts, &mut on, &cancel.device)?.bytes)
     }

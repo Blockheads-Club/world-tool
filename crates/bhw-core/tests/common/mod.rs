@@ -277,6 +277,7 @@ pub fn pc_dir(root: &Path, worlds: &[(&str, &str)], game_db: bool) -> PathBuf {
     if game_db {
         std::fs::create_dir_all(support.join("game_db")).unwrap();
         std::fs::write(support.join("game_db/data.mdb"), game_db_bytes(worlds)).unwrap();
+        std::fs::write(support.join("game_db/lock.mdb"), [0u8; 8]).unwrap();
     }
     data
 }

@@ -46,6 +46,12 @@ fn read_save_and_list() {
     assert!(saved[0].base.preview.is_some());
     assert_eq!(core.save_to_library(&r.read_id, &[D.to_string()]).unwrap_err().code, ErrorCode::NotFound);
     assert_eq!(core.save_to_library("nope", &[]).unwrap_err().code, ErrorCode::NotFound);
+    let w = core
+        .read("op", &ReadRequest { device_id: "10.0.0.2:5555".into(), password: String::new() }, &mut |_| {})
+        .unwrap();
+    let wifi = core.save_to_library(&w.read_id, &[B.to_string()]).unwrap();
+    assert_eq!(wifi[0].source_detail.as_deref(), Some("Wi-Fi"));
+    core.lib().unwrap().delete(&wifi[0].base.id).unwrap();
     let lib = core.lib().unwrap().list().unwrap();
     assert_eq!(lib.len(), 1);
     assert_eq!(lib[0].world_id, A);
@@ -218,6 +224,30 @@ fn transfer_from_files_and_new_phone() {
     assert_eq!(res.added, ["Server World"]);
     assert_eq!(env.phone.names(), ["Server World"]);
     assert_eq!(env.phone.registered(), [B]);
+}
+
+#[test]
+fn a_world_whose_record_has_another_id_is_refused() {
+    let env = Env::new(&PhoneData::new(&[]));
+    let core = env.core();
+    // Folder id A, but the record inside says B.
+    let mut w = client_world(B, "Odd");
+    w.id = A.into();
+    let info = bhw_core::worlds::inspect(&w, None).unwrap();
+    let meta = bhw_core::library::AddMeta {
+        origin: bhw_core::Origin::File,
+        source: "x".into(),
+        source_detail: None,
+        game_version: None,
+        kind: bhw_world::SourceKind::Bhworld,
+        device_name: None,
+    };
+    let added = core.lib().unwrap().add(&w, &info, &meta).unwrap();
+    let plan = core.transfer_plan(&Source::Library, &[added.base.id], "S1").unwrap();
+    let e = core
+        .transfer("op", &TransferRequest { plan_id: plan.plan_id, choices: Default::default() }, &mut |_| {})
+        .unwrap_err();
+    assert_eq!(e.code, ErrorCode::WorldDamaged);
 }
 
 #[test]

@@ -20,7 +20,7 @@ use crate::types::{
     ActivityKind, BackupReason, Choice, ConflictKind, Device, DeviceKind, DeviceWorld, PlanItem, PlanResult, Progress,
     Source, Stage, TransferPlan, TransferRequest, TransferResult,
 };
-use crate::util::{lock, unique_id, Cancel, TempPath};
+use crate::util::{lock, unique_id, Cancel, TempPath, Throttle};
 use crate::worlds::{register, set_identity};
 use crate::Core;
 
@@ -345,13 +345,8 @@ impl Core {
             None => (format!("{SUPPORT_PREFIX}saves/"), Vec::new(), GameDb::new()),
         };
         if self.settings().backup_before_write {
-            *backup = Some(self.store_backup(
-                &before.0,
-                &p.target,
-                BackupReason::BeforeWrite,
-                Some(p.keys.len()),
-                existing.len(),
-            )?);
+            let (count, worlds) = (Some(p.keys.len()), existing.len());
+            *backup = Some(self.store_backup(&before.0, &p.target, BackupReason::BeforeWrite, count, worlds)?);
         }
         progress(Progress::stage(Stage::Preparing));
         let changes = apply_choices(&existing, self.incoming(p)?, &req.choices, &mut game_db)?;
@@ -384,14 +379,14 @@ impl Core {
         let total = std::fs::metadata(file)?.len();
         let mut input = BufReader::new(std::fs::File::open(file)?);
         let opts = AbOptions { method: AbMethod::AdbCommand, if_running: IfRunning::Stop };
-        let mut last = 0;
+        let mut t = Throttle::default();
         let mut on = |x: bhw_device::Progress| match x.phase {
             Phase::WaitingForPhone => progress(Progress { elapsed: Some(0), ..Progress::stage(Stage::PhoneRestore) }),
-            Phase::Staging if x.bytes >= last + crate::read::PROGRESS_STEP => {
-                last = x.bytes;
-                progress(Progress::bytes(Stage::Preparing, x.bytes, Some(total)));
+            Phase::Staging => {
+                if t.pass(x.bytes, false) {
+                    progress(Progress::bytes(Stage::Preparing, x.bytes, Some(total)));
+                }
             }
-            Phase::Staging => {}
             _ => progress(Progress::bytes(Stage::Writing, x.bytes, Some(total))),
         };
         adb.restore(serial, &mut input, opts, &mut on, &cancel.device)?;

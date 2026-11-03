@@ -94,7 +94,8 @@ fn game_files_states() {
 
 #[test]
 fn apk_from_the_phone() {
-    let env = Env::new(&PhoneData::new(&[]));
+    let mut env = Env::new(&PhoneData::new(&[]));
+    env.pc = Some(pc_dir(env.tmp.path(), &[], false));
     let core = env.core();
     let (ev, mut on) = events();
     let g = core.apk_from_device("op", "S1", &mut on).unwrap();
@@ -348,6 +349,31 @@ fn helpers() {
         assert_eq!(g.cancel.check().unwrap_err().code, ErrorCode::Cancelled);
     }
     assert!(!ops.cancel("a"));
+    let mut t = bhw_core::util::Throttle::default();
+    assert!(t.pass(10, false));
+    assert!(!t.pass(20, false));
+    assert!(t.pass(20, true));
+    assert!(t.pass(30 + bhw_core::util::Throttle::STEP, false));
+    // Origins and saves folders.
+    use bhw_world::SourceKind as K;
+    let o: Vec<_> = [K::AndroidBackup, K::AndroidRoot, K::BlockheadsPc, K::IosBackup, K::Bhworld]
+        .into_iter()
+        .map(bhw_core::library::origin_of)
+        .collect();
+    use bhw_core::Origin as O;
+    assert_eq!(o, [O::Phone, O::Phone, O::Pc, O::Ios, O::File]);
+    let saves = |pkg: Option<&str>, prefix: &str| bhw_world::backup::BackupSaves {
+        prefix: prefix.into(),
+        package: pkg.map(str::to_string),
+        domain: None,
+        worlds: vec![],
+        game_db: vec![],
+    };
+    let pick = bhw_core::read::pick_saves;
+    assert_eq!(pick(vec![]), None);
+    let game = Some("com.noodlecake.blockheads");
+    assert_eq!(pick(vec![saves(None, "a/"), saves(game, "b/")]).unwrap().prefix, "b/");
+    assert_eq!(pick(vec![saves(None, "a/"), saves(None, "b/")]).unwrap().prefix, "a/");
     // Poisoned locks are still usable.
     let m = Arc::new(std::sync::Mutex::new(1));
     let m2 = m.clone();

@@ -114,6 +114,24 @@ impl Ops {
     }
 }
 
+/// Limits progress events while bytes move: the first one passes, then one per [`Throttle::STEP`] bytes.
+#[derive(Debug, Default)]
+pub struct Throttle(u64);
+
+impl Throttle {
+    /// Bytes between two events.
+    pub const STEP: u64 = 1 << 20;
+
+    /// Whether an event for `bytes` should be sent (`force` for the last one).
+    pub fn pass(&mut self, bytes: u64, force: bool) -> bool {
+        let ok = force || bytes >= self.0;
+        if ok {
+            self.0 = bytes + Throttle::STEP;
+        }
+        ok
+    }
+}
+
 /// Removes a file or folder when dropped (temporary files of an operation).
 #[derive(Debug)]
 pub struct TempPath(pub PathBuf);

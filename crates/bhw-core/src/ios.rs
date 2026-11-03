@@ -23,10 +23,7 @@ pub fn backups_in(dir: &Path) -> Result<Vec<BackupInfo>> {
 
 fn model(info: &BackupInfo) -> String {
     let product = info.product_type.clone().unwrap_or_else(|| "iPhone".into());
-    match &info.ios_version {
-        Some(v) => format!("{product} · iOS {v}"),
-        None => product,
-    }
+    info.ios_version.as_ref().map_or(product.clone(), |v| format!("{product} · iOS {v}"))
 }
 
 fn date_ms(info: &BackupInfo) -> u64 {

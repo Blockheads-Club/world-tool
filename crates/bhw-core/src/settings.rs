@@ -65,9 +65,7 @@ impl Settings {
 
     /// Writes the settings file.
     pub fn save(&self, file: &Path) -> Result<()> {
-        if let Some(dir) = file.parent() {
-            std::fs::create_dir_all(dir)?;
-        }
+        std::fs::create_dir_all(file.parent().unwrap_or(Path::new("")))?;
         std::fs::write(file, serde_json::to_vec_pretty(self)?)?;
         Ok(())
     }

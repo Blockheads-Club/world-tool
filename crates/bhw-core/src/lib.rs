@@ -12,7 +12,7 @@ mod files;
 mod gamefiles;
 mod ios;
 pub mod library;
-mod read;
+pub mod read;
 pub mod settings;
 mod transfer;
 pub mod types;

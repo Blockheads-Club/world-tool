@@ -46,9 +46,7 @@ impl ActivityLog {
     }
 
     fn save(&self, items: &[Activity]) -> Result<()> {
-        if let Some(dir) = self.file.parent() {
-            std::fs::create_dir_all(dir)?;
-        }
+        std::fs::create_dir_all(self.file.parent().unwrap_or(Path::new("")))?;
         std::fs::write(&self.file, serde_json::to_vec(items)?)?;
         Ok(())
     }

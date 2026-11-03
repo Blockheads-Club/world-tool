@@ -8,8 +8,12 @@ use bhw_save::GameDb;
 use common::*;
 
 fn pc_env(worlds: &[(&str, &str)], game_db: bool, running: bool) -> Env {
+    pc_env_with(&[(C, "Phone World")], worlds, game_db, running)
+}
+
+fn pc_env_with(phone: &[(&str, &str)], worlds: &[(&str, &str)], game_db: bool, running: bool) -> Env {
     let mut env = Env::with(
-        &PhoneData::new(&[(C, "Phone World")]),
+        &PhoneData::new(phone),
         |_| {},
         |l| {
             if running {
@@ -121,16 +125,26 @@ fn pc_without_game_db_and_running_game() {
     std::fs::write(dir.join("x.ab"), phone_ab(&PhoneData::new(&[]), None)).unwrap();
     assert_eq!(core.restore_backup("op", "x.ab", "pc", &mut |_| {}).unwrap_err().code, ErrorCode::GameRunning);
 
-    // Not running, no game_db and no backup before writing.
+    // Not running, no game_db (the backup then has none either).
     let env = pc_env(&[(A, "One")], false, false);
     let core = env.core();
-    core.set_settings(serde_json::json!({ "backup_before_write": false }).as_object().unwrap()).unwrap();
     core.read("op", &ReadRequest { device_id: "S1".into(), password: String::new() }, &mut |_| {}).unwrap();
     let plan = core.transfer_plan(&Source::Device { device_id: "S1".into() }, &[C.to_string()], "pc").unwrap();
     let res = core
         .transfer("op", &TransferRequest { plan_id: plan.plan_id, choices: Default::default() }, &mut |_| {})
         .unwrap();
-    assert_eq!(res.backup_id, None);
+    assert!(res.backup_id.is_some());
+    assert_eq!(registered(&env), [C]);
+    // No backup before writing; replacing a same-name world removes the old folder.
+    let env = pc_env_with(&[(C, "Beach")], &[(A, "beach ")], true, false);
+    let core = env.core();
+    core.set_settings(serde_json::json!({ "backup_before_write": false }).as_object().unwrap()).unwrap();
+    core.read("op", &ReadRequest { device_id: "S1".into(), password: String::new() }, &mut |_| {}).unwrap();
+    let plan = core.transfer_plan(&Source::Device { device_id: "S1".into() }, &[C.to_string()], "pc").unwrap();
+    let choices = [(C.to_string(), Choice::Replace)].into_iter().collect();
+    let res = core.transfer("op", &TransferRequest { plan_id: plan.plan_id, choices }, &mut |_| {}).unwrap();
+    assert_eq!((res.backup_id, res.replaced, res.total), (None, vec!["Beach".to_string()], 1));
+    assert_eq!(pc_ids(&env), [C]);
     assert_eq!(registered(&env), [C]);
 }
 
