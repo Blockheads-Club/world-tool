@@ -83,9 +83,7 @@ pub fn build(file: &MbFile, rel_path: &str) -> Vec<u8> {
     root.insert("ProtectionClass".into(), Value::Integer(file.protection_class.into()));
     root.insert("Mode".into(), Value::Integer(0o100644.into()));
     let mut objects = vec![Value::String("$null".into()), Value::Dictionary(root), Value::String(rel_path.into())];
-    objects.push(Value::Dictionary(
-        [("$classname".to_string(), Value::String("MBFile".into()))].into_iter().collect(),
-    ));
+    objects.push(Value::Dictionary([("$classname".to_string(), Value::String("MBFile".into()))].into_iter().collect()));
     if let Some(k) = &file.wrapped_key {
         let mut data = file.protection_class.to_le_bytes().to_vec();
         data.extend_from_slice(k);
@@ -138,7 +136,10 @@ mod tests {
     fn inline_key_data_and_defaults() {
         let mut key = 2u32.to_le_bytes().to_vec();
         key.extend([1, 2]);
-        let blob = archive(vec![root(vec![("EncryptionKey", Value::Data(key)), ("Size", Value::Integer((-1).into()))])], Some(Value::Uid(Uid::new(0))));
+        let blob = archive(
+            vec![root(vec![("EncryptionKey", Value::Data(key)), ("Size", Value::Integer((-1).into()))])],
+            Some(Value::Uid(Uid::new(0))),
+        );
         let f = MbFile::parse(&blob).unwrap();
         assert_eq!(f.wrapped_key, Some(vec![1, 2]));
         assert_eq!(f.size, 0);

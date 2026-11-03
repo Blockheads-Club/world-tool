@@ -232,7 +232,8 @@ impl IosBackup {
                 }
             }
         }
-        let worlds = worlds.into_iter().map(|(id, files)| WorldFiles::new(id, files)).collect::<std::result::Result<_, _>>()?;
+        let worlds =
+            worlds.into_iter().map(|(id, files)| WorldFiles::new(id, files)).collect::<std::result::Result<_, _>>()?;
         Ok(BlockheadsData { bundle_id: bundle_id.to_string(), worlds, game_db })
     }
 }
@@ -243,4 +244,217 @@ fn world_of_marker(path: &str) -> Option<&str> {
     let (id, tail) = rest.split_once('/')?;
     (tail == bhw_world::files::MARKER && id.len() == 32 && id.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f')))
         .then_some(id)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::fixture::{self, Enc, Row};
+    use plist::Dictionary;
+
+    const ID: &str = "0123456789abcdef0123456789abcdef";
+    const ID2: &str = "fedcba9876543210fedcba9876543210";
+    const DOM: &str = "AppDomain-com.example.blockheads";
+
+    fn p(s: &str) -> String {
+        format!("{APP_SUPPORT}{s}")
+    }
+
+    fn rows(paths: &[String]) -> Vec<(String, Vec<u8>)> {
+        paths.iter().map(|s| (s.clone(), format!("data of {s}").into_bytes())).collect()
+    }
+
+    fn game_rows() -> Vec<(String, String, i64, Vec<u8>)> {
+        let mut out: Vec<(String, String, i64, Vec<u8>)> = rows(&[
+            p(&format!("saves/{ID}/world_db/data.mdb")),
+            p(&format!("saves/{ID}/world_db/lock.mdb")),
+            p(&format!("saves/{ID}/map/default/0_0.png")),
+            p(&format!("saves/{ID2}/world_db/data.mdb")),
+            p("saves/not-a-world/world_db/data.mdb"),
+            p("saves/abcdefabcdefabcdefabcdefabcdefab/notes.txt"),
+            p("game_db/data.mdb"),
+            p("game/settings"),
+            "Documents/other".into(),
+        ])
+        .into_iter()
+        .map(|(path, data)| (DOM.to_string(), path, 1, data))
+        .collect();
+        out.push((DOM.into(), p(&format!("saves/{ID}/map")), 2, vec![]));
+        out.push(("AppDomain-zzz.other".into(), "Library/x".into(), 1, b"x".to_vec()));
+        out.push(("HomeDomain".into(), p(&format!("saves/{ID}/world_db/data.mdb")), 1, b"y".to_vec()));
+        out
+    }
+
+    fn make(enc: Enc, rows: &[(String, String, i64, Vec<u8>)]) -> tempfile::TempDir {
+        let dir = tempfile::tempdir().unwrap();
+        let r: Vec<Row> = rows.iter().map(|(d, p, f, data)| (d.as_str(), p.as_str(), *f, data.as_slice())).collect();
+        fixture::build(dir.path(), enc, &r);
+        dir
+    }
+
+    fn bytes(p: &Payload) -> Vec<u8> {
+        p.read_all().unwrap()
+    }
+
+    fn check(b: &IosBackup, want_file_payload: bool) {
+        assert_eq!(b.blockheads_apps().unwrap(), ["com.example.blockheads"]);
+        let data = b.blockheads().unwrap();
+        assert_eq!(data.bundle_id, "com.example.blockheads");
+        assert_eq!(data.worlds.iter().map(|w| w.id.as_str()).collect::<Vec<_>>(), [ID, ID2]);
+        let w = &data.worlds[0];
+        assert_eq!(
+            w.files.iter().map(|f| f.path.as_str()).collect::<Vec<_>>(),
+            ["map/default/0_0.png", "world_db/data.mdb", "world_db/lock.mdb"]
+        );
+        let want = format!("data of {}", p(&format!("saves/{ID}/world_db/data.mdb")));
+        assert_eq!(bytes(&w.get("world_db/data.mdb").unwrap().data), want.as_bytes());
+        assert_eq!(matches!(w.files[0].data, Payload::File(_)), want_file_payload);
+        assert_eq!(data.game_db.len(), 1);
+        assert_eq!(data.game_db[0].path, "data.mdb");
+        assert_eq!(bytes(&data.game_db[0].data), format!("data of {}", p("game_db/data.mdb")).as_bytes());
+    }
+
+    #[test]
+    fn unencrypted() {
+        let dir = make(Enc::None, &game_rows());
+        let b = IosBackup::open(dir.path(), Some("ignored")).unwrap();
+        assert!(!b.info().encrypted);
+        assert_eq!(b.info().device_name.as_deref(), Some("Test iPhone"));
+        check(&b, true);
+        assert_eq!(b.entries("HomeDomain", "").unwrap().len(), 1);
+    }
+
+    #[test]
+    fn encrypted_modern_and_legacy() {
+        for enc in [Enc::Modern("secret"), Enc::Legacy("secret")] {
+            let dir = make(enc, &game_rows());
+            let b = IosBackup::open(dir.path(), Some("secret")).unwrap();
+            assert!(b.info().encrypted);
+            check(&b, false);
+            assert!(matches!(IosBackup::open(dir.path(), Some("wrong")), Err(Error::WrongPassword)));
+            assert!(matches!(IosBackup::open(dir.path(), None), Err(Error::PasswordRequired)));
+        }
+    }
+
+    #[test]
+    fn flat_layout_and_missing_files() {
+        let rows = game_rows();
+        let dir = make(Enc::None, &rows);
+        let id = file_id(DOM, &p("game_db/data.mdb"));
+        fs::rename(dir.path().join(&id[..2]).join(&id), dir.path().join(&id)).unwrap();
+        let b = IosBackup::open(dir.path(), None).unwrap();
+        check(&b, true);
+        let id = file_id(DOM, &p(&format!("saves/{ID2}/world_db/data.mdb")));
+        fs::remove_file(dir.path().join(&id[..2]).join(&id)).unwrap();
+        assert!(matches!(b.blockheads(), Err(Error::MissingFile(m)) if m.contains(ID2)));
+        let bad = |id: &str| ManifestEntry {
+            file_id: id.into(),
+            domain: "d".into(),
+            relative_path: "p".into(),
+            flags: 1,
+            file: vec![],
+        };
+        assert!(matches!(b.read_file(&bad("../../etc")), Err(Error::Corrupt(_))));
+        assert!(matches!(b.read_file(&bad("a")), Err(Error::Corrupt(_))));
+    }
+
+    #[test]
+    fn no_blockheads_and_bad_world() {
+        let dir = make(Enc::None, &[(DOM.into(), "Library/x".into(), 1, b"x".to_vec())]);
+        let b = IosBackup::open(dir.path(), None).unwrap();
+        assert!(b.blockheads_apps().unwrap().is_empty());
+        assert!(matches!(b.blockheads(), Err(Error::NoBlockheads)));
+        let mut rows = game_rows();
+        rows.push((DOM.into(), p(&format!("saves/{ID}/world_db/../x")), 1, b"z".to_vec()));
+        let dir = make(Enc::None, &rows);
+        let b = IosBackup::open(dir.path(), None).unwrap();
+        assert!(matches!(b.blockheads(), Err(Error::World(_))));
+    }
+
+    #[test]
+    fn open_errors() {
+        let dir = make(Enc::None, &game_rows());
+        fs::remove_file(dir.path().join("Manifest.db")).unwrap();
+        assert!(matches!(IosBackup::open(dir.path(), None), Err(Error::MissingFile(_))));
+        fs::write(dir.path().join("Manifest.mbdb"), b"mbdb").unwrap();
+        assert!(matches!(IosBackup::open(dir.path(), None), Err(Error::Unsupported(_))));
+        fs::write(dir.path().join("Manifest.db"), b"not sqlite").unwrap();
+        assert!(matches!(IosBackup::open(dir.path(), None), Err(Error::Sqlite(_))));
+        assert!(matches!(IosBackup::open(&dir.path().join("nope"), None), Err(Error::NotABackup(_))));
+    }
+
+    fn edit_manifest(dir: &Path, f: impl FnOnce(&mut Dictionary)) {
+        let mut m = read_plist(&dir.join("Manifest.plist")).unwrap();
+        f(&mut m);
+        Value::Dictionary(m).to_file_binary(dir.join("Manifest.plist")).unwrap();
+    }
+
+    #[test]
+    fn encrypted_manifest_errors() {
+        let open = |dir: &tempfile::TempDir| IosBackup::open(dir.path(), Some("pw"));
+        let dir = make(Enc::Modern("pw"), &game_rows());
+        let mk = read_plist(&dir.path().join("Manifest.plist")).unwrap()["ManifestKey"].as_data().unwrap().to_vec();
+
+        let set_mk = |v: Vec<u8>| edit_manifest(dir.path(), |m| _ = m.insert("ManifestKey".into(), Value::Data(v)));
+        set_mk(mk[..3].to_vec());
+        assert!(matches!(open(&dir), Err(Error::Corrupt(_))));
+        let mut other_class = mk.clone();
+        other_class[0] = 9;
+        set_mk(other_class);
+        assert!(matches!(open(&dir), Err(Error::Keybag(m)) if m.contains("class 9")));
+        let mut bad_wrap = mk.clone();
+        bad_wrap[10] ^= 1;
+        set_mk(bad_wrap);
+        assert!(matches!(open(&dir), Err(Error::Corrupt(_))));
+        set_mk(mk);
+        fs::write(dir.path().join("Manifest.db"), [0u8; 17]).unwrap();
+        assert!(matches!(open(&dir), Err(Error::Corrupt(_))));
+        fs::write(dir.path().join("Manifest.db"), [0u8; 32]).unwrap();
+        assert!(matches!(open(&dir), Err(Error::Sqlite(_))));
+        edit_manifest(dir.path(), |m| _ = m.remove("BackupKeyBag"));
+        assert!(matches!(open(&dir), Err(Error::Keybag(_))));
+    }
+
+    #[test]
+    fn manifest_db_without_padding() {
+        let dir = make(Enc::Modern("pw"), &game_rows());
+        let r = game_rows();
+        let r: Vec<Row> = r.iter().map(|(d, p, f, data)| (d.as_str(), p.as_str(), *f, data.as_slice())).collect();
+        let db = fixture::manifest_db(&r, true);
+        fs::write(dir.path().join("Manifest.db"), crate::crypto::cbc_encrypt(&[9; 32], &[0; 16], &db)).unwrap();
+        check(&IosBackup::open(dir.path(), Some("pw")).unwrap(), false);
+    }
+
+    #[test]
+    fn encrypted_file_errors() {
+        let dir = make(Enc::Legacy("pw"), &game_rows());
+        let b = IosBackup::open(dir.path(), Some("pw")).unwrap();
+        let mut e = b.entries(DOM, &p("game_db/")).unwrap().remove(0);
+        let stored = dir.path().join(&e.file_id[..2]).join(&e.file_id);
+        let good = fs::read(&stored).unwrap();
+        fs::write(&stored, &good[..good.len() - 1]).unwrap();
+        assert!(matches!(b.read_file(&e), Err(Error::Corrupt(m)) if m.contains("multiple of 16")));
+        fs::write(&stored, &good[..good.len() - 16]).unwrap();
+        assert!(matches!(b.read_file(&e), Err(Error::Corrupt(m)) if m.contains("recorded size")));
+        let blob = e.file.clone();
+        e.file = crate::mbfile::build(&MbFile { size: 1, ..Default::default() }, "x");
+        assert!(matches!(b.read_file(&e), Err(Error::Corrupt(m)) if m.contains("no EncryptionKey")));
+        e.file = blob;
+        fs::write(&stored, good).unwrap();
+        assert!(b.read_file(&e).is_ok());
+    }
+
+    #[test]
+    fn file_ids_and_markers() {
+        // Well-known id of the address book database in public forensics literature.
+        assert_eq!(
+            file_id("HomeDomain", "Library/AddressBook/AddressBook.sqlitedb"),
+            "31bb7ba8914766d4ba40d6dfb6113c8b614be442"
+        );
+        assert_eq!(world_of_marker(&p(&format!("saves/{ID}/world_db/data.mdb"))), Some(ID));
+        assert_eq!(world_of_marker(&p(&format!("saves/{}/world_db/data.mdb", ID.to_uppercase()))), None);
+        assert_eq!(world_of_marker(&p(&format!("saves/{ID}/world_db/lock.mdb"))), None);
+        assert_eq!(world_of_marker(&p(&format!("saves/{ID}"))), None);
+        assert_eq!(world_of_marker("x"), None);
+    }
 }
