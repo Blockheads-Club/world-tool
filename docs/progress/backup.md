@@ -14,3 +14,16 @@ Crates: `crates/bhw-backup`, `crates/bhw-world`. Build with
     byte and must emit Android-style pax headers (the `tar` crate writes GNU `L` long names, which Android's restore
     parser rejects).
   - `zip` 4.6 (deflate via flate2/zlib only), `serde`/`serde_json`, `sha2` 0.10 for `.bhworld`.
+- Done (bhw-backup, 100 % lines in `cargo llvm-cov -p bhw-backup`): header parse/write, AES-256 (PBKDF2 user key,
+  master key blob, v1 8-bit fallback, signed-char UTF-8 checksum quirk), streaming CBC reader/writer, zlib, own tar
+  reader/writer (Android pax dialect), `TarEdit`/`rewrite_backup` (byte-identical copy of kept entries, insertion at end
+  of innermost anchor run), `saves` discovery (`saves/<32hex>/world_db/data.mdb` anywhere, sibling `game_db/`),
+  `world_edit`. Known-answer tests: RFC 6070 PBKDF2-HMAC-SHA1, NIST SP 800-38A CBC-AES256. Cross-check:
+  `tests/java_xcheck.rs` runs `tests/xcheck/AbXcheck.java` (JDK SunJCE PBKDF2WithHmacSHA1 + AES/CBC + Deflater) both
+  directions; skips without `java`.
+- WIP (bhw-world): `lib.rs` (Error, module list), `time.rs`, `meta.rs` (traits WorldMetaSource/WorldMetaEditor/
+  ServerWorldConverter, conflicts, unique_name, keep_both) written. NEXT: `files.rs` (WorldFiles: new/get/is_world/
+  load_dir/from_saves_dir/list_saves_dir/write_dir (tmp+rename)/save_to_saves_dir(replace)/from_server_world_dir),
+  `backup.rs` (worlds_from_backup(SavesContent), load_backup, put_worlds -> world_edit + rewrite_backup),
+  `bhworld.rs` (zip: manifest.json first, preview.png, world/…; Limits; validation), `library.rs` (worlds/*.bhworld,
+  backups/*.ab + .ab.json sidecar), `docs/bhworld-format.md`, `tests/real_saves.rs` (BHW_REAL_SAVES), coverage 100 %.
