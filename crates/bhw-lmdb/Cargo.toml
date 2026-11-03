@@ -1,0 +1,19 @@
+[package]
+name = "bhw-lmdb"
+description = "Pure-Rust reader/writer for the LMDB data file format (32-bit and 64-bit on-disk layouts)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+thiserror = { workspace = true }
+
+[dev-dependencies]
+lmdb-master-sys = "=0.2.6"
+tempfile = "3"
+libc = "0.2"
+
+[lints]
+workspace = true
