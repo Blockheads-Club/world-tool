@@ -279,12 +279,12 @@ impl<'a> Page<'a> {
         self.flags & page_flags::LEAF2 != 0
     }
 
-    /// Key `i` of a `P_LEAF2` page (`LEAF2KEY`, `mdb.c:1218`).
+    /// Key `i` of a `P_LEAF2` page (`LEAF2KEY`, `mdb.c:1214`).
     fn leaf2_key(&self, hdr: usize, i: usize) -> &'a [u8] {
         &self.b[hdr + i * self.pad..hdr + (i + 1) * self.pad]
     }
 
-    /// Node `i` (`NODEPTR`, `mdb.c:1162`).
+    /// Node `i` (`NODEPTR`, `mdb.c:1159`).
     pub(crate) fn node(&self, hdr: usize, i: usize) -> Result<Node<'a>> {
         let ofs = u16::from_le_bytes([self.b[hdr + 2 * i], self.b[hdr + 2 * i + 1]]) as usize;
         if ofs < self.lower || ofs + NODE_SIZE > self.b.len() {

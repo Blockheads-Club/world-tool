@@ -20,11 +20,12 @@ Done:
 - Coverage (`cargo llvm-cov -p bhw-lmdb`): 100% lines, 100% functions, ~99.6% regions (remaining regions are
   `?` error exits on paths like iterating after a nested error).
 
-Next (exact):
-1. `cargo clippy -p bhw-lmdb --all-targets -- -D warnings` and also `--target i686-unknown-linux-gnu` test run of
-   the whole crate after the latest refactor (check_size, non-generic build_tree).
-2. Optional: cover remaining `?` regions in reader.rs (lines ~116/126/164/169/456/483).
-3. Final report to coordinator.
+- 2026-11-03 (after sleep): clippy clean; full test suite green on x86_64 and i686 (real 32-bit LMDB), with
+  `BHW_REAL_SAVES` set (15 worlds) and without (skips). Fixed a few mdb.c line citations. Coverage: 100% lines
+  (925/925), 100% functions, 99.59% regions (8 `?` early-exit regions, e.g. `read_file` on a non-LMDB file).
+
+Next: stream complete. Possible follow-ups: `Env::get` uses a linear scan (fine for world sizes); a lenient
+mode that falls back to the other meta page if one is corrupt (LMDB itself refuses such files).
 
 Findings:
 - `mm_flags` (free DB md_flags) = `me_flags & 0xffff | MDB_INTEGERKEY`, so LMDB opened with MDB_NOSUBDIR persists

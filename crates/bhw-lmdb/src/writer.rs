@@ -128,7 +128,7 @@ impl PageBuf {
         }
     }
 
-    /// Appends a fixed-size key to a `P_LEAF2` page (`mdb_node_add`, `mdb.c:8478`): `lower += 2`,
+    /// Appends a fixed-size key to a `P_LEAF2` page (`mdb_node_add`, `mdb.c:8479`): `lower += 2`,
     /// `upper -= ksize - 2`.
     fn add_leaf2(&mut self, key: &[u8]) {
         let o = self.hdr + self.n * key.len();

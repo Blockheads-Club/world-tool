@@ -132,7 +132,7 @@ fn roundtrip_both_layouts() {
         let fixed = env.open_db(b"fixed").unwrap();
         assert_eq!(fixed.entries, 3002);
         assert!(matches!(env.open_db(b"nope"), Err(Error::NoSuchDb(n)) if n == "nope"));
-        // Page accounting (as LMDB's audit, mdb.c:2018): every page after the metas belongs to exactly one tree.
+        // Page accounting (as LMDB's audit, `mdb_audit`, mdb.c:2004): every page after the metas belongs to exactly one tree.
         let mut pages = 2 + env.main_db().leaf_pages + env.main_db().branch_pages;
         for (_, d) in env.named_dbs().unwrap() {
             pages += d.leaf_pages + d.branch_pages + d.overflow_pages + dup_subdb_pages(&env, &d);
