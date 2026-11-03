@@ -15,6 +15,7 @@
   import Thumb from '../ui/Thumb.svelte';
   import { toast } from '../ui/toast.svelte';
   import { opId, shortId } from '../util';
+  import { toAppError } from '../errors';
 
   type Filter = 'all' | Origin;
   type Sort = 'new' | 'old' | 'name' | 'size';
@@ -91,7 +92,8 @@
       });
       toast(t('worlds.exported', { name: r.files[0]?.name ?? w.name }), { label: t('common.showInFolder'), run: () => void store.api.showInFolder(r.folder) });
     } catch (e) {
-      store.fail(e);
+      const damaged = toAppError(e).code === 'world_damaged';
+      store.fail(e, () => void (damaged ? store.api.deleteWorld(w.id).then(() => store.loadWorlds()) : exportOne(w, format)));
     } finally {
       exporting = null;
     }
