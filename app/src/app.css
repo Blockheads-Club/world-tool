@@ -149,7 +149,6 @@
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
 /* Reduced motion: the OS setting, or the "Reduce motion" switch in Settings (data-motion on <html>). Progress still
    updates; spinners, stripes and skeleton shimmer stop. */
 @media (prefers-reduced-motion: reduce) {
