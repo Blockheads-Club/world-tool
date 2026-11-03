@@ -65,6 +65,7 @@ dependencies = [
  "bhw-lmdb",
  "bhw-world",
  "flate2",
+ "lmdb-master-sys",
  "plist",
  "serde",
  "tempfile",
