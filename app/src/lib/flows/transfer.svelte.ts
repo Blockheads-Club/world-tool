@@ -110,8 +110,9 @@ export class TransferFlow {
     const conflicts = items.filter((i) => i.result === 'conflict');
     const skipped = conflicts.filter((i) => this.choices[i.key] === 'skip').length;
     const replaced = conflicts.filter((i) => this.choices[i.key] === 'replace').length;
+    // A conflicting world on the target stays (or is replaced in place); "keep both" adds the copy.
     const added = items.filter((i) => i.result === 'added').length + conflicts.length - skipped - replaced;
-    const stay = items.filter((i) => i.result === 'stays').length;
+    const stay = items.filter((i) => i.result === 'stays').length + conflicts.length;
     return { added, stay, conflicts: conflicts.length, replaced, skipped, total: stay + added };
   }
 

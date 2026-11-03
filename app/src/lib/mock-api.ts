@@ -446,13 +446,18 @@ export class MockBackend implements Backend {
     const all = await this.sourceWorlds(source);
     const picked = all.filter((w) => worldIds.includes(w.id));
     const there = this.phoneWorlds[target.id] ?? [];
-    const items: PlanItem[] = there.map((w) => ({ key: `stay:${w.id}`, name: w.name, size: w.size, result: 'stays', conflict: null, copy_name: null }));
+    const items: PlanItem[] = [];
+    const clashed = new Set<string>();
     for (const w of picked) {
       const same = there.find((x) => x.name === w.name || x.id === (w as World).world_id || x.id === w.id);
       if (same) {
+        clashed.add(same.id);
         items.unshift({ key: w.id, name: w.name, size: w.size, result: 'conflict', conflict: same.name === w.name ? 'same_name' : 'same_id', copy_name: `${w.name} (2)` });
       } else items.push({ key: w.id, name: w.name, size: w.size, result: 'added', conflict: null, copy_name: null });
     }
+    // A world on the target that clashes is shown once, as the conflict row.
+    const stays = there.filter((w) => !clashed.has(w.id));
+    items.splice(items.filter((i) => i.result === 'conflict').length, 0, ...stays.map((w) => ({ key: `stay:${w.id}`, name: w.name, size: w.size, result: 'stays' as const, conflict: null, copy_name: null })));
     const plan: TransferPlan = {
       plan_id: this.id('p'), target: target.name, total_after: there.length + picked.length, items,
       size: items.reduce((s, i) => s + i.size, 0), backup_name: target.name, backup_size: there.reduce((s, w) => s + w.size, 0) + 20 * MB,
