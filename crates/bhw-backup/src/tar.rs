@@ -498,6 +498,12 @@ mod tests {
     }
 
     #[test]
+    fn empty_numeric_fields_are_zero() {
+        assert_eq!(parse_octal(&[0; 12]).unwrap(), 0);
+        assert_eq!(parse_octal(b"   \0").unwrap(), 0);
+    }
+
+    #[test]
     fn pax_record_lengths() {
         assert_eq!(pax_record("size", b"1000"), b"13 size=1000\n");
         let r = pax_record("path", &[b'a'; 91]);
@@ -598,8 +604,8 @@ mod tests {
         finish_checksum(&mut h);
         assert!(read_all(h.to_vec()).is_err());
         let mut h = raw_header(b"a", b'0', 0, b"", true);
-        h[124] = 0xC3;
-        h[125] = 0x28;
+        h[124] = b'1';
+        h[125] = 0xff;
         finish_checksum(&mut h);
         assert!(read_all(h.to_vec()).is_err());
         assert!(read_all(raw_header(b"\xff", b'0', 0, b"", true).to_vec()).is_err());
