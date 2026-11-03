@@ -181,10 +181,8 @@ pub fn parse_key_values(text: &str) -> BTreeMap<String, String> {
     map
 }
 
-/// How often [`Adb::stop_game`] tries `am kill`.
-pub const STOP_TRIES: usize = 5;
-/// Pause between the tries.
-pub const STOP_PAUSE: std::time::Duration = std::time::Duration::from_millis(600);
+/// Pause between two `am kill` tries of [`Adb::stop_game`].
+pub const STOP_PAUSE: std::time::Duration = std::time::Duration::from_millis(500);
 
 impl Adb {
     /// `adb devices -l`.
@@ -237,18 +235,21 @@ impl Adb {
     /// to the background (`input keyevent HOME`), then `am kill` (only kills background processes). Fails with
     /// [`DeviceError::GameRunning`] when it is still alive afterwards.
     ///
-    /// The process can take a moment to leave the foreground and die, so `am kill` is retried a few times
-    /// ([`STOP_TRIES`] with [`STOP_PAUSE`] between them; seen on an API 30 emulator).
+    /// `am kill` only works once the process has left the "previous app" state, so it is retried every
+    /// [`STOP_PAUSE`] for up to [`Timeouts::stop`](crate::Timeouts::stop).
     pub fn stop_game(&self, serial: &str) -> Result<()> {
         self.shell_ok(serial, "input keyevent HOME")?;
-        for _ in 0..STOP_TRIES {
+        let deadline = std::time::Instant::now() + self.timeouts.stop;
+        loop {
             self.shell_ok(serial, &format!("am kill {PACKAGE}"))?;
             if !self.game_running(serial)? {
                 return Ok(());
             }
+            if std::time::Instant::now() >= deadline {
+                return Err(DeviceError::GameRunning);
+            }
             std::thread::sleep(STOP_PAUSE);
         }
-        Err(DeviceError::GameRunning)
     }
 
     /// `am force-stop` the game. Sets the "stopped" flag, so only use it before a restore (never before a backup).

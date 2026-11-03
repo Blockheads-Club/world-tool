@@ -243,6 +243,7 @@ impl Phone {
             command: Duration::from_secs(5),
             confirm: Duration::from_secs(5),
             stall: Duration::from_secs(5),
+            stop: Duration::from_millis(300),
         };
         a
     }

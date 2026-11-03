@@ -6,11 +6,12 @@
 //! ```
 //!
 //! It reads the worlds, saves them to a temporary library, exports them, copies one back to the phone as a
-//! "keep both" copy (fresh backup → rewrite → restore), reads again to verify, then restores the automatic backup so
-//! the phone ends as it started. The confirm screens ("Back up my data" / "Restore my data") are tapped through
+//! "keep both" copy and a converted Blockheads Server export of the other one as well (each: fresh backup →
+//! rewrite → restore), reads again to verify, then restores the automatic backup so the phone ends as it started. The confirm screens ("Back up my data" / "Restore my data") are tapped through
 //! `adb shell input tap` on the `com.android.backupconfirm` allow button, so this needs an unlocked screen and
 //! **changes the device's game data**: use a test device or emulator. `BHW_DEVICE_SCREENSHOT=<file.png>` also opens
-//! the game after the copy and saves a screenshot (its world list should show the copy).
+//! the game after the copy and saves a screenshot (its world list should show the copy); `BHW_DEVICE_KEEP_COPY=1`
+//! skips the final restore so the copies can be played.
 
 use std::process::Command;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -161,6 +162,21 @@ fn read_copy_and_restore() {
     assert_eq!(res.kept_both, vec![copy_name.clone()]);
     let backup_id = res.backup_id.clone().expect("automatic backup");
 
+    // 3b. The Blockheads Server folder exported from the other world goes back too (server → game conversion; same
+    // world id, so it becomes a "keep both" copy as well).
+    let other = saved.iter().find(|w| w.base.name != "ROCKY OCEAN").unwrap();
+    let folder = tmp.path().join("export-Server").join(&other.world_id).display().to_string();
+    let src = Source::Files { paths: vec![folder.clone()] };
+    let plan = core.transfer_plan(&src, std::slice::from_ref(&folder), &serial).unwrap();
+    let server_copy = plan.items.iter().find(|i| i.key == folder).unwrap().copy_name.clone().unwrap();
+    let req = TransferRequest { plan_id: plan.plan_id, choices: Default::default() };
+    let res = {
+        let _tap = Tapper::start(&serial);
+        core.transfer("op-copy2", &req, &mut |_| {}).expect("transfer of the server folder")
+    };
+    eprintln!("transfer (server folder): {res:?}");
+    assert_eq!(res.kept_both, vec![server_copy.clone()]);
+
     // Optional: open the game and save a screenshot of its world list (`BHW_DEVICE_SCREENSHOT=<file.png>`).
     if let Ok(shot) = std::env::var("BHW_DEVICE_SCREENSHOT") {
         adb_out(
@@ -178,7 +194,8 @@ fn read_copy_and_restore() {
     let (_, after) = names(&core, &serial);
     eprintln!("after copy: {after:?}");
     assert!(after.contains(&copy_name), "{copy_name} missing after the copy: {after:?}");
-    assert_eq!(after.len(), before.len() + 1);
+    assert!(after.contains(&server_copy), "{server_copy} missing after the copy: {after:?}");
+    assert_eq!(after.len(), before.len() + 2);
 
     // 5. Restore the automatic backup: back to the start (`BHW_DEVICE_KEEP_COPY=1` leaves the copy on the device to
     // try it in the game).
