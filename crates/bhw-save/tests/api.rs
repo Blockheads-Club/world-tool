@@ -575,3 +575,27 @@ fn sparse_worlds() {
     let sum = summarize_any(&AnySave::from_files(CID, f).unwrap(), None);
     assert_eq!((sum.block_count, sum.blockheads.len(), sum.name), (0, 0, None));
 }
+
+#[test]
+fn fitting_and_register_save() {
+    assert_eq!(MapOptions::fitting(16384, 1000).tiles_per_pixel, 17);
+    assert_eq!(MapOptions::fitting(10, 0).tiles_per_pixel, 10);
+    assert_eq!(MapOptions::fitting(10, 1000).tiles_per_pixel, 1);
+    let mut g = GameDb::new();
+    let save = ClientSave::from_files(CID, client_files(CID, "HOME")).unwrap();
+    assert_eq!(g.register_save(&save).unwrap(), CID);
+    assert_eq!(g.entry(CID), save.worldv2());
+    let mut e = client_env(CID, "A");
+    let mut r = record(CID, "A");
+    r.remove("saveID");
+    put(&mut e, "main", b"worldv2", plistio::to_xml(&Value::Dictionary(r), plistio::Dialect::Apple).unwrap());
+    let mut f = FileMap::new();
+    f.insert(WORLD_DB.into(), bhw_lmdb::write_env(&e, Layout::Bits32).unwrap());
+    assert!(g.register_save(&ClientSave::from_files(CID, f.clone()).unwrap()).is_err());
+    put(&mut e, "main", b"worldv2", b"junk".to_vec());
+    f.insert(WORLD_DB.into(), bhw_lmdb::write_env(&e, Layout::Bits32).unwrap());
+    assert!(g.register_save(&ClientSave::from_files(CID, f.clone()).unwrap()).is_err());
+    remove(&mut e, "main", b"worldv2");
+    f.insert(WORLD_DB.into(), bhw_lmdb::write_env(&e, Layout::Bits32).unwrap());
+    assert!(g.register_save(&ClientSave::from_files(CID, f).unwrap()).is_err());
+}

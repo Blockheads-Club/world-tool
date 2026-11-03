@@ -25,6 +25,13 @@ impl Default for MapOptions {
     }
 }
 
+impl MapOptions {
+    /// The smallest scale that draws `width_tiles` tiles in at most `max_px` pixels (cropped to content).
+    pub fn fitting(width_tiles: u32, max_px: u32) -> MapOptions {
+        MapOptions { tiles_per_pixel: width_tiles.div_ceil(max_px.max(1)).max(1), crop_to_content: true }
+    }
+}
+
 /// Colour of areas that are not stored (never generated or loaded).
 pub const UNKNOWN: [u8; 4] = [0, 0, 0, 0];
 /// Colour of tiles with an id this tool does not know.

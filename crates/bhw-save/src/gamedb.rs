@@ -107,6 +107,18 @@ impl GameDb {
         Ok(true)
     }
 
+    /// Registers a client world with its own record (`main/worldv2`), under the record's `saveID`.
+    pub fn register_save(&mut self, save: &crate::save::ClientSave) -> Result<String> {
+        let record = save.worldv2().ok_or_else(|| Error::Format("the world has no main/worldv2 record".into()))?;
+        let id = parse_dict(record)?
+            .get("saveID")
+            .and_then(Value::as_string)
+            .ok_or_else(|| Error::Format("the world record has no saveID".into()))?
+            .to_string();
+        self.register(&id, record);
+        Ok(id)
+    }
+
     /// Registers a world record after checking that it parses and that its `saveID` is `id`.
     pub fn register_checked(&mut self, id: &str, worldv2: &[u8]) -> Result<()> {
         let d = parse_dict(worldv2)?;
