@@ -66,7 +66,7 @@ impl Core {
                     let mut tries = lock(&self.ios_attempts);
                     let n = tries.entry(id.to_string()).or_default();
                     *n += 1;
-                    err.attempt = Some(*n);
+                    err.extra.attempt = Some(*n);
                 }
                 return Err(err);
             }

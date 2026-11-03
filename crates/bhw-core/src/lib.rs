@@ -4,9 +4,6 @@
 //! and the cancel registry. Devices go through [`bhw_device`] (the `adb` binary behind a runner trait, so tests use
 //! scripted adb answers).
 
-// `AppError` mirrors the UI's flat error object; it is only built on the (cold) failure path.
-#![allow(clippy::result_large_err)]
-
 pub mod activity;
 mod backups;
 mod devices;

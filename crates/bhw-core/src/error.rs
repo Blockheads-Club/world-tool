@@ -42,6 +42,14 @@ pub struct AppError {
     pub code: ErrorCode,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub detail: Option<String>,
+    /// The rarer fields (boxed so `Result<_, AppError>` stays small).
+    #[serde(flatten)]
+    pub extra: Box<Extra>,
+}
+
+/// Fields that fill in some dialogs.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Extra {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub device: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -68,19 +76,7 @@ pub type Result<T, E = AppError> = std::result::Result<T, E>;
 impl AppError {
     /// An error with only a code.
     pub fn new(code: ErrorCode) -> AppError {
-        AppError {
-            code,
-            detail: None,
-            device: None,
-            version: None,
-            needed: None,
-            free: None,
-            disk: None,
-            percent: None,
-            backup_id: None,
-            name: None,
-            attempt: None,
-        }
+        AppError { code, detail: None, extra: Box::default() }
     }
 
     /// `code` with a technical detail line.
@@ -96,25 +92,25 @@ impl AppError {
 
     /// Sets the device name (kept when already set).
     pub fn device(mut self, d: &str) -> AppError {
-        self.device.get_or_insert_with(|| d.to_string());
+        self.extra.device.get_or_insert_with(|| d.to_string());
         self
     }
 
     /// Sets the backup that can undo a broken write.
     pub fn backup(mut self, id: Option<&str>) -> AppError {
-        self.backup_id = id.map(str::to_string);
+        self.extra.backup_id = id.map(str::to_string);
         self
     }
 
     /// Sets the file or world name.
     pub fn name(mut self, n: impl ToString) -> AppError {
-        self.name = Some(n.to_string());
+        self.extra.name = Some(n.to_string());
         self
     }
 
     /// Sets the version found.
     pub fn version(mut self, v: impl ToString) -> AppError {
-        self.version = Some(v.to_string());
+        self.extra.version = Some(v.to_string());
         self
     }
 
