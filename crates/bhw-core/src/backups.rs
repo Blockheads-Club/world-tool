@@ -197,7 +197,7 @@ impl Core {
         }
         for (i, w) in worlds.iter().enumerate() {
             progress(Progress::item(Stage::Writing, &w.id, i + 1, worlds.len()));
-            w.save_to_saves_dir(&dir, true)?;
+            crate::transfer::with_lock(w.clone())?.save_to_saves_dir(&dir, true)?;
         }
         game_db.save(&pc.game_db())?;
         Ok(())

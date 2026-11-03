@@ -56,6 +56,19 @@ pub struct Changes {
     pub result: TransferResult,
 }
 
+/// Path of LMDB's lock file inside a world.
+pub const LOCK: &str = "world_db/lock.mdb";
+
+/// A world as the game needs it on disk: with a `world_db/lock.mdb`. The game (1.7.6, Android emulator) crashes
+/// (SIGSEGV) the first time it loads a world whose lock file is missing; any 8 KiB file works, LMDB initialises it.
+pub fn with_lock(mut w: WorldFiles) -> Result<WorldFiles> {
+    if w.get(LOCK).is_none() {
+        w.files.push(bhw_world::WorldFile { path: LOCK.into(), data: Payload::Bytes(vec![0; 8192]) });
+        w = WorldFiles::new(w.id, w.files)?;
+    }
+    Ok(w)
+}
+
 fn same_name(a: &str, b: &str) -> bool {
     a.trim().to_lowercase() == b.trim().to_lowercase()
 }
@@ -102,7 +115,7 @@ pub fn apply_choices(
         register(game_db, &w)?;
         ids.push(w.id.clone());
         c.puts.retain(|p| p.id != w.id);
-        c.puts.push(w);
+        c.puts.push(with_lock(w)?);
     }
     ids.retain(|i| !c.removes.contains(i));
     ids.sort();

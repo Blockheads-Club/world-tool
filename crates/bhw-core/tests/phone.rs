@@ -162,6 +162,11 @@ fn transfer_to_phone_with_every_choice() {
     assert_eq!(res.total, 4);
     assert_eq!(res.target, "Pixel 8");
     assert_eq!(env.phone.names(), ["Castle", "New World", "Sunny Isle", "Sunny Isle (2)"]);
+    assert!(!env.phone.all_locked(), "the phone's own worlds in the fixture have no lock file");
+    let ab = env.phone.ab.lock().unwrap().clone();
+    let (_, saves) = bhw_world::backup::load_backup(Box::new(&ab[..]), None).unwrap();
+    let written: Vec<_> = saves[0].worlds.iter().filter(|w| w.id != B && w.id != A).collect();
+    assert!(written.iter().all(|w| w.get("world_db/lock.mdb").is_some()));
     let mut reg = env.phone.registered();
     reg.sort();
     assert_eq!(reg.len(), 4);

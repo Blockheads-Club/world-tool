@@ -180,7 +180,11 @@ fn read_copy_and_restore() {
     assert!(after.contains(&copy_name), "{copy_name} missing after the copy: {after:?}");
     assert_eq!(after.len(), before.len() + 1);
 
-    // 5. Restore the automatic backup: back to the start.
+    // 5. Restore the automatic backup: back to the start (`BHW_DEVICE_KEEP_COPY=1` leaves the copy on the device to
+    // try it in the game).
+    if std::env::var("BHW_DEVICE_KEEP_COPY").is_ok() {
+        return;
+    }
     {
         let _tap = Tapper::start(&serial);
         core.restore_backup("op-restore", &backup_id, &serial, &mut |p| eprintln!("restore: {p:?}")).expect("restore");

@@ -257,6 +257,13 @@ impl Phone {
         n
     }
 
+    /// Whether every world on the phone has a `world_db/lock.mdb`.
+    pub fn all_locked(&self) -> bool {
+        let ab = self.ab.lock().unwrap().clone();
+        let (_, saves) = bhw_world::backup::load_backup(Box::new(&ab[..]), None).unwrap();
+        saves[0].worlds.iter().all(|w| w.get("world_db/lock.mdb").is_some())
+    }
+
     /// Ids registered in the phone's `game_db`.
     pub fn registered(&self) -> Vec<String> {
         let ab = self.ab.lock().unwrap().clone();

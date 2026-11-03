@@ -66,6 +66,7 @@ fn read_and_write_pc() {
     assert_eq!((res.added.clone(), res.total), (vec!["Phone World".to_string()], 3));
     assert!(ev.lock().unwrap().iter().any(|p| p.stage == bhw_core::Stage::Writing));
     assert_eq!(pc_ids(&env), [A, B, C]);
+    assert!(support(&env).join("saves").join(C).join("world_db/lock.mdb").is_file());
     assert_eq!(registered(&env).len(), 3);
     let backup = res.backup_id.unwrap();
     let b = core.list_backups().unwrap();
