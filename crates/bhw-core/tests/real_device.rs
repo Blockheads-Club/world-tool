@@ -145,7 +145,7 @@ fn read_copy_and_restore() {
 
     // 3. Copy ROCKY OCEAN back as a second copy.
     let rocky = saved.iter().find(|w| w.base.name == "ROCKY OCEAN").unwrap();
-    let plan = core.transfer_plan(&Source::Library, &[rocky.base.id.clone()], &serial).unwrap();
+    let plan = core.transfer_plan(&Source::Library, std::slice::from_ref(&rocky.base.id), &serial).unwrap();
     eprintln!("plan: {plan:?}");
     let copy_name = plan.items.iter().find(|i| i.key == rocky.base.id).unwrap().copy_name.clone().unwrap();
     let req = TransferRequest {
