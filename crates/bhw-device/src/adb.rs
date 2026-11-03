@@ -44,12 +44,13 @@ impl std::fmt::Debug for Adb {
 
 /// The adb executable's file name on this OS.
 pub fn adb_file_name() -> &'static str {
-    if cfg!(windows) {
-        "adb.exe"
-    } else {
-        "adb"
-    }
+    ADB_FILE_NAME
 }
+
+#[cfg(windows)]
+const ADB_FILE_NAME: &str = "adb.exe";
+#[cfg(not(windows))]
+const ADB_FILE_NAME: &str = "adb";
 
 /// Finds adb: the bundled sidecar when it exists, then `$ANDROID_HOME`/`$ANDROID_SDK_ROOT` `platform-tools`,
 /// then every `PATH` entry. `env` reads environment variables, `exists` checks files (both injectable for tests).

@@ -4,11 +4,10 @@
 use crate::adb::{sh_quote, Adb, RootStyle, PACKAGE};
 use crate::error::{DeviceError, Result};
 use crate::process::wait_until;
-use crate::transfer::{CancelToken, IfRunning, Phase, Progress, ProgressFn, Watchdog};
-use std::io::{self, Read, Write};
+use crate::transfer::{CancelToken, Counting, IfRunning, ProgressFn, Watchdog};
+use std::io::{Read, Write};
 use std::path::Path;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
+use std::sync::atomic::Ordering;
 use std::time::Instant;
 
 /// Where the game keeps its saves on this device.
@@ -51,34 +50,6 @@ pub fn parse_world_dbs(text: &str) -> Option<RootSaves> {
         f.worlds.sort();
     }
     found
-}
-
-/// Counts bytes read and reports progress.
-struct Counting<'a, R> {
-    inner: R,
-    bytes: Arc<AtomicU64>,
-    progress: ProgressFn<'a>,
-}
-
-impl<R: Read> Read for Counting<'_, R> {
-    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        let n = self.inner.read(buf)?;
-        let total = self.bytes.fetch_add(n as u64, Ordering::SeqCst) + n as u64;
-        (self.progress)(Progress { phase: Phase::Transferring, bytes: total, total: None });
-        Ok(n)
-    }
-}
-
-impl<W: Write> Write for Counting<'_, W> {
-    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        let n = self.inner.write(buf)?;
-        let total = self.bytes.fetch_add(n as u64, Ordering::SeqCst) + n as u64;
-        (self.progress)(Progress { phase: Phase::Transferring, bytes: total, total: None });
-        Ok(n)
-    }
-    fn flush(&mut self) -> io::Result<()> {
-        self.inner.flush()
-    }
 }
 
 /// Default app data roots searched for saves.
@@ -136,7 +107,7 @@ impl Adb {
             .spawn(self.program(), &Adb::device_args(serial, &["exec-out", &cmd]), false)
             .map_err(Adb::spawn_error)?;
         let stderr = crate::process::collect(child.take_stderr());
-        let stdout = child.take_stdout().unwrap_or_else(|| Box::new(io::empty()));
+        let stdout = child.take_stdout().unwrap_or_else(crate::process::empty_reader);
         let dog = Watchdog::start(child.clone(), cancel.clone(), self.timeouts.confirm, self.timeouts.stall);
         let reader = Counting { inner: stdout, bytes: dog.bytes.clone(), progress };
         let unpacked = unpack(reader, dest);
@@ -154,8 +125,7 @@ impl Adb {
             Ok(0) if moved == 0 => Err(DeviceError::RootUnavailable),
             Ok(0) => Err(DeviceError::SavesNotFound),
             Ok(n) => Ok(n),
-            Err(e @ DeviceError::DiskFull) => Err(e),
-            Err(_) => Err(DeviceError::Disconnected),
+            Err(e) => Err(if matches!(e, DeviceError::Io(_)) { DeviceError::Disconnected } else { e }),
         }
     }
 
@@ -189,7 +159,7 @@ impl Adb {
         let stderr = crate::process::collect(child.take_stderr());
         let stdout = crate::process::collect(child.take_stdout());
         let dog = Watchdog::start(child.clone(), cancel.clone(), self.timeouts.confirm, self.timeouts.stall);
-        let stdin = child.take_stdin().unwrap_or_else(|| Box::new(io::sink()));
+        let stdin = child.take_stdin().unwrap_or_else(crate::process::null_writer);
         let sent = pack(Counting { inner: stdin, bytes: dog.bytes.clone(), progress }, src);
         let moved = dog.bytes.load(Ordering::SeqCst);
         let code = wait_until(&*child, Instant::now() + self.timeouts.confirm)?;
@@ -201,11 +171,8 @@ impl Adb {
         if let Some(e) = crate::error::classify_adb_message(&String::from_utf8_lossy(&err), serial) {
             return Err(e);
         }
-        match (sent, code) {
-            (Ok(()), Some(_)) => {}
-            (Err(e @ DeviceError::Io(_)), _) if moved == 0 => return Err(e),
-            _ => return Err(DeviceError::Disconnected),
-        }
+        sent?;
+        code.ok_or(DeviceError::Disconnected)?;
         let dest = sh_quote(&format!("{support_dir}/{rel}"));
         let finish = format!(
             "[ -d {tmp}/x ] && rm -rf {dest} && mkdir -p \"$(dirname {dest})\" && mv {tmp}/x {dest} && rm -rf {tmp} \
@@ -238,7 +205,6 @@ fn unpack(reader: impl Read, dest: &Path) -> Result<usize> {
 fn pack(out: impl Write, src: &Path) -> Result<()> {
     let mut builder = tar::Builder::new(out);
     builder.follow_symlinks(false);
-    builder.append_dir_all("x", src)?;
-    builder.into_inner()?.flush()?;
-    Ok(())
+    let r = builder.append_dir_all("x", src).and_then(|()| builder.into_inner()?.flush());
+    r.map_err(crate::transfer::pipe_or_local)
 }

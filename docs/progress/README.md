@@ -12,3 +12,4 @@ After an interruption (machine asleep), read the stream's file and `git log` on 
 | Devices (adb, root, Wi-Fi, Blockheads PC) | `feat/device` | `../world-tool-wt/device` | `device.md` |
 
 lmdb: done, merged into dev (8a70b84).
+device: crate done on `feat/device` (faked adb; real-phone run pending), see `device.md`.

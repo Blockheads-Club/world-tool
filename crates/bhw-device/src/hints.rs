@@ -13,15 +13,16 @@ pub enum HostOs {
 impl HostOs {
     /// This build's OS (anything else counts as Linux).
     pub fn current() -> HostOs {
-        if cfg!(windows) {
-            HostOs::Windows
-        } else if cfg!(target_os = "macos") {
-            HostOs::MacOs
-        } else {
-            HostOs::Linux
-        }
+        CURRENT_OS
     }
 }
+
+#[cfg(windows)]
+const CURRENT_OS: HostOs = HostOs::Windows;
+#[cfg(target_os = "macos")]
+const CURRENT_OS: HostOs = HostOs::MacOs;
+#[cfg(not(any(windows, target_os = "macos")))]
+const CURRENT_OS: HostOs = HostOs::Linux;
 
 /// A hint id for the UI.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

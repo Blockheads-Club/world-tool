@@ -29,12 +29,15 @@ pub struct Reply {
     pub on_spawn: Option<Hook>,
     /// Spawn fails with this error kind.
     pub spawn_error: Option<io::ErrorKind>,
+    /// Stdout fails once with this error kind after the chunks.
+    pub read_error: Option<io::ErrorKind>,
 }
 
 impl Reply {
     /// Exit 0 with `stdout`.
     pub fn ok(stdout: impl AsRef<[u8]>) -> Reply {
-        Reply { stdout: vec![stdout.as_ref().to_vec()], ..Reply::default() }
+        let out = stdout.as_ref();
+        Reply { stdout: if out.is_empty() { Vec::new() } else { vec![out.to_vec()] }, ..Reply::default() }
     }
     /// Exit `code` with `stderr`.
     pub fn fail(code: i32, stderr: impl AsRef<[u8]>) -> Reply {
@@ -161,6 +164,7 @@ struct FakeStdout {
     chunks: std::collections::VecDeque<Vec<u8>>,
     delay: Duration,
     hang: bool,
+    read_error: Option<io::ErrorKind>,
     shared: Arc<Shared>,
 }
 
@@ -177,6 +181,9 @@ impl Read for FakeStdout {
                 self.chunks.push_front(c.split_off(n));
             }
             return Ok(n);
+        }
+        if let Some(kind) = self.read_error.take() {
+            return Err(kind.into());
         }
         if self.hang {
             self.shared.wait_killed();
@@ -231,6 +238,7 @@ impl Child for FakeChild {
                 chunks: self.reply.stdout.iter().cloned().collect(),
                 delay: self.reply.chunk_delay,
                 hang: self.reply.hang,
+                read_error: self.reply.read_error,
                 shared: self.shared.clone(),
             }) as Box<dyn Read + Send>
         })

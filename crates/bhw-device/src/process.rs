@@ -84,6 +84,16 @@ pub struct Output {
     pub stderr: String,
 }
 
+/// Stands in for a stream that was already taken.
+pub(crate) fn empty_reader() -> Box<dyn Read + Send> {
+    Box::new(io::empty())
+}
+
+/// Stands in for a stdin that was already taken.
+pub(crate) fn null_writer() -> Box<dyn Write + Send> {
+    Box::new(io::sink())
+}
+
 /// Reads a stream to the end on a thread.
 pub(crate) fn collect(r: Option<Box<dyn Read + Send>>) -> std::thread::JoinHandle<Vec<u8>> {
     std::thread::spawn(move || {

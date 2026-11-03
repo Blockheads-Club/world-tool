@@ -160,6 +160,34 @@ impl Watchdog {
     }
 }
 
+/// Counts bytes read and reports progress.
+pub(crate) struct Counting<'a, R> {
+    pub inner: R,
+    pub bytes: Arc<AtomicU64>,
+    pub progress: ProgressFn<'a>,
+}
+
+impl<R: Read> Read for Counting<'_, R> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        let n = self.inner.read(buf)?;
+        let total = self.bytes.fetch_add(n as u64, Ordering::SeqCst) + n as u64;
+        (self.progress)(Progress { phase: Phase::Transferring, bytes: total, total: None });
+        Ok(n)
+    }
+}
+
+impl<W: Write> Write for Counting<'_, W> {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        let n = self.inner.write(buf)?;
+        let total = self.bytes.fetch_add(n as u64, Ordering::SeqCst) + n as u64;
+        (self.progress)(Progress { phase: Phase::Transferring, bytes: total, total: None });
+        Ok(n)
+    }
+    fn flush(&mut self) -> io::Result<()> {
+        self.inner.flush()
+    }
+}
+
 /// Reads a file another process is still writing; EOF once `child` has exited and nothing more is there.
 struct TailReader {
     path: PathBuf,
@@ -324,7 +352,7 @@ impl Adb {
             AbMethod::AdbCommand => {
                 (Box::new(TailReader { path: file, file: None, child: child.clone() }), Some(collect(stdout)))
             }
-            AbMethod::BuStream => (stdout.unwrap_or_else(|| Box::new(io::empty())), None),
+            AbMethod::BuStream => (stdout.unwrap_or_else(crate::process::empty_reader), None),
         };
         let dog = Watchdog::start(child.clone(), cancel.clone(), self.timeouts.confirm, self.timeouts.stall);
         let pumped = pump(&mut src, out, &dog.bytes, progress);
@@ -410,12 +438,9 @@ impl Adb {
             }
             None => {
                 let dog = Watchdog::start(child.clone(), cancel.clone(), self.timeouts.confirm, self.timeouts.stall);
-                let mut stdin = child.take_stdin().unwrap_or_else(|| Box::new(io::sink()));
-                let bytes = dog.bytes.clone();
-                let r = copy_cancellable(input, &mut stdin, &CancelToken::new(), &mut |b| {
-                    bytes.store(b, Ordering::SeqCst);
-                    progress(Progress { phase: Phase::Transferring, bytes: b, total: None })
-                });
+                let stdin = child.take_stdin().unwrap_or_else(crate::process::null_writer);
+                let mut stdin = Counting { inner: stdin, bytes: dog.bytes.clone(), progress: &mut *progress };
+                let r = copy_cancellable(input, &mut stdin, &CancelToken::new(), &mut |_| {});
                 drop(stdin);
                 let moved = dog.bytes.load(Ordering::SeqCst);
                 let code = wait_until(&*child, Instant::now() + self.timeouts.confirm)?;
@@ -442,7 +467,7 @@ impl Adb {
 
 /// Copies with a cancel check between chunks; write errors to the local disk become [`DeviceError::DiskFull`]
 /// where applicable, a broken pipe [`DeviceError::Disconnected`].
-pub(crate) fn copy_cancellable(
+pub fn copy_cancellable(
     input: &mut dyn Read,
     out: &mut dyn Write,
     cancel: &CancelToken,
@@ -468,7 +493,7 @@ pub(crate) fn copy_cancellable(
     Ok(total)
 }
 
-fn pipe_or_local(e: io::Error) -> DeviceError {
+pub(crate) fn pipe_or_local(e: io::Error) -> DeviceError {
     if e.kind() == io::ErrorKind::BrokenPipe {
         DeviceError::Disconnected
     } else {
