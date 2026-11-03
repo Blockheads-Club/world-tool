@@ -298,7 +298,7 @@ impl Env {
         let tmp = tempfile::tempdir().unwrap();
         let l = ScriptedRunner::new();
         local(&l);
-        l.on("ps", Reply::ok("bash\ninit\n")).on("tasklist", Reply::ok("\"x.exe\",\"1\"\n"));
+        l.on("comm=", Reply::ok("bash\ninit\n")).on("CSV", Reply::ok("\"x.exe\",\"1\"\n"));
         Env { tmp, phone: Phone::new(data, custom), local: l, pc: None }
     }
 
