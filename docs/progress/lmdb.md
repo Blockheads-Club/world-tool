@@ -14,8 +14,20 @@ Done:
 - `tests/real_saves.rs` (gated by `BHW_REAL_SAVES=<.../saves>`): all 15 local worlds read, rewritten 32/64-bit,
   re-read identical; real LMDB (x86_64 and i686) reads ours, appends 3 txns, compacts; ours reads the result.
 
-Next:
-- Unit tests for every error path + synthetic real-LMDB cross tests (dupsort, dupfixed, integerkey, reversekey,
-  overflow, multi-level trees, non-empty free DB). Reach 100% line coverage (`cargo llvm-cov -p bhw-lmdb`).
+- Unit tests (`src/tests.rs`) for all error paths, both layouts; synthetic real-LMDB cross tests
+  (`tests/real_lmdb.rs`: dupsort/dupfixed/integerkey/reversekey/overflow/multi-level/free pages/page sizes).
+  Both pass on x86_64 and on `--target i686-unknown-linux-gnu` (real 32-bit LMDB).
+- Coverage (`cargo llvm-cov -p bhw-lmdb`): 100% lines, 100% functions, ~99.6% regions (remaining regions are
+  `?` error exits on paths like iterating after a nested error).
 
-Open questions: none yet.
+Next (exact):
+1. `cargo clippy -p bhw-lmdb --all-targets -- -D warnings` and also `--target i686-unknown-linux-gnu` test run of
+   the whole crate after the latest refactor (check_size, non-generic build_tree).
+2. Optional: cover remaining `?` regions in reader.rs (lines ~116/126/164/169/456/483).
+3. Final report to coordinator.
+
+Findings:
+- `mm_flags` (free DB md_flags) = `me_flags & 0xffff | MDB_INTEGERKEY`, so LMDB opened with MDB_NOSUBDIR persists
+  0x4008; game saves have 0x0008. We preserve the source value.
+- Real LMDB silently drops empty values in DUPSORT DBs; our writer rejects them (1..=511 bytes required).
+- `Cargo.lock` intentionally not committed in this branch (would conflict with sibling streams); add at merge.

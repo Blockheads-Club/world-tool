@@ -161,10 +161,12 @@ struct Writer {
     out: Vec<u8>,
 }
 
-fn check_key(db: Option<&[u8]>, what: &str, k: &[u8], max: usize) -> Result<()> {
-    if k.is_empty() || k.len() > max {
+/// Checks a key/value size against LMDB's limits: keys and `MDB_DUPSORT` values are 1..=`MDB_MAXKEYSIZE`
+/// (`mdb.c:7740`), other values fit the 32-bit node size field (`MAXDATASIZE`, `mdb.c:703`).
+pub(crate) fn check_size(db: Option<&[u8]>, what: &str, len: u64, min: u64, max: u64) -> Result<()> {
+    if len < min || len > max {
         let db = db.map(lossy).unwrap_or_else(|| "<main>".into());
-        return Err(Error::BadValue(format!("{what} of {} bytes in {db} (LMDB allows 1..={max})", k.len())));
+        return Err(Error::BadValue(format!("{what} of {len} bytes in {db} (LMDB allows {min}..={max})")));
     }
     Ok(())
 }
@@ -202,12 +204,10 @@ impl Writer {
         let flags = db.flags;
         let dupsort = flags.has(DbFlags::DUPSORT);
         for (k, v) in &db.entries {
-            check_key(name, "key", k, MAX_KEY_SIZE)?;
-            if dupsort {
-                check_key(name, "duplicate value", v, MAX_KEY_SIZE)?;
-            } else if v.len() > u32::MAX as usize {
-                return Err(Error::BadValue("value larger than 4 GiB".into()));
-            }
+            check_size(name, "key", k.len() as u64, 1, MAX_KEY_SIZE as u64)?;
+            let (what, min, max) =
+                if dupsort { ("duplicate value", 1, MAX_KEY_SIZE as u64) } else { ("value", 0, u32::MAX as u64) };
+            check_size(name, what, v.len() as u64, min, max)?;
         }
         // Sort: by key, then (DUPSORT) by value. Named-DB records are merged in as keys too.
         let mut items: Vec<SortItem> = db
@@ -275,7 +275,7 @@ impl Writer {
             nodes.push(node);
             i = j;
         }
-        let mut stats = self.build_tree(nodes.into_iter().map(Leaf::Node), page_flags::LEAF, 0);
+        let mut stats = self.build_tree(nodes.into_iter().map(Leaf::Node).collect(), page_flags::LEAF, 0);
         stats.overflow += overflow;
         Ok(DbRecord {
             pad: 0,
@@ -312,9 +312,9 @@ impl Writer {
     ) -> Result<LeafNode<'a>> {
         let fixed = flags.has(DbFlags::DUPFIXED);
         let ksize = values[0].len();
-        if fixed && (ksize == 0 || values.iter().any(|v| v.len() != ksize)) {
+        if fixed && values.iter().any(|v| v.len() != ksize) {
             return Err(Error::BadValue(format!(
-                "MDB_DUPFIXED values of key {:?} in {:?} differ in size or are empty",
+                "MDB_DUPFIXED values of key {:?} in {:?} differ in size",
                 lossy(key),
                 name.map(lossy)
             )));
@@ -349,7 +349,7 @@ impl Writer {
         } else {
             (page_flags::LEAF, 0, 0)
         };
-        let leaves = values.iter().map(|v| if fixed { Leaf::Fixed(v) } else { Leaf::Node(key_only(v)) });
+        let leaves = values.iter().map(|v| if fixed { Leaf::Fixed(v) } else { Leaf::Node(key_only(v)) }).collect();
         let stats = self.build_tree(leaves, leaf_flags, pad);
         let rec = DbRecord {
             pad: pad as u32,
@@ -371,7 +371,7 @@ impl Writer {
     }
 
     /// Bulk-loads a B+tree from sorted leaf entries.
-    fn build_tree<'a>(&mut self, leaves: impl Iterator<Item = Leaf<'a>>, leaf_flags: u16, pad: usize) -> Stats {
+    fn build_tree(&mut self, leaves: Vec<Leaf>, leaf_flags: u16, pad: usize) -> Stats {
         let mut stats = Stats::default();
         // Leaf level: (pgno, first key) of each page.
         let mut level: Vec<(u64, Vec<u8>)> = Vec::new();

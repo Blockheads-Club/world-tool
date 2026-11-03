@@ -185,7 +185,7 @@ impl<'a> Env<'a> {
     }
 
     /// Fetches tree page `pgno` and checks its header.
-    fn page(&self, pgno: u64) -> Result<Page<'a>> {
+    pub(crate) fn page(&self, pgno: u64) -> Result<Page<'a>> {
         if pgno < 2 || pgno > self.last_pgno() {
             return bad_page(pgno, format!("page number outside 2..={}", self.last_pgno()));
         }
@@ -228,21 +228,21 @@ impl<'a> Env<'a> {
 
 /// A parsed page (or `P_SUBP` sub-page) header.
 #[derive(Debug, Clone, Copy)]
-struct Page<'a> {
+pub(crate) struct Page<'a> {
     b: &'a [u8],
     pgno: u64,
-    flags: u16,
+    pub(crate) flags: u16,
     lower: usize,
     pad: usize,
-    n: usize,
+    pub(crate) n: usize,
 }
 
 /// One raw node.
-struct Node<'a> {
-    flags: u16,
-    lo_hi: u32,
+pub(crate) struct Node<'a> {
+    pub(crate) flags: u16,
+    pub(crate) lo_hi: u32,
     key: &'a [u8],
-    rest: &'a [u8],
+    pub(crate) rest: &'a [u8],
 }
 
 impl<'a> Page<'a> {
@@ -285,7 +285,7 @@ impl<'a> Page<'a> {
     }
 
     /// Node `i` (`NODEPTR`, `mdb.c:1162`).
-    fn node(&self, hdr: usize, i: usize) -> Result<Node<'a>> {
+    pub(crate) fn node(&self, hdr: usize, i: usize) -> Result<Node<'a>> {
         let ofs = u16::from_le_bytes([self.b[hdr + 2 * i], self.b[hdr + 2 * i + 1]]) as usize;
         if ofs < self.lower || ofs + NODE_SIZE > self.b.len() {
             return bad_page(self.pgno, format!("node {i} offset {ofs} out of bounds"));

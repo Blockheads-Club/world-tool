@@ -21,6 +21,9 @@ mod model;
 mod reader;
 mod writer;
 
+#[cfg(test)]
+mod tests;
+
 pub use error::{Error, Result};
 pub use format::{DbFlags, DbRecord, Meta};
 pub use layout::Layout;

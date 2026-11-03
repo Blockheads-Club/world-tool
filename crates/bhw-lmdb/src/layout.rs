@@ -31,11 +31,10 @@ pub enum Layout {
 impl Layout {
     /// The layout real LMDB produces when compiled for the current target.
     pub const fn native() -> Layout {
-        if cfg!(target_pointer_width = "64") {
-            Layout::Bits64
-        } else {
-            Layout::Bits32
-        }
+        #[cfg(target_pointer_width = "64")]
+        return Layout::Bits64;
+        #[cfg(not(target_pointer_width = "64"))]
+        return Layout::Bits32;
     }
 
     /// Size in bytes of `size_t` / `pgno_t` / `txnid_t` / `mdb_size_t`.
