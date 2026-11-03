@@ -229,8 +229,8 @@ impl Phone {
                      adb-S-y\t_adb-tls-connect._tcp.\t10.0.0.2:41000\nfoo\t_other._tcp\t1.2.3.4:1\n",
                 ),
             )
-            .on(" pair ", Reply::ok("Successfully paired to 10.0.0.2:37000"))
-            .on(" connect ", Reply::ok("connected to 10.0.0.2:41000"))
+            .on("pair ", Reply::ok("Successfully paired to 10.0.0.2:37000"))
+            .on("connect ", Reply::ok("connected to 10.0.0.2:41000"))
             .on("kill-server", Reply::ok(""))
             .on("start-server", Reply::ok(""))
             .on("version", Reply::ok("Android Debug Bridge version 1.0.41\nVersion 36\n"));

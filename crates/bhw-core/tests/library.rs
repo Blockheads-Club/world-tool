@@ -35,9 +35,14 @@ fn import_with_choices() {
     write(&bad, b"not a zip");
     let txt = env.path("in/notes.txt");
     write(&txt, b"x");
-    let paths: Vec<String> =
-        [one.clone(), server.display().to_string(), client.display().to_string(), bad.display().to_string(), txt.display().to_string()]
-            .into();
+    let paths: Vec<String> = [
+        one.clone(),
+        server.display().to_string(),
+        client.display().to_string(),
+        bad.display().to_string(),
+        txt.display().to_string(),
+    ]
+    .into();
     let items = core.inspect_import(&paths).unwrap();
     let k: Vec<_> = items.iter().map(|i| (i.kind, i.status)).collect();
     assert_eq!(
@@ -66,9 +71,10 @@ fn import_with_choices() {
     let renamed = bhworld(&env, "in2/Other.bhworld", C, "srv");
     let items = core.inspect_import(std::slice::from_ref(&renamed)).unwrap();
     assert_eq!((items[0].conflict, items[0].existing.as_deref()), (Some(ConflictKind::SameName), Some("Srv")));
-    let choices = [(one.clone(), Choice::KeepBoth), (paths[1].clone(), Choice::Replace), (renamed.clone(), Choice::Skip)]
-        .into_iter()
-        .collect();
+    let choices =
+        [(one.clone(), Choice::KeepBoth), (paths[1].clone(), Choice::Replace), (renamed.clone(), Choice::Skip)]
+            .into_iter()
+            .collect();
     let added = core
         .import_worlds(&ImportRequest { choices, paths: vec![one.clone(), paths[1].clone(), renamed.clone()] })
         .unwrap();
@@ -147,7 +153,12 @@ fn export_formats() {
     assert_eq!(ev.lock().unwrap()[0].stage, bhw_core::Stage::Exporting);
     // Library worlds as server folders; a second .bhworld export gets a free name.
     let id = res.saved[0].base.id.clone();
-    let req = ExportRequest { read_id: None, world_ids: vec![id.clone()], format: ExportFormat::Server, folder: req.folder.clone() };
+    let req = ExportRequest {
+        read_id: None,
+        world_ids: vec![id.clone()],
+        format: ExportFormat::Server,
+        folder: req.folder.clone(),
+    };
     let res = core.export_worlds("op", &req, &mut |_| {}).unwrap();
     assert_eq!(res.files[0].name, A);
     assert!(out.join(A).join("worldv2").is_file());

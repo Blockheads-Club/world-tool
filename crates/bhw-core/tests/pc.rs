@@ -8,11 +8,15 @@ use bhw_save::GameDb;
 use common::*;
 
 fn pc_env(worlds: &[(&str, &str)], game_db: bool, running: bool) -> Env {
-    let mut env = Env::with(&PhoneData::new(&[(C, "Phone World")]), |_| {}, |l| {
-        if running {
-            l.on("comm=", Reply::ok("bhpc-run\n"));
-        }
-    });
+    let mut env = Env::with(
+        &PhoneData::new(&[(C, "Phone World")]),
+        |_| {},
+        |l| {
+            if running {
+                l.on("comm=", Reply::ok("bhpc-run\n"));
+            }
+        },
+    );
     env.pc = Some(pc_dir(env.tmp.path(), worlds, game_db));
     env
 }
@@ -22,8 +26,10 @@ fn support(env: &Env) -> std::path::PathBuf {
 }
 
 fn pc_ids(env: &Env) -> Vec<String> {
-    let mut v: Vec<String> =
-        std::fs::read_dir(support(env).join("saves")).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().into_owned()).collect();
+    let mut v: Vec<String> = std::fs::read_dir(support(env).join("saves"))
+        .unwrap()
+        .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
     v.sort();
     v
 }
@@ -51,7 +57,8 @@ fn read_and_write_pc() {
     assert!(!plan.needs_phone);
     assert!(plan.backup_size > 0);
     let (ev, mut on) = events();
-    let res = core.transfer("op", &TransferRequest { plan_id: plan.plan_id, choices: Default::default() }, &mut on).unwrap();
+    let res =
+        core.transfer("op", &TransferRequest { plan_id: plan.plan_id, choices: Default::default() }, &mut on).unwrap();
     assert_eq!((res.added.clone(), res.total), (vec!["Phone World".to_string()], 3));
     assert!(ev.lock().unwrap().iter().any(|p| p.stage == bhw_core::Stage::Writing));
     assert_eq!(pc_ids(&env), [A, B, C]);
@@ -87,8 +94,13 @@ fn read_and_write_pc() {
     assert_eq!(pc_ids(&env), [D]);
     assert_eq!(registered(&env), [D]);
     // An empty backup empties the PC.
-    std::fs::write(dir.join("empty.ab"), phone_ab(&PhoneData { worlds: vec![], game_db: false, extra: vec![] }, None)).unwrap();
-    let mut b = bhw_backup::BackupWriter::create(Box::new(std::fs::File::create(dir.join("bare.ab")).unwrap()), &Default::default()).unwrap();
+    std::fs::write(dir.join("empty.ab"), phone_ab(&PhoneData { worlds: vec![], game_db: false, extra: vec![] }, None))
+        .unwrap();
+    let mut b = bhw_backup::BackupWriter::create(
+        Box::new(std::fs::File::create(dir.join("bare.ab")).unwrap()),
+        &Default::default(),
+    )
+    .unwrap();
     bhw_backup::TarWriter::new(&mut b).finish().unwrap();
     b.finish().unwrap();
     core.restore_backup("op", "bare.ab", "pc", &mut |_| {}).unwrap();
@@ -101,7 +113,9 @@ fn pc_without_game_db_and_running_game() {
     let core = env.core();
     core.read("op", &ReadRequest { device_id: "S1".into(), password: String::new() }, &mut |_| {}).unwrap();
     let plan = core.transfer_plan(&Source::Device { device_id: "S1".into() }, &[C.to_string()], "pc").unwrap();
-    let e = core.transfer("op", &TransferRequest { plan_id: plan.plan_id, choices: Default::default() }, &mut |_| {}).unwrap_err();
+    let e = core
+        .transfer("op", &TransferRequest { plan_id: plan.plan_id, choices: Default::default() }, &mut |_| {})
+        .unwrap_err();
     assert_eq!((e.code, e.extra.backup_id.clone()), (ErrorCode::GameRunning, None));
     let dir = core.lib().unwrap().inner.backups_dir();
     std::fs::write(dir.join("x.ab"), phone_ab(&PhoneData::new(&[]), None)).unwrap();
@@ -113,7 +127,9 @@ fn pc_without_game_db_and_running_game() {
     core.set_settings(serde_json::json!({ "backup_before_write": false }).as_object().unwrap()).unwrap();
     core.read("op", &ReadRequest { device_id: "S1".into(), password: String::new() }, &mut |_| {}).unwrap();
     let plan = core.transfer_plan(&Source::Device { device_id: "S1".into() }, &[C.to_string()], "pc").unwrap();
-    let res = core.transfer("op", &TransferRequest { plan_id: plan.plan_id, choices: Default::default() }, &mut |_| {}).unwrap();
+    let res = core
+        .transfer("op", &TransferRequest { plan_id: plan.plan_id, choices: Default::default() }, &mut |_| {})
+        .unwrap();
     assert_eq!(res.backup_id, None);
     assert_eq!(registered(&env), [C]);
 }
@@ -121,7 +137,8 @@ fn pc_without_game_db_and_running_game() {
 #[test]
 fn pc_folder_from_settings() {
     let env = pc_env(&[(A, "One")], true, false);
-    let core = bhw_core::Core::new(bhw_core::CoreConfig { pc_locator: std::sync::Arc::new(|| None), ..env.config(true) });
+    let core =
+        bhw_core::Core::new(bhw_core::CoreConfig { pc_locator: std::sync::Arc::new(|| None), ..env.config(true) });
     assert!(!core.list_devices().iter().any(|d| d.kind == DeviceKind::Pc));
     let e = core.read("op", &ReadRequest { device_id: "pc".into(), password: String::new() }, &mut |_| {}).unwrap_err();
     assert_eq!(e.code, ErrorCode::NotFound);
@@ -129,6 +146,9 @@ fn pc_folder_from_settings() {
     core.set_settings(serde_json::json!({ "pc_folder": folder }).as_object().unwrap()).unwrap();
     assert!(core.list_devices().iter().any(|d| d.kind == DeviceKind::Pc));
     // A folder where the game never ran is not offered.
-    core.set_settings(serde_json::json!({ "pc_folder": env.path("nothing").display().to_string() }).as_object().unwrap()).unwrap();
+    core.set_settings(
+        serde_json::json!({ "pc_folder": env.path("nothing").display().to_string() }).as_object().unwrap(),
+    )
+    .unwrap();
     assert!(!core.list_devices().iter().any(|d| d.kind == DeviceKind::Pc));
 }
