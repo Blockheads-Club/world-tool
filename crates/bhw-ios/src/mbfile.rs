@@ -72,7 +72,7 @@ impl MbFile {
 }
 
 /// Archives an `MBFile` the way iOS does (test fixtures).
-#[cfg(test)]
+#[cfg(any(test, feature = "test-util"))]
 pub fn build(file: &MbFile, rel_path: &str) -> Vec<u8> {
     use plist::Uid;
     let mut root = Dictionary::new();

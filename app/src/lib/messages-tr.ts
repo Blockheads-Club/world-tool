@@ -735,6 +735,10 @@ export const tr: Record<Key, string> = {
   'err.offline': 'Çevrimdışı görünüyorsunuz.',
   'err.cancelled': 'Durduruldu.',
   'err.not_found': 'Artık orada değil. Yenileyip tekrar deneyin.',
+  'err.game_running': 'The Blockheads açık. Oyunu kapatın ve tekrar deneyin.',
+  'err.game_stopped': 'The Blockheads’i telefonda bir kez açın, ana ekrana dönün ve tekrar deneyin.',
+  'err.not_supported_yet': 'Bu henüz desteklenmiyor. iPhone ve iPad yedeklerinden yalnızca okunabilir.',
+  'err.adb_missing': 'Telefon bağlantı aracı (adb) bulunamadı. BH World Tool’u yeniden yükleyin.',
   'err.not_implemented': 'Bu henüz bu sürümde yok.',
   'err.io': 'Bir şeyler ters gitti. Ayrıntılar Etkinlik’te.'
 };

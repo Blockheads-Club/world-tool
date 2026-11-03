@@ -19,11 +19,19 @@ pub struct Timeouts {
     pub confirm: Duration,
     /// No new bytes for this long during a transfer means the device is gone.
     pub stall: Duration,
+    /// How long [`Adb::stop_game`] keeps trying: Android only kills the game once it has left the "previous app"
+    /// state, which took more than 5 s on an API 30 emulator after leaving a world.
+    pub stop: Duration,
 }
 
 impl Default for Timeouts {
     fn default() -> Self {
-        Timeouts { command: Duration::from_secs(30), confirm: Duration::from_secs(180), stall: Duration::from_secs(60) }
+        Timeouts {
+            command: Duration::from_secs(30),
+            confirm: Duration::from_secs(180),
+            stall: Duration::from_secs(60),
+            stop: Duration::from_secs(30),
+        }
     }
 }
 

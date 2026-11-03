@@ -23,6 +23,7 @@ pub fn adb(r: &ScriptedRunner) -> Adb {
         command: Duration::from_secs(5),
         confirm: Duration::from_millis(300),
         stall: Duration::from_millis(300),
+        stop: Duration::from_millis(300),
     };
     a
 }

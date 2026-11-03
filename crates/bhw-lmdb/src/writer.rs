@@ -1,6 +1,11 @@
 //! Builds a fresh, compact LMDB data file, the way `mdb_env_copy2(..., MDB_CP_COMPACT)` does
-//! (`mdb_env_copyfd1`, `mdb.c:10537`): meta page 0 describes an empty environment with txnid 0, meta page 1 holds
-//! the real roots with txnid 1 (`mdb.c:10635`), the free DB is empty and every page after the metas is in use.
+//! (`mdb_env_copyfd1`, `mdb.c:10537`): meta page 1 holds the real roots with txnid 1 (`mdb.c:10635`), the free DB
+//! is empty and every page after the metas is in use.
+//!
+//! Unlike `mdb_copy`, meta page 0 (txnid 0) holds the same roots instead of an empty environment. LMDB picks the
+//! meta page of a transaction from the lock file's last txnid (`mti_txnid & 1`), so a file that is placed next to a
+//! stale or zeroed `lock.mdb` must look the same through either meta page. The Blockheads (1.7.6, Android) crashed
+//! loading a world written with an empty meta page 0 next to a zeroed lock file.
 //!
 //! Trees are bulk-loaded bottom-up with full pages. Node encoding follows `mdb_node_add` (`mdb.c:8458`): nodes are
 //! `EVEN(NODESIZE + key + data)` bytes, stacked from the end of the page; leaf data larger than `me_nodemax`
@@ -52,9 +57,9 @@ pub fn write_env(contents: &EnvContents, layout: Layout) -> Result<Vec<u8>> {
         return Err(Error::TooLarge("map size"));
     }
     let mut meta = Meta::init(ps, map_size, contents.env_flags);
-    w.put_meta(0, &meta);
     meta.main_db = main;
     meta.last_pgno = last_pgno;
+    w.put_meta(0, &meta);
     meta.txnid = 1;
     w.put_meta(1, &meta);
     Ok(w.out)

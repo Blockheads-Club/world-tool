@@ -737,6 +737,10 @@ export const en = {
   'err.offline': 'You seem to be offline.',
   'err.cancelled': 'Stopped.',
   'err.not_found': 'It isn’t there any more. Refresh and try again.',
+  'err.game_running': 'The Blockheads is running. Close the game, then try again.',
+  'err.game_stopped': 'Open The Blockheads once on the phone, go back to the home screen, then try again.',
+  'err.not_supported_yet': 'That isn’t supported yet. iPhone and iPad backups can only be read from.',
+  'err.adb_missing': 'The phone connection tool (adb) is missing. Reinstall BH World Tool.',
   'err.not_implemented': 'This isn’t available in this version yet.',
   'err.io': 'Something went wrong. Details are in Activity.'
 } as const;

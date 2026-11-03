@@ -319,8 +319,8 @@ pub fn inspect(path: &Path) -> Result<ApkInfo> {
     Ok(ApkSet::open(path)?.info)
 }
 
-#[cfg(test)]
-pub(crate) mod testutil {
+#[cfg(any(test, feature = "test-util"))]
+pub mod testutil {
     //! Synthesized APKs for tests.
 
     use crate::axml::build;

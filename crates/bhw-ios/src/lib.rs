@@ -14,8 +14,9 @@ pub mod info;
 pub mod keybag;
 pub mod mbfile;
 
-#[cfg(test)]
-mod fixture;
+/// Synthetic backups for tests (also for other crates' tests with the `test-util` feature).
+#[cfg(any(test, feature = "test-util"))]
+pub mod fixture;
 
 use std::path::PathBuf;
 

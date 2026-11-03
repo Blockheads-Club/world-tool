@@ -1,0 +1,32 @@
+[package]
+name = "bhw-core"
+description = "Application logic of BH World Tool (devices, reads, transfers, library, backups, activity), independent of the GUI"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+bhw-assets = { path = "../bhw-assets" }
+bhw-backup = { path = "../bhw-backup" }
+bhw-device = { path = "../bhw-device" }
+bhw-ios = { path = "../bhw-ios" }
+bhw-lmdb = { path = "../bhw-lmdb" }
+bhw-save = { path = "../bhw-save" }
+bhw-world = { path = "../bhw-world" }
+base64 = "0.22"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sysinfo = { version = "0.36", default-features = false, features = ["disk"] }
+thiserror = { workspace = true }
+zip = { version = "4.6", default-features = false, features = ["deflate-flate2-zlib"] }
+
+[dev-dependencies]
+bhw-assets = { path = "../bhw-assets", features = ["test-util"] }
+bhw-ios = { path = "../bhw-ios", features = ["test-util"] }
+plist = "1.7"
+tempfile = "3"
+
+[lints]
+workspace = true

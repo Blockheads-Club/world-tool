@@ -7,6 +7,10 @@ rust-version.workspace = true
 license.workspace = true
 publish = false
 
+[features]
+# Exposes the synthetic-fixture builders to other crates' tests.
+test-util = []
+
 [dependencies]
 aes = "0.8.4"
 bhw-world = { path = "../bhw-world" }

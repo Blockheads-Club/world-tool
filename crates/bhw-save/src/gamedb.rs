@@ -11,7 +11,7 @@ use bhw_lmdb::{Database, EnvContents, Layout};
 use plist::Value;
 
 use crate::error::{io, Error, Result};
-use crate::plistio::{parse_dict, to_xml, Dialect};
+use crate::plistio::parse_dict;
 use crate::save::{env_bytes, map_size_for, write_atomic, GAME_DB_MAP_SIZE, PAGE_SIZE};
 
 const SUFFIX: &str = "_worldv2";
@@ -99,10 +99,7 @@ impl GameDb {
     /// with that record when it next saves the world.
     pub fn rename(&mut self, id: &str, name: &str) -> Result<bool> {
         let Some(old) = self.entry(id) else { return Ok(false) };
-        let dialect = Dialect::detect(old);
-        let mut d = parse_dict(old)?;
-        d.insert("worldName".into(), Value::String(name.into()));
-        let bytes = to_xml(&Value::Dictionary(d), dialect)?;
+        let bytes = crate::identity::rewrite_record(old, None, Some(name))?;
         self.register(id, &bytes);
         Ok(true)
     }

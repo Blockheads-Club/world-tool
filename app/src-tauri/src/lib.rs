@@ -1,95 +1,25 @@
-//! BH World Tool desktop shell. The commands mirror the `Backend` interface of `src/lib/api.ts`. Phase 1 UI work:
-//! settings, app info and OS integration are real; everything that needs the world / backup crates (`crates/*`) is a
-//! stub that rejects with `{ code: "not_implemented" }` until those crates are wired in.
+//! BH World Tool desktop shell: thin glue between the UI (`src/lib/api.ts`) and `bhw-core`, which holds all the
+//! application logic. Long commands run on blocking threads and report progress through a `Channel`; `cancel`
+//! goes to the core's cancel registry. Pickers use the dialog plugin; updates are not wired yet.
 
-use serde::{Deserialize, Serialize};
-use serde_json::{json, Map, Value};
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
+
+use bhw_core::{
+    AppError, Core, CoreConfig, ErrorCode, ExportRequest, ImportRequest, Progress, ReadRequest, Settings, Source,
+    TransferRequest,
+};
+use serde_json::{json, Map, Value};
 use tauri::ipc::Channel;
-#[cfg(target_os = "macos")]
-use tauri::Emitter;
-use tauri::{AppHandle, Manager, State};
-
-/// Rejection payload; matches `AppError` in `src/lib/types.ts`.
-#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
-pub struct AppError {
-    pub code: &'static str,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub detail: Option<String>,
-}
-
-impl AppError {
-    pub fn new(code: &'static str) -> Self {
-        Self { code, detail: None }
-    }
-
-    pub fn io(e: impl std::fmt::Display) -> Self {
-        Self { code: "io", detail: Some(e.to_string()) }
-    }
-}
+use tauri::{AppHandle, Emitter, Manager, State};
+use tauri_plugin_dialog::DialogExt;
 
 type Res<T> = Result<T, AppError>;
 
-fn not_implemented<T>() -> Res<T> {
-    Err(AppError::new("not_implemented"))
-}
-
-/// Settings as the UI sees them (`Settings` in types.ts).
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct Settings {
-    pub first_run_done: bool,
-    pub worlds_folder: String,
-    pub backup_before_write: bool,
-    pub backups_to_keep: u32,
-    pub root_mode: String,
-    pub theme: String,
-    pub lang: Option<String>,
-    pub reduce_motion: bool,
-    pub auto_update: bool,
-    pub pc_folder: Option<String>,
-    pub skipped_version: Option<String>,
-    pub last_update_check: Option<u64>,
-}
-
-impl Settings {
-    pub fn defaults(worlds_folder: &Path) -> Self {
-        Self {
-            first_run_done: false,
-            worlds_folder: worlds_folder.to_string_lossy().into_owned(),
-            backup_before_write: true,
-            backups_to_keep: 5,
-            root_mode: "auto".into(),
-            theme: "system".into(),
-            lang: None,
-            reduce_motion: false,
-            auto_update: true,
-            pc_folder: None,
-            skipped_version: None,
-            last_update_check: None,
-        }
-    }
-
-    /// Apply a partial update (`Partial<Settings>` from the UI); unknown keys are ignored, bad types rejected.
-    pub fn merge(&self, patch: &Map<String, Value>) -> Res<Self> {
-        let mut v = serde_json::to_value(self).map_err(AppError::io)?;
-        let obj = v.as_object_mut().ok_or_else(|| AppError::io("settings"))?;
-        for (k, val) in patch {
-            if obj.contains_key(k) {
-                obj.insert(k.clone(), val.clone());
-            }
-        }
-        serde_json::from_value(v).map_err(AppError::io)
-    }
-}
-
-/// Load saved settings, falling back to the defaults for a missing or broken file.
-pub fn load_settings(file: &Path, defaults: Settings) -> Settings {
-    std::fs::read(file)
-        .ok()
-        .and_then(|b| serde_json::from_slice::<Map<String, Value>>(&b).ok())
-        .and_then(|m| defaults.merge(&m).ok())
-        .unwrap_or(defaults)
+struct AppState {
+    core: Arc<Core>,
+    open_files: Mutex<Vec<String>>,
 }
 
 /// `.bhworld` files and folders given on the command line (double-click in the file manager).
@@ -100,10 +30,42 @@ pub fn open_args(args: impl IntoIterator<Item = String>) -> Vec<String> {
         .collect()
 }
 
-struct AppState {
-    settings: Mutex<Settings>,
-    file: PathBuf,
-    open_files: Mutex<Vec<String>>,
+/// Where the bundled adb sidecar sits: next to the app's executable (Tauri `externalBin`, see `docs/adb-sidecar.md`).
+pub fn sidecar_adb(exe: &Path) -> Option<PathBuf> {
+    Some(exe.parent()?.join(bhw_device::adb::adb_file_name()))
+}
+
+/// The command that shows `path` in the system file manager.
+pub fn reveal_command(os: &str, path: &Path) -> (String, Vec<String>) {
+    let p = path.display().to_string();
+    match os {
+        "windows" => ("explorer".into(), vec![format!("/select,{p}")]),
+        "macos" => ("open".into(), vec!["-R".into(), p]),
+        _ => {
+            let dir = if path.is_dir() { path } else { path.parent().unwrap_or(path) };
+            ("xdg-open".into(), vec![dir.display().to_string()])
+        }
+    }
+}
+
+fn not_implemented<T>() -> Res<T> {
+    Err(AppError::with(ErrorCode::NotImplemented, "not available in this version yet"))
+}
+
+/// Runs core work on a blocking thread.
+async fn blocking<T: Send + 'static>(
+    state: State<'_, AppState>,
+    f: impl FnOnce(&Core) -> Res<T> + Send + 'static,
+) -> Res<T> {
+    let core = state.core.clone();
+    tauri::async_runtime::spawn_blocking(move || f(&core)).await.map_err(AppError::io)?
+}
+
+/// Progress callback that forwards to the UI's channel.
+fn sink(ch: Channel<Progress>) -> impl FnMut(Progress) {
+    move |p| {
+        let _ = ch.send(p);
+    }
 }
 
 #[tauri::command]
@@ -113,19 +75,12 @@ fn app_info(app: AppHandle) -> Value {
 
 #[tauri::command]
 fn get_settings(state: State<'_, AppState>) -> Settings {
-    state.settings.lock().unwrap_or_else(|e| e.into_inner()).clone()
+    state.core.settings()
 }
 
 #[tauri::command]
 fn set_settings(state: State<'_, AppState>, patch: Map<String, Value>) -> Res<Settings> {
-    let mut s = state.settings.lock().unwrap_or_else(|e| e.into_inner());
-    let next = s.merge(&patch)?;
-    if let Some(dir) = state.file.parent() {
-        std::fs::create_dir_all(dir).map_err(AppError::io)?;
-    }
-    std::fs::write(&state.file, serde_json::to_vec_pretty(&next).map_err(AppError::io)?).map_err(AppError::io)?;
-    *s = next.clone();
-    Ok(next)
+    state.core.set_settings(&patch)
 }
 
 #[tauri::command]
@@ -138,106 +93,315 @@ fn restart_app(app: AppHandle) {
     app.restart()
 }
 
-/// Nothing runs yet, so there is nothing to cancel.
 #[tauri::command]
-fn cancel(op: String) {
-    let _ = op;
+fn cancel(state: State<'_, AppState>, op: String) {
+    state.core.cancel(&op)
 }
 
-/// Lists that are simply empty until the crates are wired (the UI then shows its empty states).
 #[tauri::command]
-fn list_devices() -> Vec<Value> {
-    Vec::new()
-}
-#[tauri::command]
-fn list_worlds() -> Vec<Value> {
-    Vec::new()
-}
-#[tauri::command]
-fn list_backups() -> Vec<Value> {
-    Vec::new()
-}
-#[tauri::command]
-fn list_activity() -> Vec<Value> {
-    Vec::new()
-}
-#[tauri::command]
-fn paired_devices() -> Vec<Value> {
-    Vec::new()
-}
-#[tauri::command]
-fn ios_backups(folder: Option<String>) -> Vec<Value> {
-    let _ = folder;
-    Vec::new()
-}
-#[tauri::command]
-fn game_files() -> Value {
-    json!({ "state": "not_set", "apk_path": null, "apk_name": null, "version": null, "images": null, "size": null })
+async fn list_devices(state: State<'_, AppState>) -> Res<Vec<bhw_core::Device>> {
+    blocking(state, |c| Ok(c.list_devices())).await
 }
 
-/// Stubs: same names and arguments as the real commands will have.
-macro_rules! stub {
-    ($( $name:ident ( $( $arg:ident : $ty:ty ),* ) ),* $(,)?) => {
-        $(
-            #[tauri::command]
-            #[allow(unused_variables)]
-            fn $name($( $arg: $ty ),*) -> Res<Value> {
-                not_implemented()
+#[tauri::command]
+async fn wifi_discover(state: State<'_, AppState>) -> Res<Vec<bhw_core::WifiCandidate>> {
+    blocking(state, |c| c.wifi_discover()).await
+}
+
+#[tauri::command]
+async fn wifi_pair(state: State<'_, AppState>, address: String, code: String) -> Res<bhw_core::Device> {
+    blocking(state, move |c| c.wifi_pair(&address, &code)).await
+}
+
+#[tauri::command]
+async fn paired_devices(state: State<'_, AppState>) -> Res<Vec<bhw_core::PairedDevice>> {
+    blocking(state, |c| c.paired_devices()).await
+}
+
+#[tauri::command]
+async fn forget_paired(state: State<'_, AppState>, id: String) -> Res<()> {
+    blocking(state, move |c| c.forget_paired(&id)).await
+}
+
+#[tauri::command]
+async fn restart_adb(state: State<'_, AppState>) -> Res<()> {
+    blocking(state, |c| c.restart_adb()).await
+}
+
+#[tauri::command]
+fn open_device_manager() -> Res<()> {
+    if !cfg!(windows) {
+        return not_implemented();
+    }
+    std::process::Command::new("mmc").arg("devmgmt.msc").spawn().map(drop).map_err(AppError::from)
+}
+
+#[tauri::command]
+async fn ios_backups(state: State<'_, AppState>, folder: Option<String>) -> Res<Vec<bhw_core::IosBackup>> {
+    blocking(state, move |c| c.ios_backups(folder.as_deref())).await
+}
+
+#[tauri::command]
+async fn ios_open(state: State<'_, AppState>, id: String, password: String) -> Res<bhw_core::Device> {
+    blocking(state, move |c| c.ios_open(&id, &password)).await
+}
+
+#[tauri::command]
+async fn diagnostics(state: State<'_, AppState>) -> Res<String> {
+    blocking(state, |c| Ok(c.diagnostics())).await
+}
+
+#[tauri::command]
+async fn read_worlds(
+    state: State<'_, AppState>,
+    op: String,
+    req: ReadRequest,
+    on_progress: Channel<Progress>,
+) -> Res<bhw_core::ReadResult> {
+    blocking(state, move |c| c.read(&op, &req, &mut sink(on_progress))).await
+}
+
+#[tauri::command]
+async fn save_to_library(
+    state: State<'_, AppState>,
+    read_id: String,
+    world_ids: Vec<String>,
+) -> Res<Vec<bhw_core::World>> {
+    blocking(state, move |c| c.save_to_library(&read_id, &world_ids)).await
+}
+
+#[tauri::command]
+async fn export_worlds(
+    state: State<'_, AppState>,
+    op: String,
+    req: ExportRequest,
+    on_progress: Channel<Progress>,
+) -> Res<bhw_core::ExportResult> {
+    blocking(state, move |c| c.export_worlds(&op, &req, &mut sink(on_progress))).await
+}
+
+#[tauri::command]
+async fn free_space(state: State<'_, AppState>, folder: String) -> Res<u64> {
+    blocking(state, move |c| c.free_space(&folder)).await
+}
+
+#[tauri::command]
+async fn source_worlds(state: State<'_, AppState>, source: Source) -> Res<Vec<bhw_core::DeviceWorld>> {
+    blocking(state, move |c| c.source_worlds(&source)).await
+}
+
+#[tauri::command]
+async fn transfer_plan(
+    state: State<'_, AppState>,
+    source: Source,
+    world_ids: Vec<String>,
+    target_id: String,
+) -> Res<bhw_core::TransferPlan> {
+    blocking(state, move |c| c.transfer_plan(&source, &world_ids, &target_id)).await
+}
+
+#[tauri::command]
+async fn transfer(
+    state: State<'_, AppState>,
+    op: String,
+    req: TransferRequest,
+    on_progress: Channel<Progress>,
+) -> Res<bhw_core::TransferResult> {
+    blocking(state, move |c| c.transfer(&op, &req, &mut sink(on_progress))).await
+}
+
+#[tauri::command]
+async fn list_worlds(state: State<'_, AppState>) -> Res<Vec<bhw_core::World>> {
+    blocking(state, |c| c.lib()?.list()).await
+}
+
+#[tauri::command]
+async fn rename_world(state: State<'_, AppState>, id: String, name: String) -> Res<bhw_core::World> {
+    blocking(state, move |c| c.lib()?.rename(&id, &name)).await
+}
+
+#[tauri::command]
+async fn duplicate_world(state: State<'_, AppState>, id: String) -> Res<bhw_core::World> {
+    blocking(state, move |c| c.lib()?.duplicate(&id)).await
+}
+
+#[tauri::command]
+async fn delete_world(state: State<'_, AppState>, id: String) -> Res<()> {
+    blocking(state, move |c| c.lib()?.delete(&id)).await
+}
+
+#[tauri::command]
+fn show_in_folder(path: String) -> Res<()> {
+    let (prog, args) = reveal_command(std::env::consts::OS, Path::new(&path));
+    std::process::Command::new(prog).args(args).spawn().map(drop).map_err(AppError::from)
+}
+
+#[tauri::command]
+async fn inspect_import(state: State<'_, AppState>, paths: Vec<String>) -> Res<Vec<bhw_core::ImportItem>> {
+    blocking(state, move |c| c.inspect_import(&paths)).await
+}
+
+#[tauri::command]
+async fn import_worlds(state: State<'_, AppState>, req: ImportRequest) -> Res<Vec<bhw_core::World>> {
+    blocking(state, move |c| c.import_worlds(&req)).await
+}
+
+#[tauri::command]
+async fn list_backups(state: State<'_, AppState>) -> Res<Vec<bhw_core::Backup>> {
+    blocking(state, |c| c.list_backups()).await
+}
+
+#[tauri::command]
+async fn restore_backup(
+    state: State<'_, AppState>,
+    op: String,
+    backup_id: String,
+    device_id: String,
+    on_progress: Channel<Progress>,
+) -> Res<()> {
+    blocking(state, move |c| c.restore_backup(&op, &backup_id, &device_id, &mut sink(on_progress))).await
+}
+
+#[tauri::command]
+async fn delete_backup(state: State<'_, AppState>, id: String) -> Res<()> {
+    blocking(state, move |c| c.delete_backup(&id)).await
+}
+
+#[tauri::command]
+fn list_activity(state: State<'_, AppState>) -> Vec<bhw_core::Activity> {
+    state.core.list_activity()
+}
+
+#[tauri::command]
+fn clear_activity(state: State<'_, AppState>) -> Res<()> {
+    state.core.clear_activity()
+}
+
+#[tauri::command]
+async fn game_files(state: State<'_, AppState>) -> Res<bhw_core::GameFiles> {
+    blocking(state, |c| Ok(c.game_files())).await
+}
+
+#[tauri::command]
+async fn use_apk(
+    state: State<'_, AppState>,
+    op: String,
+    path: String,
+    on_progress: Channel<Progress>,
+) -> Res<bhw_core::GameFiles> {
+    blocking(state, move |c| c.use_apk(&op, &path, &mut sink(on_progress))).await
+}
+
+#[tauri::command]
+async fn apk_from_device(
+    state: State<'_, AppState>,
+    op: String,
+    device_id: String,
+    on_progress: Channel<Progress>,
+) -> Res<bhw_core::GameFiles> {
+    blocking(state, move |c| c.apk_from_device(&op, &device_id, &mut sink(on_progress))).await
+}
+
+#[tauri::command]
+async fn reextract(state: State<'_, AppState>, op: String, on_progress: Channel<Progress>) -> Res<bhw_core::GameFiles> {
+    blocking(state, move |c| c.reextract(&op, &mut sink(on_progress))).await
+}
+
+#[tauri::command]
+async fn clear_game_files(state: State<'_, AppState>) -> Res<bhw_core::GameFiles> {
+    blocking(state, |c| c.clear_game_files()).await
+}
+
+fn path_string(p: tauri_plugin_dialog::FilePath) -> Option<String> {
+    p.into_path().ok().map(|p| p.display().to_string())
+}
+
+#[tauri::command]
+async fn pick_folder(app: AppHandle, start: Option<String>) -> Option<String> {
+    let mut d = app.dialog().file();
+    if let Some(s) = start {
+        d = d.set_directory(s);
+    }
+    tauri::async_runtime::spawn_blocking(move || d.blocking_pick_folder().and_then(path_string)).await.ok().flatten()
+}
+
+#[tauri::command]
+async fn pick_import(app: AppHandle, folders: bool) -> Vec<String> {
+    let d = app.dialog().file();
+    let picked = tauri::async_runtime::spawn_blocking(move || {
+        if folders {
+            d.blocking_pick_folders()
+        } else {
+            d.add_filter("BH World", &["bhworld"]).blocking_pick_files()
+        }
+    });
+    picked.await.ok().flatten().unwrap_or_default().into_iter().filter_map(path_string).collect()
+}
+
+#[tauri::command]
+async fn pick_apk(app: AppHandle) -> Option<String> {
+    let d = app.dialog().file().add_filter("Android app", &["apk", "apks", "xapk"]);
+    tauri::async_runtime::spawn_blocking(move || d.blocking_pick_file().and_then(path_string)).await.ok().flatten()
+}
+
+#[tauri::command]
+fn check_update() -> Res<Value> {
+    not_implemented()
+}
+
+#[tauri::command]
+fn download_update(op: String, on_progress: Channel<Progress>) -> Res<()> {
+    let _ = (op, on_progress);
+    not_implemented()
+}
+
+/// Sends `devices-changed` whenever the device list changes (polled every few seconds).
+fn watch_devices(app: AppHandle, core: Arc<Core>) {
+    std::thread::spawn(move || {
+        let mut last = Value::Null;
+        loop {
+            let now = serde_json::to_value(core.list_devices()).unwrap_or_default();
+            if now != last {
+                let _ = app.emit("devices-changed", &now);
+                last = now;
             }
-        )*
-    };
+            std::thread::sleep(Duration::from_secs(3));
+        }
+    });
 }
 
-type Progress = Channel<Value>;
+/// Everything the core needs, from Tauri's folders and the process environment.
+fn core_config(app: &tauri::App) -> tauri::Result<CoreConfig> {
+    let config = app.path().app_config_dir()?;
+    let cache = app.path().app_cache_dir()?;
+    let docs = app.path().document_dir().unwrap_or_else(|_| config.clone());
+    let sidecar = std::env::current_exe().ok().and_then(|e| sidecar_adb(&e));
+    Ok(CoreConfig {
+        config_dir: config,
+        cache_dir: cache,
+        default_worlds_folder: docs.join("BH World Tool"),
+        adb: bhw_device::Adb::locate(sidecar.as_deref()).ok(),
+        runner: Arc::new(bhw_device::process::SystemRunner),
+        pc_locator: Arc::new(|| bhw_device::PcInstall::locate().map(|p| p.data_dir)),
+        ios_locator: Arc::new(bhw_ios::default_backup_dirs),
+        android_dir: bhw_device::wifi::android_user_dir(&|k| std::env::var_os(k), app.path().home_dir().ok()),
+        app_version: app.package_info().version.to_string(),
+    })
+}
 
-stub! {
-    wifi_discover(),
-    wifi_pair(address: String, code: String),
-    forget_paired(id: String),
-    restart_adb(),
-    open_device_manager(),
-    ios_open(id: String, password: String),
-    diagnostics(),
-    read_worlds(op: String, req: Value, on_progress: Progress),
-    save_to_library(read_id: String, world_ids: Vec<String>),
-    export_worlds(op: String, req: Value, on_progress: Progress),
-    free_space(folder: String),
-    source_worlds(source: Value),
-    transfer_plan(source: Value, world_ids: Vec<String>, target_id: String),
-    transfer(op: String, req: Value, on_progress: Progress),
-    rename_world(id: String, name: String),
-    duplicate_world(id: String),
-    delete_world(id: String),
-    show_in_folder(path: String),
-    inspect_import(paths: Vec<String>),
-    import_worlds(req: Value),
-    restore_backup(op: String, backup_id: String, device_id: String, on_progress: Progress),
-    delete_backup(id: String),
-    clear_activity(),
-    use_apk(op: String, path: String, on_progress: Progress),
-    apk_from_device(op: String, device_id: String, on_progress: Progress),
-    reextract(op: String, on_progress: Progress),
-    clear_game_files(),
-    pick_folder(start: Option<String>),
-    pick_import(folders: bool),
-    pick_apk(),
-    check_update(),
-    download_update(op: String, on_progress: Progress),
+/// Payload of `AppError` as the UI sees it (for tests).
+pub fn error_json(e: &AppError) -> Value {
+    serde_json::to_value(e).unwrap_or_default()
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
-            let config = app.path().app_config_dir()?;
-            let docs = app.path().document_dir().unwrap_or_else(|_| config.clone());
-            let file = config.join("settings.json");
-            let settings = load_settings(&file, Settings::defaults(&docs.join("BH World Tool")));
-            app.manage(AppState {
-                settings: Mutex::new(settings),
-                file,
-                open_files: Mutex::new(open_args(std::env::args())),
-            });
+            let core = Arc::new(Core::new(core_config(app)?));
+            watch_devices(app.handle().clone(), core.clone());
+            app.manage(AppState { core, open_files: Mutex::new(open_args(std::env::args())) });
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -310,36 +474,35 @@ mod tests {
     use super::*;
 
     #[test]
-    fn merge_applies_known_keys_only() {
-        let s = Settings::defaults(Path::new("/w"));
-        let mut patch = Map::new();
-        patch.insert("theme".into(), json!("dark"));
-        patch.insert("nope".into(), json!(1));
-        let n = s.merge(&patch).unwrap();
-        assert_eq!(n.theme, "dark");
-        assert_eq!(n.worlds_folder, "/w");
-        patch.insert("backups_to_keep".into(), json!("x"));
-        assert_eq!(s.merge(&patch).unwrap_err().code, "io");
-    }
-
-    #[test]
-    fn load_falls_back_to_defaults() {
-        let dir = std::env::temp_dir().join(format!("bhwt-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let f = dir.join("s.json");
-        let d = Settings::defaults(Path::new("/w"));
-        assert_eq!(load_settings(&f, d.clone()), d);
-        std::fs::write(&f, br#"{"first_run_done":true}"#).unwrap();
-        assert!(load_settings(&f, d.clone()).first_run_done);
-        std::fs::write(&f, b"broken").unwrap();
-        assert_eq!(load_settings(&f, d.clone()), d);
-        std::fs::remove_dir_all(&dir).unwrap();
-    }
-
-    #[test]
     fn open_args_keeps_worlds() {
         let a = open_args(["app", "--flag", "/x/A.BHWORLD", "/x/b.txt"].map(String::from));
         assert_eq!(a, vec!["/x/A.BHWORLD".to_string()]);
+    }
+
+    #[test]
+    fn sidecar_sits_next_to_the_exe() {
+        let p = sidecar_adb(Path::new("/opt/bh/bh-world-tool")).unwrap();
+        assert_eq!(p.parent().unwrap(), Path::new("/opt/bh"));
+        assert!(p.file_name().unwrap().to_string_lossy().starts_with("adb"));
+        assert_eq!(sidecar_adb(Path::new("")), None);
+    }
+
+    #[test]
+    fn reveal_per_os() {
+        let f = Path::new("/w/a.bhworld");
+        assert_eq!(reveal_command("windows", f), ("explorer".into(), vec!["/select,/w/a.bhworld".into()]));
+        assert_eq!(reveal_command("macos", f), ("open".into(), vec!["-R".into(), "/w/a.bhworld".into()]));
+        assert_eq!(reveal_command("linux", f), ("xdg-open".into(), vec!["/w".into()]));
+        let d = std::env::temp_dir();
+        assert_eq!(reveal_command("linux", &d).1, vec![d.display().to_string()]);
+    }
+
+    #[test]
+    fn errors_serialize_like_the_ui_expects() {
+        let e = error_json(&not_implemented::<()>().unwrap_err());
+        assert_eq!(e["code"], "not_implemented");
+        let e = error_json(&AppError::new(ErrorCode::GameStopped).device("Pixel"));
+        assert_eq!(e, json!({ "code": "game_stopped", "device": "Pixel" }));
     }
 
     #[test]
@@ -351,6 +514,5 @@ mod tests {
         for name in list.split('\'').skip(1).step_by(2) {
             assert!(build.contains(&format!("\"{name}\"")), "{name} missing in build.rs");
         }
-        assert_eq!(not_implemented::<()>().unwrap_err(), AppError::new("not_implemented"));
     }
 }

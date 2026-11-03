@@ -32,3 +32,9 @@ Findings:
   0x4008; game saves have 0x0008. We preserve the source value.
 - Real LMDB silently drops empty values in DUPSORT DBs; our writer rejects them (1..=511 bytes required).
 - `Cargo.lock` intentionally not committed in this branch (would conflict with sibling streams); add at merge.
+
+## 2026-11-03 (core stream)
+- The writer now puts the real roots into **both** meta pages (txnid 0 and 1) instead of an empty meta page 0 like
+  `mdb_copy -c`. LMDB chooses a transaction's meta page from the lock file's `mti_txnid & 1`, so a compact file
+  placed next to a zeroed or stale `lock.mdb` (what happens when we write worlds/game_db for the game) must look the
+  same through either page. The game crashed on such a file on the emulator; real-LMDB cross tests still pass.
