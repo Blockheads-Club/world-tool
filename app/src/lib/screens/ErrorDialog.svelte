@@ -23,8 +23,9 @@
   let way = $state<Guide | 'devices'>('wifi');
 
   function retry() {
+    const again = shown.retry;
     onclose();
-    shown.retry?.();
+    again?.();
   }
 
   function next() {
@@ -34,8 +35,9 @@
   }
 
   function restore() {
+    const id = e.backup_id ?? null;
     onclose();
-    store.restoreId = e.backup_id ?? null;
+    store.restoreId = id;
     store.go('backups');
   }
 
