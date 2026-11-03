@@ -162,7 +162,7 @@ struct Writer {
 }
 
 fn check_key(db: Option<&[u8]>, what: &str, k: &[u8], max: usize) -> Result<()> {
-    if k.len() > max || (what == "key" && k.is_empty()) {
+    if k.is_empty() || k.len() > max {
         let db = db.map(lossy).unwrap_or_else(|| "<main>".into());
         return Err(Error::BadValue(format!("{what} of {} bytes in {db} (LMDB allows 1..={max})", k.len())));
     }
