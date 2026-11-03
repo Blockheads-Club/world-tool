@@ -202,11 +202,7 @@ pub(crate) fn hex(bytes: &[u8]) -> String {
 }
 
 fn read_manifest(part: &mut Part) -> Result<ManifestInfo> {
-    let mut entry = match part.zip.by_name(MANIFEST) {
-        Ok(e) => e,
-        Err(zip::result::ZipError::FileNotFound) => return Err(damaged(&part.label, "no AndroidManifest.xml")),
-        Err(e) => return Err(damaged(&part.label, e)),
-    };
+    let mut entry = part.zip.by_name(MANIFEST).map_err(|e| damaged(&format!("{}: {MANIFEST}", part.label), e))?;
     let mut bytes = Vec::new();
     copy(&mut entry, &mut bytes, &part.label)?;
     parse_manifest(&bytes).map_err(|e| damaged(&part.label, e))
@@ -459,10 +455,7 @@ mod tests {
         let p = write(d.path(), "b.apk", &apk(PACKAGE, "1.7.3", true));
         assert!(matches!(inspect(&p), Err(Error::Unsupported(v)) if v == "1.7.3"));
         let p = write(d.path(), "c.apk", &apk(PACKAGE, "1.7.6", false));
-        match inspect(&p) {
-            Err(Error::Incomplete(m)) => assert_eq!(m.len(), 4),
-            other => panic!("{other:?}"),
-        }
+        assert!(matches!(inspect(&p), Err(Error::Incomplete(m)) if m.len() == 4));
         let p = write(d.path(), "d.txt", b"hello world");
         assert!(matches!(inspect(&p), Err(Error::NotAnApk)));
         let p = write(d.path(), "e.apk", b"PK\x03\x04 truncated");
@@ -527,6 +520,9 @@ mod tests {
             &zip(&[("splits/base-master.apk", apk(PACKAGE, "1.7.4", false)), ("splits/z.apk", assets_split)], true),
         );
         assert_eq!(inspect(&p).unwrap().files, 7);
+        // A nested APK without a manifest.
+        let p = write(d.path(), "v.apks", &zip(&[("base.apk", zip(&[("a", vec![1])], true))], true));
+        assert!(matches!(inspect(&p), Err(Error::Damaged(m)) if m.contains("AndroidManifest.xml")));
         // A nested entry that is not a zip.
         let p = write(d.path(), "u.apks", &zip(&[("base.apk", b"garbage".to_vec())], true));
         assert!(matches!(inspect(&p), Err(Error::Damaged(m)) if m.contains("base.apk")));

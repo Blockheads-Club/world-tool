@@ -353,12 +353,8 @@ mod tests {
         assert_eq!(fs::read(&p).unwrap(), png(2048, 2048, 100));
         assert_eq!(gf.file("nope.png").unwrap(), None);
         assert!(!gf.root().join(&dir_name).join("largo.mp4").exists());
-        match gf.status() {
-            Status::Ready { version, files, bytes, source_present, .. } => {
-                assert_eq!((version.as_str(), files, bytes, source_present), ("1.7.6", 7, m.total_bytes, true));
-            }
-            s => panic!("{s:?}"),
-        }
+        let Status::Ready { version, files, bytes, source_present, .. } = gf.status() else { unreachable!() };
+        assert_eq!((version.as_str(), files, bytes, source_present), ("1.7.6", 7, m.total_bytes, true));
         // Re-extract the same APK: same directory, leftovers cleaned.
         fs::create_dir_all(gf.root().join(".tmp-stale")).unwrap();
         fs::write(gf.root().join("stray"), b"x").unwrap();

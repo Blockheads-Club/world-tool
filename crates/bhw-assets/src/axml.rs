@@ -452,6 +452,24 @@ mod tests {
             }
             let _ = parse_manifest(&t);
         }
+        let ok8 = document("manifest", &[("package", None, Val::Str("p")), ("versionName", None, Val::Str("p"))], true);
+        assert_eq!(parse_manifest(&ok8).unwrap().version_name.as_deref(), Some("p"));
+        for n in 0..ok8.len() {
+            let mut t = ok8[..n].to_vec();
+            if t.len() >= 8 {
+                t[4..8].copy_from_slice(&(ok8.len() as u32).to_le_bytes());
+            }
+            let _ = parse_manifest(&t);
+        }
+        // Unknown chunks are skipped.
+        let pool_len = u32::from_le_bytes(ok[12..16].try_into().unwrap()) as usize;
+        let mut extra = ok[..8 + pool_len].to_vec();
+        extra.extend_from_slice(&[0x00, 0x01, 0x10, 0x00, 0x18, 0, 0, 0]);
+        extra.extend_from_slice(&[0xff; 16]);
+        extra.extend_from_slice(&ok[8 + pool_len..]);
+        let len = extra.len() as u32;
+        extra[4..8].copy_from_slice(&len.to_le_bytes());
+        assert_eq!(parse_manifest(&extra).unwrap().package, "p");
         // Bad chunk size.
         let mut bad = ok.clone();
         bad[12..16].copy_from_slice(&4u32.to_le_bytes());
@@ -477,6 +495,8 @@ mod tests {
         let str_start = u32::from_le_bytes(oob[28..32].try_into().unwrap()) as usize;
         oob[8 + str_start + 1] = 0x7f;
         assert!(parse_manifest(&oob).unwrap_err().0.contains("out of bounds"));
+        oob[8 + 28..8 + 32].copy_from_slice(&0x00ff_ffffu32.to_le_bytes());
+        assert!(parse_manifest(&oob).unwrap_err().0.contains("truncated"));
         assert_eq!(AxmlError("x".into()).to_string(), "invalid AndroidManifest.xml: x");
     }
 }
