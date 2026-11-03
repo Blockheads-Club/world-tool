@@ -1,0 +1,25 @@
+[package]
+name = "bhw-ios"
+description = "Read-only access to The Blockheads worlds in iPhone/iPad backups (Finder/iTunes, incl. encrypted) for BH World Tool"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+aes = "0.8.4"
+bhw-world = { path = "../bhw-world" }
+pbkdf2 = { version = "0.12.2", default-features = false, features = ["hmac"] }
+plist = "1.7"
+rusqlite = { version = "0.37", features = ["bundled", "serialize"] }
+sha1 = "0.10.6"
+sha2 = "0.10.9"
+thiserror = { workspace = true }
+
+[dev-dependencies]
+bhw-save = { path = "../bhw-save" }
+tempfile = "3"
+
+[lints]
+workspace = true
