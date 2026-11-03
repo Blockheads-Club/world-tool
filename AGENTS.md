@@ -21,6 +21,7 @@ extracted from the user's own APK. GPL-3.0-or-later. Not affiliated with Majic J
   (Blockheads Server) on-disk layouts.
 - `crates/bhw-backup` — Android `adb backup` (.ab) read/write incl. encryption; tar handling.
 - `crates/bhw-world` — world discovery/metadata in game saves, `.bhworld` format, conversions.
+- `crates/bhw-core` — all app logic as a service (`Core`) the Tauri commands call; scripted-adb tests.
 - `crates/bhw-assets` — validates the user's own APK (AXML manifest, `.apks`/`.xapk`, split folders) and extracts
   its graphics into a local cache (`docs/game-files.md`).
 - `app/` — SvelteKit UI + `app/src-tauri` Tauri shell.
@@ -35,4 +36,8 @@ extracted from the user's own APK. GPL-3.0-or-later. Not affiliated with Majic J
   emulator, including restore of an injected world that then loaded in the game.
 - `adb backup` skips apps in Android's "stopped" state (after `am force-stop` or never launched) and returns a
   header-only file. Never force-stop before a backup; send the game to the background and use `am kill`.
+- A world written to the game needs `world_db/lock.mdb` and an LMDB file whose meta pages both hold the current
+  tree (LMDB picks the meta page from the lock file's txnid); otherwise 1.7.6 crashes loading it (emulator, see
+  `docs/progress/core.md`). bhw-lmdb writes both metas; bhw-core adds a zero-filled lock file.
+- `am kill` only kills the game once it left the "previous app" state (seconds after HOME); retry for a while.
 - Android APK: package `com.noodlecake.blockheads`, targetSdk 27, allowBackup default true, armeabi-v7a only.

@@ -90,3 +90,9 @@ backup, removing").
   `Hint::OpenGameOnce` ("Open The Blockheads once on the phone, go back to the home screen, then try again").
   `check_backup`'s `EmptyBackup` stays for other cases.
 - Tests: `tests::phone()` scripts a non-stopped game for backup tests; line coverage 100%.
+
+## 2026-11-03 (core stream, emulator)
+- `stop_game` retries `am kill` every 500 ms for `Timeouts::stop` (new field, default 30 s): the game stays in
+  Android's "previous app" state for several seconds after HOME and `am kill` ignores it meanwhile.
+- Backup/restore via `adb backup -f` / `adb restore` verified on the API 30 emulator through bhw-core's
+  `tests/real_device.rs` (confirm screens tapped by the test).

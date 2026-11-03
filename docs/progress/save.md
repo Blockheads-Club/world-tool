@@ -30,3 +30,9 @@ Open questions:
 - Answer for the bhw-world stream: the id is stored in `world_db` `main/worldv2` (`saveID`), in a server's
   `worldv2` file and as the `game_db` key `<id>_worldv2`; keep-both must rewrite them (`SaveMeta::set_identity`
   does the first two; the caller updates `game_db` with `GameDb::register`/`unregister`).
+
+## 2026-11-03 (core stream)
+- `identity::rewrite_record` (and `GameDb::rename`) now replace the `saveID` / `worldName` strings in place and keep
+  every other byte; whole-record re-serialization is only a fallback. Done while chasing a crash of the game when
+  loading a "keep both" copy on the emulator (main causes were in LMDB meta pages / missing lock file, see
+  `core.md`).
