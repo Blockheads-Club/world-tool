@@ -117,7 +117,9 @@ fn roundtrip_both_layouts() {
         assert_eq!(env.layout(), l);
         assert_eq!(env.meta_index(), 1);
         assert_eq!(env.metas()[0].txnid, 0);
-        assert_eq!(env.metas()[0].main_db.root, None);
+        // Both meta pages describe the same tree (see the writer's module docs).
+        assert_eq!(env.metas()[0].main_db, env.metas()[1].main_db);
+        assert_eq!(env.metas()[0].last_pgno, env.metas()[1].last_pgno);
         assert_eq!(env.last_txnid(), 1);
         assert_eq!(env.last_pgno() as usize, fx.b.len() / 4096 - 1);
         assert_eq!(env.env_flags(), DbFlags::INTEGERKEY);

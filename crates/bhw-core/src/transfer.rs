@@ -60,13 +60,17 @@ pub struct Changes {
 pub const LOCK: &str = "world_db/lock.mdb";
 
 /// A world as the game needs it on disk: with a `world_db/lock.mdb`. The game (1.7.6, Android emulator) crashes
-/// (SIGSEGV) the first time it loads a world whose lock file is missing; any 8 KiB file works, LMDB initialises it.
+/// (SIGSEGV) loading a world whose lock file is missing. A new lock file is zero-filled (8 KiB), so LMDB then reads
+/// meta page 0: `data.mdb` is re-encoded so that both meta pages hold the current tree (see `bhw_lmdb::writer`).
 pub fn with_lock(mut w: WorldFiles) -> Result<WorldFiles> {
-    if w.get(LOCK).is_none() {
-        w.files.push(bhw_world::WorldFile { path: LOCK.into(), data: Payload::Bytes(vec![0; 8192]) });
-        w = WorldFiles::new(w.id, w.files)?;
+    if w.get(LOCK).is_some() {
+        return Ok(w);
     }
-    Ok(w)
+    for f in w.files.iter_mut().filter(|f| f.path == "world_db/data.mdb") {
+        f.data = Payload::Bytes(bhw_lmdb::convert(&f.data.read_all()?, bhw_lmdb::Layout::Bits32)?);
+    }
+    w.files.push(bhw_world::WorldFile { path: LOCK.into(), data: Payload::Bytes(vec![0; 8192]) });
+    Ok(WorldFiles::new(w.id, w.files)?)
 }
 
 fn same_name(a: &str, b: &str) -> bool {
