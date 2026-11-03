@@ -362,6 +362,38 @@ fn identity() {
 }
 
 #[test]
+fn record_rewrite_keeps_the_other_bytes() {
+    use bhw_save::identity::rewrite_record;
+    let new_id = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    let rec = client_record(CID, "HOME");
+    let out = rewrite_record(&rec, Some(new_id), Some("A & <B>")).unwrap();
+    let back = String::from_utf8(out.clone()).unwrap().replace(new_id, CID).replace("A &amp; &lt;B&gt;", "HOME");
+    assert_eq!(back.into_bytes(), rec, "only the two values change");
+    let d = plistio::parse_dict(&out).unwrap();
+    assert_eq!((d["saveID"].as_string(), d["worldName"].as_string()), (Some(new_id), Some("A & <B>")));
+    assert_eq!(rewrite_record(&rec, None, None).unwrap(), rec);
+    // A missing key or a non-string value: parsed and written again.
+    let mut r = record(CID, "HOME");
+    r.remove("worldName");
+    r.insert("saveID".into(), plist::Value::Integer(5.into()));
+    let odd = plistio::to_xml(&plist::Value::Dictionary(r), plistio::Dialect::Apple).unwrap();
+    let out = rewrite_record(&odd, Some(new_id), Some("N")).unwrap();
+    let d = plistio::parse_dict(&out).unwrap();
+    assert_eq!((d["saveID"].as_string(), d["worldName"].as_string()), (Some(new_id), Some("N")));
+    // The first `worldName` is in a nested dict: the textual edit is checked and dropped.
+    let mut nested = plist::Dictionary::new();
+    nested.insert("worldName".into(), plist::Value::String("inner".into()));
+    let mut r = plist::Dictionary::new();
+    r.insert("aNested".into(), plist::Value::Dictionary(nested));
+    r.extend(record(CID, "HOME"));
+    let odd = plistio::to_xml(&plist::Value::Dictionary(r), plistio::Dialect::Apple).unwrap();
+    let d = plistio::parse_dict(&rewrite_record(&odd, None, Some("N")).unwrap()).unwrap();
+    assert_eq!(d["worldName"].as_string(), Some("N"));
+    // An unterminated string is not touched textually (and the record does not parse).
+    assert!(rewrite_record(b"<key>saveID</key><string>x", Some(new_id), None).is_err());
+}
+
+#[test]
 fn round_trip_client_server_client() {
     let client = client_files(CID, "HOME");
     let (server, rep) = client_to_server_files(&client, &opts()).unwrap();

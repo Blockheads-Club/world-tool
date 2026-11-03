@@ -9,7 +9,8 @@
 //! "keep both" copy (fresh backup → rewrite → restore), reads again to verify, then restores the automatic backup so
 //! the phone ends as it started. The confirm screens ("Back up my data" / "Restore my data") are tapped through
 //! `adb shell input tap` on the `com.android.backupconfirm` allow button, so this needs an unlocked screen and
-//! **changes the device's game data**: use a test device or emulator.
+//! **changes the device's game data**: use a test device or emulator. `BHW_DEVICE_SCREENSHOT=<file.png>` also opens
+//! the game after the copy and saves a screenshot (its world list should show the copy).
 
 use std::process::Command;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -159,6 +160,19 @@ fn read_copy_and_restore() {
     eprintln!("transfer: {res:?}");
     assert_eq!(res.kept_both, vec![copy_name.clone()]);
     let backup_id = res.backup_id.clone().expect("automatic backup");
+
+    // Optional: open the game and save a screenshot of its world list (`BHW_DEVICE_SCREENSHOT=<file.png>`).
+    if let Ok(shot) = std::env::var("BHW_DEVICE_SCREENSHOT") {
+        adb_out(
+            &serial,
+            &["shell", "monkey", "-p", "com.noodlecake.blockheads", "-c", "android.intent.category.LAUNCHER", "1"],
+        );
+        std::thread::sleep(Duration::from_secs(30));
+        let png = Command::new("adb").args(["-s", &serial, "exec-out", "screencap", "-p"]).output().unwrap().stdout;
+        std::fs::write(&shot, png).unwrap();
+        adb_out(&serial, &["shell", "input", "keyevent", "HOME"]);
+        std::thread::sleep(Duration::from_secs(2));
+    }
 
     // 4. Read again: the copy is there.
     let (_, after) = names(&core, &serial);

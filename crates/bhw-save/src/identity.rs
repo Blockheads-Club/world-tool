@@ -16,8 +16,29 @@ use crate::error::{Error, Result};
 use crate::plistio::{parse_dict, to_xml, Dialect};
 use crate::save::{env_bytes, env_from, get, is_world_id, put, FileMap, WORLD_DB};
 
-/// Rewrites `saveID` and/or `worldName` in a serialized world record, keeping its XML dialect.
+/// Rewrites `saveID` and/or `worldName` in a serialized world record.
+///
+/// The record is edited in place as text: only the two `<string>` values change and every other byte stays as the
+/// game wrote it. Re-serializing the whole property list is not safe: the game (1.7.6 on Android) crashes loading a
+/// world whose record was rewritten by a different XML writer (seen with unwrapped `<data>` lines). Records where
+/// a key is missing or not a plain `<string>` fall back to parsing and re-serializing in the record's dialect.
 pub fn rewrite_record(record: &[u8], new_id: Option<&str>, new_name: Option<&str>) -> Result<Vec<u8>> {
+    let mut out = Some(record.to_vec());
+    for (key, value) in [("saveID", new_id), ("worldName", new_name)] {
+        if let Some(v) = value {
+            out = out.and_then(|r| replace_string(&r, key, v));
+        }
+    }
+    let wanted = |d: &plist::Dictionary| {
+        [("saveID", new_id), ("worldName", new_name)]
+            .iter()
+            .all(|(k, v)| v.is_none_or(|v| d.get(k).and_then(Value::as_string) == Some(v)))
+    };
+    if let Some(r) = out {
+        if parse_dict(&r).is_ok_and(|d| wanted(&d)) {
+            return Ok(r);
+        }
+    }
     let mut d = parse_dict(record)?;
     if let Some(id) = new_id {
         d.insert("saveID".into(), Value::String(id.into()));
@@ -26,6 +47,27 @@ pub fn rewrite_record(record: &[u8], new_id: Option<&str>, new_name: Option<&str
         d.insert("worldName".into(), Value::String(name.into()));
     }
     to_xml(&Value::Dictionary(d), Dialect::detect(record))
+}
+
+fn find(hay: &[u8], needle: &[u8]) -> Option<usize> {
+    hay.windows(needle.len()).position(|w| w == needle)
+}
+
+/// Replaces the text of the `<string>` that follows `<key>key</key>` (first occurrence).
+fn replace_string(xml: &[u8], key: &str, value: &str) -> Option<Vec<u8>> {
+    let k = format!("<key>{key}</key>");
+    let after_key = find(xml, k.as_bytes())? + k.len();
+    let ws = xml[after_key..].iter().take_while(|b| b.is_ascii_whitespace()).count();
+    let start = after_key + ws + b"<string>".len();
+    if !xml[after_key + ws..].starts_with(b"<string>") {
+        return None;
+    }
+    let end = start + find(&xml[start..], b"</string>")?;
+    let escaped = value.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;");
+    let mut out = xml[..start].to_vec();
+    out.extend_from_slice(escaped.as_bytes());
+    out.extend_from_slice(&xml[end..]);
+    Some(out)
 }
 
 /// Rewrites `main/worldv2` of a `world_db`. False if there is no such record.
