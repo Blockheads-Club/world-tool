@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-duplicate-world"
+description = "Enables the duplicate_world command without any pre-configured scope."
+commands.allow = ["duplicate_world"]
+
+[[permission]]
+identifier = "deny-duplicate-world"
+description = "Denies the duplicate_world command without any pre-configured scope."
+commands.deny = ["duplicate_world"]

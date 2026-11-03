@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-clear-game-files"
+description = "Enables the clear_game_files command without any pre-configured scope."
+commands.allow = ["clear_game_files"]
+
+[[permission]]
+identifier = "deny-clear-game-files"
+description = "Denies the clear_game_files command without any pre-configured scope."
+commands.deny = ["clear_game_files"]

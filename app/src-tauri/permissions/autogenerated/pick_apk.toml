@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-pick-apk"
+description = "Enables the pick_apk command without any pre-configured scope."
+commands.allow = ["pick_apk"]
+
+[[permission]]
+identifier = "deny-pick-apk"
+description = "Denies the pick_apk command without any pre-configured scope."
+commands.deny = ["pick_apk"]

@@ -1,0 +1,151 @@
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/svelte';
+import { afterEach, describe, expect, it } from 'vitest';
+import { store } from '../store.svelte';
+import { setup } from '../test-utils';
+import type { Device } from '../types';
+
+afterEach(() => cleanup());
+const dev = (id: string) => store.devices.find((d) => d.id === id) as Device;
+
+describe('Read worlds', () => {
+  it('runs prepare → phone → reading → choose → options → exporting → done', async () => {
+    const { mock } = await setup({ tick: 15 });
+    store.read.start(dev('pixel8'));
+    await screen.findByRole('heading', { name: 'Read worlds from Ada’s Pixel 8' });
+    expect(screen.getByText('Google Pixel 8 · USB · Game 1.7.6')).toBeInTheDocument();
+    expect(screen.getByRole('navigation', { name: 'Steps' })).toHaveTextContent('Confirm on phone');
+    const start = screen.getByRole('button', { name: 'Start reading' });
+    expect(start).toBeDisabled();
+    await fireEvent.click(screen.getByLabelText('The game is closed'));
+    await fireEvent.input(screen.getByLabelText('Phone backup password (optional)'), { target: { value: '' } });
+    await fireEvent.click(start);
+    expect(await screen.findByText('Look at your phone and tap “Back up my data”')).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: /Full backup/ })).toBeInTheDocument();
+    expect(await screen.findByRole('progressbar', { name: 'Reading game data' })).toBeInTheDocument();
+    await screen.findByRole('table', { name: 'Worlds on Ada’s Pixel 8' }, { timeout: 3000 });
+    expect(screen.getByText('5 selected · 267 MB')).toBeInTheDocument();
+    // selection: all → none → one; search; grid view
+    const all = screen.getByLabelText('Select all worlds');
+    await fireEvent.click(all);
+    expect(screen.getByRole('button', { name: 'Export 0 worlds…' })).toBeDisabled();
+    await fireEvent.click(screen.getByLabelText('Sunny Isle'));
+    expect(screen.getByText(/1 selected/)).toBeInTheDocument();
+    expect((screen.getByLabelText('Select all worlds') as HTMLInputElement).indeterminate).toBe(true);
+    await fireEvent.click(screen.getByLabelText('Deep Mine'));
+    await fireEvent.click(screen.getByLabelText('Deep Mine'));
+    await fireEvent.input(screen.getByRole('searchbox', { name: 'Search worlds' }), { target: { value: 'desert' } });
+    expect(screen.getAllByRole('row')).toHaveLength(2);
+    await fireEvent.input(screen.getByRole('searchbox', { name: 'Search worlds' }), { target: { value: '' } });
+    await fireEvent.click(screen.getByRole('radio', { name: 'Grid' }));
+    expect(screen.queryByRole('table')).toBeNull();
+    await fireEvent.click(screen.getByLabelText('Castle Build'));
+    await fireEvent.click(screen.getByRole('radio', { name: 'List' }));
+    expect(screen.getByText('Never')).toBeInTheDocument();
+    expect(screen.getAllByText('Expert').length).toBe(2);
+    expect(screen.getByText('No preview')).toBeInTheDocument();
+    await fireEvent.click(screen.getByRole('button', { name: 'Export 2 worlds…' }));
+    await screen.findByRole('radiogroup', { name: 'Export as' });
+    expect(screen.getByText('Sunny Isle.bhworld')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText(/41 GB free/)).toBeInTheDocument());
+    await fireEvent.click(screen.getByLabelText(/Blockheads Server folders/));
+    expect(screen.getByText('Castle Build')).toBeInTheDocument();
+    await fireEvent.click(screen.getByLabelText(/\.bhworld files/));
+    mock.picks.folder = '/tmp/out';
+    await fireEvent.click(screen.getByRole('button', { name: 'Browse…' }));
+    await waitFor(() => expect(screen.getByLabelText('Save to')).toHaveValue('/tmp/out'));
+    mock.picks.folder = null;
+    await fireEvent.click(screen.getByRole('button', { name: 'Browse…' }));
+    await fireEvent.input(screen.getByLabelText('Save to'), { target: { value: '/tmp/out' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+    await fireEvent.click(await screen.findByRole('button', { name: 'Export 2 worlds…' }));
+    await fireEvent.click(await screen.findByRole('button', { name: 'Export' }));
+    expect(await screen.findByRole('progressbar', { name: 'Exporting 2 worlds' })).toBeInTheDocument();
+    expect(await screen.findByText(/making map preview/)).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '2 worlds exported' }, { timeout: 3000 })).toBeInTheDocument();
+    expect(screen.getByText('Saved to /tmp/out and to Worlds.')).toBeInTheDocument();
+    await fireEvent.click(screen.getByRole('button', { name: 'Show in folder' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Open in Worlds' }));
+    expect(store.screen).toBe('worlds');
+    store.screen = 'read';
+    await fireEvent.click(await screen.findByRole('button', { name: 'Done' }));
+    expect(store.screen).toBe('devices');
+  });
+
+  it('saves to Worlds only; server-folder results show a folder icon', async () => {
+    await setup();
+    store.read.start(dev('pc'));
+    await screen.findByText('Blockheads PC is checked for you');
+    expect(screen.getByRole('navigation', { name: 'Steps' })).not.toHaveTextContent('Confirm on phone');
+    expect(screen.queryByLabelText('Phone backup password (optional)')).toBeNull();
+    await fireEvent.click(screen.getByRole('button', { name: 'Start reading' }));
+    await fireEvent.click(await screen.findByRole('button', { name: 'Save to Worlds only' }));
+    await waitFor(() => expect(store.screen).toBe('worlds'));
+    expect(await screen.findByText('5 worlds saved to Worlds')).toBeInTheDocument();
+    store.read.start(dev('pc'));
+    await fireEvent.click(await screen.findByRole('button', { name: 'Start reading' }));
+    await fireEvent.click(await screen.findByRole('button', { name: /Export 5 worlds/ }));
+    await fireEvent.click(await screen.findByLabelText(/Blockheads Server folders/));
+    await fireEvent.click(screen.getByRole('button', { name: 'Export' }));
+    expect(await screen.findByRole('heading', { name: '5 worlds exported' })).toBeInTheDocument();
+    store.read.format = 'bhworld';
+    store.read.stage = 'reading';
+    store.read.progress = null;
+    await screen.findByRole('progressbar');
+    store.read.stage = 'exporting';
+    await screen.findByRole('progressbar', { name: /Exporting/ });
+    store.read.stage = 'phone';
+    await screen.findByText('0:00');
+    await fireEvent.click(screen.getByRole('button', { name: 'Nothing on the phone?' }));
+    expect(store.guide).toBe('trouble');
+  });
+
+  it('reads an iPhone backup (read-only badge) and a root phone without the phone step', async () => {
+    await setup();
+    store.read.start(dev('iphone'));
+    await screen.findByRole('heading', { name: 'Read worlds from Ada’s iPhone' });
+    expect(screen.getByText('Read-only')).toBeInTheDocument();
+    store.read.start(dev('redmi'));
+    await screen.findByRole('heading', { name: 'Read worlds from Redmi Note 9' });
+    expect(screen.queryByLabelText('Phone backup password (optional)')).toBeNull();
+    expect(store.read.stepIndex).toBe(0);
+    store.read.stage = 'choose';
+    expect(store.read.stepIndex).toBe(2);
+    store.read.stage = 'prepare';
+    await fireEvent.click(await screen.findByRole('button', { name: 'Cancel' }));
+    expect(store.screen).toBe('devices');
+  });
+
+  it('cancels while waiting and while reading or exporting', async () => {
+    await setup({ tick: 40 });
+    store.read.start(dev('pixel8'));
+    await fireEvent.click(await screen.findByLabelText('The game is closed'));
+    await fireEvent.click(screen.getByRole('button', { name: 'Start reading' }));
+    await screen.findByRole('img', { name: /Full backup/ });
+    await fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    await screen.findByRole('button', { name: 'Start reading' });
+    await fireEvent.click(screen.getByRole('button', { name: 'Start reading' }));
+    await screen.findByRole('progressbar', { name: 'Reading game data' }, { timeout: 2000 });
+    await fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    await screen.findByRole('button', { name: 'Start reading' }, { timeout: 2000 });
+  });
+
+  it('shows the designed error dialogs and retries', async () => {
+    const { mock } = await setup();
+    mock.fail.read = { code: 'declined', device: 'Ada’s Pixel 8' };
+    store.read.start(dev('pixel8'));
+    await fireEvent.click(await screen.findByLabelText('The game is closed'));
+    await fireEvent.click(screen.getByRole('button', { name: 'Start reading' }));
+    const dlg = await screen.findByRole('dialog', { name: 'The phone said no' });
+    await fireEvent.click(within(dlg).getByRole('button', { name: 'Start again' }));
+    await screen.findByRole('table', {}, { timeout: 3000 });
+    // export fails with disk full → choose another folder
+    mock.fail.export = { code: 'disk_full', needed: 270 * 1024 * 1024, free: 120 * 1024 * 1024, disk: 'C:' };
+    await fireEvent.click(screen.getByRole('button', { name: /Export 5 worlds/ }));
+    await fireEvent.click(await screen.findByRole('button', { name: 'Export' }));
+    const full = await screen.findByRole('dialog', { name: 'Not enough disk space' });
+    expect(full).toHaveTextContent('about 270 MB');
+    expect(full).toHaveTextContent('Free on C:');
+    await fireEvent.click(within(full).getByRole('button', { name: 'Choose another folder…' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  });
+});

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-apk-from-device"
+description = "Enables the apk_from_device command without any pre-configured scope."
+commands.allow = ["apk_from_device"]
+
+[[permission]]
+identifier = "deny-apk-from-device"
+description = "Denies the apk_from_device command without any pre-configured scope."
+commands.deny = ["apk_from_device"]

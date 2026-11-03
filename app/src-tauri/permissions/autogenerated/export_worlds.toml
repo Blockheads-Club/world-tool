@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-export-worlds"
+description = "Enables the export_worlds command without any pre-configured scope."
+commands.allow = ["export_worlds"]
+
+[[permission]]
+identifier = "deny-export-worlds"
+description = "Denies the export_worlds command without any pre-configured scope."
+commands.deny = ["export_worlds"]
