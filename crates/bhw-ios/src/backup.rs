@@ -460,4 +460,29 @@ mod tests {
         assert_eq!(world_of_marker(&p(&format!("saves/{ID}"))), None);
         assert_eq!(world_of_marker("x"), None);
     }
+
+    #[test]
+    fn extracted_files_feed_bhw_save() {
+        use bhw_save::{summarize_any, AnySave, GameDb, SaveKind};
+        let mut gdb = GameDb::new();
+        gdb.register(ID, b"record");
+        let gdb_bytes = gdb.to_bytes().unwrap();
+        let world_db = GameDb::new().to_bytes().unwrap();
+        let rows = vec![
+            (DOM.to_string(), p(&format!("saves/{ID}/world_db/data.mdb")), 1, world_db.clone()),
+            (DOM.to_string(), p("game_db/data.mdb"), 1, gdb_bytes),
+        ];
+        for enc in [Enc::None, Enc::Modern("pw")] {
+            let dir = make(enc, &rows);
+            let data = IosBackup::open(dir.path(), Some("pw")).unwrap().blockheads().unwrap();
+            let gdb = GameDb::from_bytes(&data.game_db[0].data.read_all().unwrap()).unwrap();
+            assert_eq!(gdb.world_ids(), [ID]);
+            let files = bhw_save::world::to_file_map(&data.worlds[0]).unwrap();
+            assert_eq!(files["world_db/data.mdb"], world_db);
+            let save = AnySave::from_files(ID, files).unwrap();
+            let summary = summarize_any(&save, Some(&gdb));
+            assert_eq!(summary.kind, Some(SaveKind::Client));
+            assert_eq!(summary.registered_in_game_db, Some(true));
+        }
+    }
 }
