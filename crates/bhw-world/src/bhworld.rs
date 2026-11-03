@@ -251,13 +251,19 @@ pub fn write_with_manifest(
     }
     for (f, e) in world.files.iter().zip(&manifest.files) {
         zip.start_file(format!("{WORLD_DIR}{}", f.path), options_for(&f.path, e.size))?;
-        let n = io::copy(&mut f.data.open()?, &mut zip)?;
-        if n != e.size {
-            return Err(Error::Format(format!("{} changed while exporting", f.path)));
-        }
+        copy_exact(&mut f.data.open()?, &mut zip, e.size, &f.path)?;
     }
     zip.finish()?;
     Ok(manifest)
+}
+
+/// Copies exactly `size` bytes (the size hashed for the manifest); a file that changed meanwhile is an error.
+fn copy_exact(r: &mut dyn Read, w: &mut dyn Write, size: u64, name: &str) -> Result<()> {
+    let n = io::copy(&mut r.take(size + 1), w)?;
+    if n != size {
+        return Err(Error::Format(format!("{name} changed while exporting")));
+    }
+    Ok(())
 }
 
 /// Writes `world` as a new `.bhworld`.
@@ -499,6 +505,14 @@ pub(crate) mod tests {
         let b = open(&z, &Limits::default()).unwrap();
         assert_eq!(b.manifest.source.kind, SourceKind::Unknown);
         assert_eq!(b.world, w);
+    }
+
+    #[test]
+    fn copy_exact_detects_changes() {
+        let mut out = Vec::new();
+        assert!(copy_exact(&mut &b"abc"[..], &mut out, 3, "a").is_ok());
+        assert!(matches!(copy_exact(&mut &b"ab"[..], &mut out, 3, "a"), Err(Error::Format(_))));
+        assert!(matches!(copy_exact(&mut &b"abcd"[..], &mut out, 3, "a"), Err(Error::Format(_))));
     }
 
     #[test]

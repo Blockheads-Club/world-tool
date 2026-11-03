@@ -60,6 +60,11 @@ pub fn new_world_id() -> String {
     bhw_backup::hex::encode_lower(&b)
 }
 
+/// A fresh random world id that is not in `taken`.
+pub fn new_world_id_excluding(taken: &[&str]) -> String {
+    std::iter::repeat_with(new_world_id).find(|id| !taken.contains(&id.as_str())).expect("repeat_with is endless")
+}
+
 /// Id and name of a world, for conflict checks.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WorldSummary {
@@ -128,12 +133,8 @@ pub fn unique_name(name: &str, taken: &[&str]) -> String {
 
 /// "Keep both": a new random id that is not in `existing` and a unique name (`"Name (2)"`).
 pub fn keep_both(incoming: &WorldSummary, existing: &[WorldSummary]) -> WorldSummary {
-    let id = loop {
-        let id = new_world_id();
-        if !existing.iter().any(|e| e.id == id) {
-            break id;
-        }
-    };
+    let ids: Vec<&str> = existing.iter().map(|e| e.id.as_str()).collect();
+    let id = new_world_id_excluding(&ids);
     let taken: Vec<&str> = existing.iter().filter_map(|e| e.name.as_deref()).collect();
     WorldSummary { id, name: incoming.name.as_deref().map(|n| unique_name(n, &taken)) }
 }

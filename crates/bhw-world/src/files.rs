@@ -269,6 +269,7 @@ pub(crate) mod tests {
         let w = sample(ID);
         assert_eq!(w.save_to_saves_dir(saves, false).unwrap(), saves.join(ID));
         assert!(matches!(w.save_to_saves_dir(saves, false), Err(Error::AlreadyExists(_))));
+        assert!(matches!(w.write_dir(&saves.join(ID)), Err(Error::AlreadyExists(_))));
         // Noise that listing must ignore.
         fs::create_dir_all(saves.join(ID2).join("map")).unwrap();
         fs::write(saves.join("notes.txt"), b"x").unwrap();
@@ -300,6 +301,15 @@ pub(crate) mod tests {
         assert!(bad.total_size().is_err());
         assert!(bad.to_memory().is_err());
         assert!(WorldFiles::list_saves_dir(&saves.join("missing")).is_err());
+    }
+
+    #[test]
+    fn list_is_sorted_by_id() {
+        let t = tempfile::tempdir().unwrap();
+        sample(ID2).save_to_saves_dir(t.path(), false).unwrap();
+        sample(ID).save_to_saves_dir(t.path(), false).unwrap();
+        let ids: Vec<String> = WorldFiles::list_saves_dir(t.path()).unwrap().into_iter().map(|w| w.id).collect();
+        assert_eq!(ids, [ID, ID2]);
     }
 
     #[cfg(unix)]

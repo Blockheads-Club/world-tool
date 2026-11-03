@@ -17,7 +17,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::bhworld::{open_bhworld, open_manifest, save_with_manifest, ExportInfo, Limits, Manifest};
 use crate::files::WorldFiles;
-use crate::meta::{new_world_id, unique_name, WorldMetaEditor};
+use crate::meta::{new_world_id_excluding, unique_name, WorldMetaEditor};
 use crate::time::now_rfc3339;
 use crate::{Error, Result};
 
@@ -212,12 +212,8 @@ impl Library {
         let (names, ids) = self.names()?;
         let taken: Vec<&str> = names.iter().map(String::as_str).collect();
         let name = unique_name(m.world.name.as_deref().unwrap_or("World"), &taken);
-        let id = loop {
-            let id = new_world_id();
-            if !ids.contains(&id) {
-                break id;
-            }
-        };
+        let ids: Vec<&str> = ids.iter().map(String::as_str).collect();
+        let id = new_world_id_excluding(&ids);
         self.rewrite(path, id, &name, editor, true)
     }
 
