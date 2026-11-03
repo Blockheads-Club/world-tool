@@ -201,8 +201,8 @@ fn read_manifest(b: &[u8], off: usize, pool: &Pool, resmap: &[u32]) -> Result<Ma
     Ok(info)
 }
 
-#[cfg(test)]
-pub(crate) mod build {
+#[cfg(any(test, feature = "test-util"))]
+pub mod build {
     //! Synthesizes binary manifests for tests.
 
     use super::*;

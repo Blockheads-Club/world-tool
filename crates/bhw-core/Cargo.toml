@@ -23,6 +23,9 @@ thiserror = { workspace = true }
 zip = { version = "4.6", default-features = false, features = ["deflate-flate2-zlib"] }
 
 [dev-dependencies]
+bhw-assets = { path = "../bhw-assets", features = ["test-util"] }
+bhw-ios = { path = "../bhw-ios", features = ["test-util"] }
+bhw-backup = { path = "../bhw-backup" }
 plist = "1.7"
 tempfile = "3"
 

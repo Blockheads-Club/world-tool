@@ -121,7 +121,7 @@ impl Keybag {
 }
 
 /// Builds a keybag (test fixtures): `classes` are `(class, key)` wrapped with the passcode key of `password`.
-#[cfg(test)]
+#[cfg(any(test, feature = "test-util"))]
 pub fn build(password: &str, salt: &[u8], iter: u32, dp: Option<(&[u8], u32)>, classes: &[(u32, [u8; 32])]) -> Vec<u8> {
     fn tlv(out: &mut Vec<u8>, tag: &[u8; 4], v: &[u8]) {
         out.extend_from_slice(tag);
