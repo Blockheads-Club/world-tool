@@ -12,8 +12,10 @@ After an interruption (machine asleep), read the stream's file and `git log` on 
 | Devices (adb, root, Wi-Fi, Blockheads PC) | `feat/device` | `../world-tool-wt/device` | `device.md` |
 | APK game files (validate, extract) | `feat/assets` | `../world-tool-wt/assets` | `assets.md` |
 | iOS backups (read-only) | `feat/ios` | `../world-tool-wt/ios` | `ios.md` |
+| Core service + Tauri wiring | `feat/core` | `../world-tool-wt/core` | `core.md` |
 | App logic + Tauri wiring | `feat/core` | `../world-tool-wt/core` | `core.md` |
 
 lmdb: done, merged into dev (8a70b84).
 backup: done, merged into dev (1171c7e).
 device: done, merged into dev (b3bb380); adb faked in tests, real-phone run pending (`device.md`).
+core: done, merged into dev (bhw-core + Tauri wiring; emulator E2E passes).
