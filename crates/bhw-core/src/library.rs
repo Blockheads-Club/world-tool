@@ -105,7 +105,7 @@ impl Lib {
             base: info.device_world(&file_name(path), m.world.game_version.as_deref().unwrap_or_default()),
             world_id: b.world.id.clone(),
             origin: origin_of(m.source.kind),
-            source: m.source.device_name.clone().unwrap_or_else(|| file_name(path)),
+            source: m.source.device_name.clone().unwrap_or(file_name(path)),
             source_detail: None,
             added: mtime_ms(path),
             edited: None,

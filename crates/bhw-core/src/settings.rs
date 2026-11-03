@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::path::{Path, PathBuf};
 
-use crate::error::{AppError, Result};
+use crate::error::Result;
 
 /// Settings as the UI sees them.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -45,10 +45,10 @@ impl Settings {
     /// Applies a partial update (`Partial<Settings>`); unknown keys are ignored, bad types rejected.
     pub fn merge(&self, patch: &Map<String, Value>) -> Result<Settings> {
         let mut v = serde_json::to_value(self)?;
-        let obj = v.as_object_mut().ok_or_else(|| AppError::io("settings"))?;
+        let obj = v.as_object_mut().expect("a struct serializes to an object");
         for (k, val) in patch {
-            if obj.contains_key(k) {
-                obj.insert(k.clone(), val.clone());
+            if let Some(slot) = obj.get_mut(k) {
+                *slot = val.clone();
             }
         }
         Ok(serde_json::from_value(v)?)

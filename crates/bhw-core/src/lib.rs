@@ -132,7 +132,7 @@ impl Core {
     }
 
     fn adb(&self) -> Result<&Adb> {
-        self.cfg.adb.as_ref().ok_or_else(|| AppError::from(bhw_device::DeviceError::AdbNotFound))
+        self.cfg.adb.as_ref().ok_or(AppError::from(bhw_device::DeviceError::AdbNotFound))
     }
 
     /// The Blockheads PC data folder in use, if the game has run there.

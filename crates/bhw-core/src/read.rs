@@ -47,7 +47,7 @@ pub struct ReadSession {
 impl ReadSession {
     /// World `id` (its world id).
     pub fn world(&self, id: &str) -> Result<&SessionWorld> {
-        self.worlds.iter().find(|w| w.info.world_id == id).ok_or_else(|| AppError::not_found(id))
+        self.worlds.iter().find(|w| w.info.world_id == id).ok_or(AppError::not_found(id))
     }
 
     /// The worlds as the UI lists them.
@@ -109,7 +109,7 @@ impl Core {
     }
 
     fn session(&self, read_id: &str) -> Result<Arc<ReadSession>> {
-        lock(&self.reads).iter().find(|s| s.id == read_id).cloned().ok_or_else(|| AppError::not_found(read_id))
+        lock(&self.reads).iter().find(|s| s.id == read_id).cloned().ok_or(AppError::not_found(read_id))
     }
 
     pub(crate) fn add_session(&self, s: ReadSession) -> Arc<ReadSession> {
@@ -197,7 +197,7 @@ impl Core {
 
     /// A read of Blockheads PC's saves folder (worlds stay on disk until used).
     pub(crate) fn read_pc(&self, d: &Device, progress: &mut dyn FnMut(Progress)) -> Result<ReadSession> {
-        let pc = self.pc().ok_or_else(|| AppError::not_found("Blockheads PC"))?;
+        let pc = self.pc().ok_or(AppError::not_found("Blockheads PC"))?;
         let game_db = GameDb::open(&pc.game_db()).ok();
         let list = pc.list_worlds()?;
         let mut worlds = Vec::new();
@@ -224,7 +224,7 @@ impl Core {
             entry.device = d.name.clone();
             let s = match d.kind {
                 DeviceKind::Pc => self.add_session(self.read_pc(&d, progress)?),
-                DeviceKind::Ios => self.latest_session(&d.id).ok_or_else(|| AppError::not_found(&d.id))?,
+                DeviceKind::Ios => self.latest_session(&d.id).ok_or(AppError::not_found(&d.id))?,
                 DeviceKind::Android => self
                     .add_session(self.read_android(&d, req, progress, &guard.cancel).map_err(|e| e.device(&d.name))?),
             };

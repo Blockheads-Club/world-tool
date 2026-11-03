@@ -22,7 +22,7 @@ pub fn backups_in(dir: &Path) -> Result<Vec<BackupInfo>> {
 }
 
 fn model(info: &BackupInfo) -> String {
-    let product = info.product_type.clone().unwrap_or_else(|| "iPhone".into());
+    let product = info.product_type.clone().unwrap_or("iPhone".into());
     info.ios_version.as_ref().map_or(product.clone(), |v| format!("{product} · iOS {v}"))
 }
 
@@ -41,7 +41,7 @@ impl Core {
             .into_iter()
             .map(|i| IosBackup {
                 id: i.path.display().to_string(),
-                name: i.device_name.clone().unwrap_or_else(|| "iPhone".into()),
+                name: i.device_name.clone().unwrap_or("iPhone".into()),
                 model: model(&i),
                 date: date_ms(&i),
                 encrypted: i.encrypted,
@@ -79,7 +79,7 @@ impl Core {
         let device = Device {
             id: format!("ios:{}", info.id),
             kind: DeviceKind::Ios,
-            name: info.device_name.clone().unwrap_or_else(|| "iPhone".into()),
+            name: info.device_name.clone().unwrap_or("iPhone".into()),
             model: model(&info),
             os_version: info.ios_version.clone(),
             status: DeviceStatus::Ready,

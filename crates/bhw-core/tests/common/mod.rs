@@ -178,8 +178,8 @@ pub fn sh(stdout: &str, code: i32) -> Reply {
 pub const DEVICES: &str = "List of devices attached\n\
 S1\tdevice usb:1-1 product:p model:Pixel_8 device:d transport_id:1\n\
 10.0.0.2:5555\tdevice product:p model:Tab transport_id:2\n\
-U1\tunauthorized usb:1-2 transport_id:3\n\
-O1\toffline transport_id:4\n";
+U1\tunauthorized usb:1-2 model:Moto_G transport_id:3\n\
+O1\toffline transport_id:4\nU2\tunauthorized transport_id:5\n";
 
 pub const DETAILS: &str = "model=Pixel_8\nrelease=14\nsdk=34\n    versionName=1.7.6\n    versionCode=1\n    \
 User 0: installed=true stopped=false\n";

@@ -209,7 +209,7 @@ impl Core {
             for (i, id) in ids.iter().enumerate() {
                 guard.cancel.check()?;
                 let b = lib.open_world(id)?;
-                let name = b.manifest.world.name.clone().unwrap_or_else(|| "World".into());
+                let name = b.manifest.world.name.clone().unwrap_or("World".into());
                 progress(Progress::item(Stage::Exporting, &name, i + 1, ids.len()));
                 let out = match req.format {
                     ExportFormat::Bhworld => {
@@ -240,7 +240,7 @@ impl Core {
     pub fn free_space(&self, folder: &str) -> Result<u64> {
         let mut p = PathBuf::from(folder);
         while !p.exists() {
-            p = p.parent().map(Path::to_path_buf).ok_or_else(|| AppError::not_found(folder))?;
+            p = p.parent().map(Path::to_path_buf).ok_or(AppError::not_found(folder))?;
         }
         let p = std::fs::canonicalize(&p)?;
         let disks = sysinfo::Disks::new_with_refreshed_list();
@@ -250,6 +250,6 @@ impl Core {
             .filter(|d| p.starts_with(d.mount_point()))
             .max_by_key(|d| d.mount_point().as_os_str().len())
             .map(|d| d.available_space())
-            .ok_or_else(|| AppError::not_found(folder))
+            .ok_or(AppError::not_found(folder))
     }
 }

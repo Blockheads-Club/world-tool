@@ -26,7 +26,7 @@ impl Core {
             .map(|x| x.model.clone())
             .filter(|m| !m.is_empty())
             .or_else(|| l.model.as_ref().map(|m| m.replace('_', " ")))
-            .unwrap_or_else(|| l.serial.clone());
+            .unwrap_or(l.serial.clone());
         let world_count = self.latest_session(&l.serial).map(|s| s.worlds.len());
         Device {
             id: l.serial.clone(),
@@ -84,7 +84,7 @@ impl Core {
 
     /// A device by id, freshly listed.
     pub(crate) fn device(&self, id: &str) -> Result<Device> {
-        self.list_devices().into_iter().find(|d| d.id == id).ok_or_else(|| AppError::not_found(id))
+        self.list_devices().into_iter().find(|d| d.id == id).ok_or(AppError::not_found(id))
     }
 
     /// A device that can be used now.
@@ -151,7 +151,7 @@ impl Core {
 
     /// Forgets a paired phone (restarts the adb server so it takes effect).
     pub fn forget_paired(&self, id: &str) -> Result<()> {
-        let dir = self.cfg.android_dir.as_ref().ok_or_else(|| AppError::not_found(id))?;
+        let dir = self.cfg.android_dir.as_ref().ok_or(AppError::not_found(id))?;
         if !forget_paired_host(dir, id)? {
             return Err(AppError::not_found(id));
         }

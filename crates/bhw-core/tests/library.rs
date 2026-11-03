@@ -171,4 +171,5 @@ fn export_formats() {
     assert_eq!(core.list_activity()[0].kind, bhw_core::ActivityKind::Export);
     // Free space of a folder that does not exist yet (its parent's disk).
     assert!(core.free_space(&out.join("new/deeper").display().to_string()).unwrap() > 0);
+    assert_eq!(core.free_space("no-such-relative-folder").unwrap_err().code, ErrorCode::NotFound);
 }

@@ -72,7 +72,7 @@ pub fn inspect(world: &WorldFiles, game_db: Option<&GameDb>) -> Result<WorldInfo
     let preview_png = (img.width > 0 && img.height > 0).then(|| img.to_png());
     Ok(WorldInfo {
         world_id: s.id,
-        name: s.name.unwrap_or_else(|| "World".into()),
+        name: s.name.unwrap_or("World".into()),
         size,
         last_played: s.last_saved.map(ms),
         created: s.created.map(ms).unwrap_or(0),

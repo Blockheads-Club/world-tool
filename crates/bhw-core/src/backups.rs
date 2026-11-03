@@ -220,7 +220,7 @@ impl Core {
             entry.size = Some(fs::metadata(&path)?.len());
             match d.kind {
                 DeviceKind::Pc => {
-                    let pc = self.pc().ok_or_else(|| crate::AppError::not_found("Blockheads PC"))?;
+                    let pc = self.pc().ok_or(crate::AppError::not_found("Blockheads PC"))?;
                     self.check_pc_stopped()?;
                     progress(Progress::stage(Stage::BackingUp));
                     self.backup_pc(&pc, &d, BackupReason::BeforeRestore, None)?;

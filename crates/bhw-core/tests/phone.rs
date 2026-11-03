@@ -304,6 +304,14 @@ fn backups_are_pruned_and_deleted() {
     assert_eq!(core.delete_backup(&b[0].id).unwrap_err().code, ErrorCode::NotFound);
     assert_eq!(core.delete_backup("../x").unwrap_err().code, ErrorCode::NotFound);
     assert_eq!(core.restore_backup("op", "nope.ab", "S1", &mut |_| {}).unwrap_err().code, ErrorCode::NotFound);
+    // Restoring needs a fresh backup first: a declined one stops it.
+    let dir = core.lib().unwrap().inner.backups_dir();
+    std::fs::write(dir.join("keep.ab"), phone_ab(&PhoneData::new(&[]), None)).unwrap();
+    let empty = std::mem::take(&mut *env.phone.ab.lock().unwrap());
+    let e = core.restore_backup("op", "keep.ab", "S1", &mut |_| {}).unwrap_err();
+    assert_eq!((e.code, e.extra.device.as_deref()), (ErrorCode::Declined, Some("Pixel 8")));
+    *env.phone.ab.lock().unwrap() = empty;
+    std::fs::remove_file(dir.join("keep.ab")).unwrap();
     // A backup copied in by hand (no sidecars) is listed too.
     let dir = core.lib().unwrap().inner.backups_dir();
     std::fs::write(dir.join("hand.ab"), phone_ab(&PhoneData::new(&[]), None)).unwrap();
@@ -344,8 +352,9 @@ fn devices_listing() {
     let u = d.iter().find(|x| x.id == "U1").unwrap();
     assert_eq!(
         (u.status, u.name.as_str(), u.game_version.as_deref()),
-        (bhw_core::DeviceStatus::Unauthorized, "U1", None)
+        (bhw_core::DeviceStatus::Unauthorized, "Moto G", None)
     );
+    assert_eq!(d.iter().find(|x| x.id == "U2").unwrap().name, "U2");
     assert_eq!(d.iter().find(|x| x.id == "O1").unwrap().status, bhw_core::DeviceStatus::Offline);
     // Without adb: no phones.
     let core = bhw_core::Core::new(env.config(false));

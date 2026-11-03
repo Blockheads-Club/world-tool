@@ -224,7 +224,7 @@ impl Core {
             let d = self.ready_device(device_id)?;
             return Ok(self.add_session(self.read_pc(&d, &mut |_| {})?));
         }
-        self.latest_session(device_id).ok_or_else(|| AppError::not_found(device_id))
+        self.latest_session(device_id).ok_or(AppError::not_found(device_id))
     }
 
     /// Worlds a source offers.
@@ -237,7 +237,7 @@ impl Core {
         match source {
             Source::Library => {
                 let b = self.lib()?.open_world(key)?;
-                let name = b.manifest.world.name.clone().unwrap_or_else(|| "World".into());
+                let name = b.manifest.world.name.clone().unwrap_or("World".into());
                 Ok((b.world, name))
             }
             Source::Files { .. } => {
@@ -245,7 +245,7 @@ impl Core {
                 Ok((l.world, l.info.name))
             }
             Source::Device { device_id } => {
-                let s = self.latest_session(device_id).ok_or_else(|| AppError::not_found(device_id))?;
+                let s = self.latest_session(device_id).ok_or(AppError::not_found(device_id))?;
                 let w = s.world(key)?;
                 Ok((w.files.to_memory()?, w.info.name.clone()))
             }
@@ -304,7 +304,7 @@ impl Core {
         progress: &mut dyn FnMut(Progress),
     ) -> Result<TransferResult> {
         let guard = self.ops.start(op);
-        let p = lock(&self.plans).get(&req.plan_id).cloned().ok_or_else(|| AppError::not_found(&req.plan_id))?;
+        let p = lock(&self.plans).get(&req.plan_id).cloned().ok_or(AppError::not_found(&req.plan_id))?;
         let mut entry = Entry::new(ActivityKind::Copy, &p.target.name);
         entry.worlds = p.plan.items.iter().filter(|i| i.result != PlanResult::Stays).map(|i| i.name.clone()).collect();
         entry.size = Some(p.plan.size);
@@ -400,7 +400,7 @@ impl Core {
         progress: &mut dyn FnMut(Progress),
         backup: &mut Option<crate::Backup>,
     ) -> Result<TransferResult> {
-        let pc = self.pc().ok_or_else(|| AppError::not_found("Blockheads PC"))?;
+        let pc = self.pc().ok_or(AppError::not_found("Blockheads PC"))?;
         self.check_pc_stopped()?;
         let (existing, _) = self.target_worlds(&p.target)?;
         if self.settings().backup_before_write {
