@@ -23,6 +23,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "bhw-assets"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "thiserror",
+ "zip",
+]
+
+[[package]]
 name = "bhw-backup"
 version = "0.1.0"
 dependencies = [
