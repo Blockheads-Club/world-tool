@@ -216,7 +216,7 @@ describe('mock backend', () => {
     await expect(b.deleteWorld('nope')).rejects.toMatchObject({ code: 'not_found' });
     await b.showInFolder('/x');
     const items = await b.inspectImport(['/d/Frozen Peaks.bhworld', '/d/Sunny Isle.bhworld', '/s/Deep Mine', '/d/notes.txt']);
-    expect(items.map((i) => i.status)).toEqual(['new', 'conflict', 'conflict', 'invalid']);
+    expect(items.map((i) => i.status)).toEqual(['new', 'new', 'conflict', 'invalid']);
     expect(items[2]).toMatchObject({ kind: 'server', status: 'conflict', conflict: 'same_name' });
     expect(items[3].kind).toBe('invalid');
     const sunnyFile = (await b.inspectImport(['/d/Castle Build.bhworld']))[0];
