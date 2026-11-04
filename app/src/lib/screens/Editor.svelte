@@ -78,10 +78,12 @@
       </Empty>
     </div>
   {:else if w}
-    <div class="notes">
-      {#if odd(w)}<Notice tone="warn" title={t('edv.version.title', { v: `${odd(w)}` })}>{t('edv.version.text')}</Notice>{/if}
-      {#if w.damaged_blocks > 0}<Notice tone="warn" title={t('edv.damaged', { n: w.damaged_blocks })} />{/if}
-    </div>
+    {#if odd(w) || w.damaged_blocks > 0}
+      <div class="notes">
+        {#if odd(w)}<Notice tone="warn" title={t('edv.version.title', { v: `${odd(w)}` })}>{t('edv.version.text')}</Notice>{/if}
+        {#if w.damaged_blocks > 0}<Notice tone="warn" title={t('edv.damaged', { n: w.damaged_blocks })} />{/if}
+      </div>
+    {/if}
     <div class="ebody">
       <div class="canvas">
         <MapView />
@@ -140,7 +142,6 @@
   .center { flex: 1; display: grid; place-items: center; padding: 24px; }
   .card { display: flex; gap: 14px; align-items: center; padding: 20px 24px; background: var(--surface); border: 2px solid var(--line); border-radius: 16px; max-width: 520px; }
   .card p { white-space: normal; }
-  .notes:empty { display: none; }
   .notes { display: flex; flex-direction: column; gap: 8px; padding: 10px 14px 0; }
   .ebody { flex: 1; min-height: 0; display: flex; }
   .canvas { flex: 1; min-width: 0; position: relative; overflow: hidden; background-color: #8fcbea; }

@@ -205,17 +205,25 @@ describe('World editor (viewer)', () => {
     // open again while open: the first session is closed
     const first = store.editor.world!.session;
     mock.editorOpen = async (id: string) => {
+      mock.editors.set('ed99', id);
       const w = mockWorld('ed99', id, 'x');
-      return { ...w, spawn: null, blockheads: [], blocks: [], game_version: null };
+      return { ...w, spawn: null, blockheads: [], blocks: [], game_version: '1.5.0', damaged_blocks: 0 };
     };
     await store.editor.open(store.editing!);
     expect(mock.editors.has(first)).toBe(false);
     expect(store.editor.cam.x).toBe(16.5);
-    expect(screen.queryByText(/Made with The Blockheads/)).toBeNull();
+    expect(store.editor.status).toBe('ready');
+    expect(screen.getByText('Made with The Blockheads 1.5.0')).toBeInTheDocument();
+    expect(screen.queryByText(/damaged block/)).toBeNull();
     // no spawn: the view starts at the first blockhead
-    mock.editorOpen = async (id: string) => ({ ...mockWorld('ed98', id, 'x'), spawn: null });
+    mock.editorOpen = async (id: string) => {
+      mock.editors.set('ed98', id);
+      return { ...mockWorld('ed98', id, 'x'), spawn: null, damaged_blocks: 1, game_version: null };
+    };
     await store.editor.open(store.editing!);
     expect(store.editor.cam.x).toBe(205.5);
+    expect(await screen.findByText('1 damaged block is not shown')).toBeInTheDocument();
+    expect(screen.queryByText(/Made with The Blockheads/)).toBeNull();
     store.editor.resize(0, 0);
     store.editor.resize(640, 480);
     expect(store.editor.size).toEqual({ w: 640, h: 480 });
