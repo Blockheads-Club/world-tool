@@ -65,7 +65,7 @@ impl Core {
             read_only: false,
             encrypted: false,
             last_seen: None,
-            world_count: pc.list_worlds().ok().map(|w| w.len()),
+            world_count: self.latest_session(PC_ID).map(|s| s.worlds.len()).or_else(|| pc_world_count(&pc)),
             path: Some(path),
             backup_date: None,
         })
@@ -196,4 +196,16 @@ impl Core {
         lines.push(format!("Worlds folder: {}", self.settings().worlds_folder));
         lines.join("\n")
     }
+}
+
+/// Worlds a read of Blockheads PC lists, without reading them all: registered ones that are not caches of multiplayer
+/// worlds (`remoteGame`), and unregistered ones that have their own world record (leftover folders do not).
+fn pc_world_count(pc: &bhw_device::PcInstall) -> Option<usize> {
+    let game_db = bhw_save::GameDb::open(&pc.game_db()).unwrap_or_default();
+    let listed = |w: &bhw_device::pc::PcWorld| match game_db.entry(&w.id) {
+        Some(_) => !game_db.is_remote(&w.id),
+        None => bhw_save::summary::summarize(&w.path, None)
+            .is_ok_and(|s| !s.remote_game && !s.problems.iter().any(|p| p == "no main/worldv2 record")),
+    };
+    Some(pc.list_worlds().ok()?.iter().filter(|w| listed(w)).count())
 }

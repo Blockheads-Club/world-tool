@@ -291,6 +291,14 @@ fn game_db() {
     assert_eq!(g.world_ids(), vec![CID.to_string()]);
     assert!(g.rename(CID, "NEW").unwrap());
     assert!(!g.rename(SID, "NEW").unwrap());
+    assert!(!g.is_remote(CID) && !g.is_remote(SID));
+    let mut remote = GameDb::new();
+    let mut r = record(SID, "TEST");
+    r.insert("remoteGame".into(), Value::Boolean(true));
+    remote.register(SID, &plistio::to_xml(&Value::Dictionary(r), plistio::Dialect::Apple).unwrap());
+    assert!(remote.is_remote(SID));
+    remote.register(SID, b"junk");
+    assert!(!remote.is_remote(SID));
     let d = plistio::parse_dict(g.entry(CID).unwrap()).unwrap();
     assert_eq!(d["worldName"].as_string(), Some("NEW"));
     let dir = tmp.path().join("game_db");

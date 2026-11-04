@@ -64,13 +64,21 @@ fn ms(secs: i64) -> u64 {
 
 /// Parses a world (either kind) and summarises it, rendering a map preview.
 pub fn inspect(world: &WorldFiles, game_db: Option<&GameDb>) -> Result<WorldInfo> {
+    Ok(inspect_record(world, game_db)?.0)
+}
+
+/// [`inspect`], plus whether the world has a world record at all (its own `main/worldv2` or a `game_db` entry). The
+/// game creates the folder of a new world before its record: a folder without one is a leftover the game does not
+/// list (seen on Blockheads PC).
+pub fn inspect_record(world: &WorldFiles, game_db: Option<&GameDb>) -> Result<(WorldInfo, bool)> {
     let size = world.total_size()?;
     let save = AnySave::from_files(&world.id, to_file_map(world)?)?;
     let s = summarize_any(&save, game_db);
+    let record = !s.problems.iter().any(|p| p == "no main/worldv2 record") || s.registered_in_game_db == Some(true);
     let width = s.world_width_tiles().unwrap_or(0);
     let (img, _) = render_map(save.world_db(), MapOptions::fitting(width, PREVIEW_PX));
     let preview_png = (img.width > 0 && img.height > 0).then(|| img.to_png());
-    Ok(WorldInfo {
+    let info = WorldInfo {
         world_id: s.id,
         name: s.name.unwrap_or("World".into()),
         size,
@@ -79,7 +87,8 @@ pub fn inspect(world: &WorldFiles, game_db: Option<&GameDb>) -> Result<WorldInfo
         mode: if s.expert_mode { GameMode::Expert } else { GameMode::Normal },
         remote: s.remote_game,
         preview_png,
-    })
+    };
+    Ok((info, record))
 }
 
 /// A world in the game client's format: server worlds are converted (`keep_extras`: keep the server-only files

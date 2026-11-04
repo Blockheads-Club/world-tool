@@ -167,3 +167,26 @@ fn pc_folder_from_settings() {
     .unwrap();
     assert!(!core.list_devices().iter().any(|d| d.kind == DeviceKind::Pc));
 }
+
+#[test]
+fn pc_leftover_folders_and_multiplayer_caches_are_not_worlds() {
+    let env = pc_env(&[(A, "Skyblock"), (B, "Server Cache")], true, false);
+    let saves = support(&env).join("saves");
+    // B is a cache of a multiplayer world: remoteGame in its record and in the world list.
+    let mut e = client_env(B, "Server Cache", true, true);
+    let rec = e.named[&b"main"[..]].entries[0].1.clone();
+    write(&saves.join(B).join("world_db/data.mdb"), &bhw_lmdb::write_env(&e, bhw_lmdb::Layout::Bits32).unwrap());
+    let mut g = GameDb::open(&support(&env).join("game_db")).unwrap();
+    g.register(B, &rec);
+    g.save(&support(&env).join("game_db")).unwrap();
+    // D is a folder the game made for a new world but never wrote a record into (not in the world list either).
+    e.named.clear();
+    write(&saves.join(D).join("world_db/data.mdb"), &bhw_lmdb::write_env(&e, bhw_lmdb::Layout::Bits32).unwrap());
+    let core = env.core();
+    let pc = |core: &bhw_core::Core| core.list_devices().into_iter().find(|d| d.kind == DeviceKind::Pc).unwrap();
+    assert_eq!(pc(&core).world_count, Some(1));
+    let r = core.read("op", &ReadRequest { device_id: "pc".into(), password: String::new() }, &mut |_| {}).unwrap();
+    let names: Vec<&str> = r.worlds.iter().map(|w| w.name.as_str()).collect();
+    assert_eq!(names, ["Skyblock"]);
+    assert_eq!(pc(&core).world_count, Some(1));
+}
