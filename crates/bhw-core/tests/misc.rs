@@ -384,3 +384,15 @@ fn helpers() {
     .join();
     assert_eq!(*bhw_core::util::lock(&m), 1);
 }
+
+#[test]
+fn outside_operations_can_be_cancelled() {
+    let env = Env::new(&PhoneData::new(&[]));
+    let core = env.core();
+    let guard = core.start_op("update-1");
+    assert!(!guard.cancel.is_cancelled());
+    core.cancel("update-1");
+    assert!(guard.cancel.is_cancelled());
+    drop(guard);
+    core.cancel("update-1");
+}

@@ -78,6 +78,23 @@ impl Counter {
     }
 }
 
+/// How often a running download looks at its cancel flag.
+const CANCEL_POLL: std::time::Duration = std::time::Duration::from_millis(200);
+
+/// Runs `fut` until it finishes (`Some`) or `cancelled()` turns true (`None`; `fut` is dropped, which stops the
+/// download).
+pub async fn unless_cancelled<T>(fut: impl std::future::Future<Output = T>, cancelled: impl Fn() -> bool) -> Option<T> {
+    let watch = async {
+        while !cancelled() {
+            tokio::time::sleep(CANCEL_POLL).await;
+        }
+    };
+    tokio::select! {
+        r = fut => Some(r),
+        () = watch => None,
+    }
+}
+
 /// The update between the commands: offered by `check_update`, downloaded by `download_update`, installed by
 /// `restart_app`. Generic so the bookkeeping is testable without a real `tauri_plugin_updater::Update`.
 pub struct Slot<U> {
@@ -168,6 +185,21 @@ mod tests {
         let mut c = Counter::default();
         assert_eq!(c.chunk(10, Some(30)), Progress::bytes(Stage::Downloading, 10, Some(30)));
         assert_eq!(c.chunk(5, None), Progress::bytes(Stage::Downloading, 15, None));
+    }
+
+    #[test]
+    fn downloads_stop_when_cancelled() {
+        let rt = tokio::runtime::Builder::new_current_thread().enable_time().build().unwrap();
+        assert_eq!(rt.block_on(unless_cancelled(async { 7 }, || false)), Some(7));
+        let never = std::future::pending::<u8>();
+        assert_eq!(rt.block_on(unless_cancelled(never, || true)), None);
+        let flag = std::sync::atomic::AtomicBool::new(false);
+        let later = async {
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+            flag.store(true, std::sync::atomic::Ordering::SeqCst);
+            std::future::pending::<u8>().await
+        };
+        assert_eq!(rt.block_on(unless_cancelled(later, || flag.load(std::sync::atomic::Ordering::SeqCst))), None);
     }
 
     #[test]

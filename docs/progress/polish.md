@@ -24,3 +24,9 @@ review tr/ru/kk, (5) restore-check wording.
   AUX, NUL, COM1–9, LPT1–9 incl. ¹²³, any case, also before an extension) get a `_`. Used by `slug()` (exported
   `.bhworld` files, library files, backup names; it already replaced `<>:"/\|?*`, control chars and capped at 60
   chars) and by schematic file names (`schematic_file`). The schematic save dialog gets the already-safe file name.
+- (3) Update download cancellable: `download_update` registers its `op` with the core (`Core::start_op`) and races
+  the updater's download against the cancel flag (`update::unless_cancelled`, tokio `select!`; dropping the
+  download future stops it). The design (WT-Update) only shows the "Downloading n %" chip; clicking it during a
+  download used to reopen the "available" popup (with "Update and restart" again). It now shows the download
+  progress with "Cancel download" / "Hide" (same pattern as the adb download dialog). Cancelled → the update is
+  offered again (chip "Update x.y.z"), no error popover.
