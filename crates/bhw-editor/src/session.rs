@@ -15,6 +15,9 @@ use crate::geom::{Rect, MAX_TILES};
 use crate::history::{Change, History, Label, OpKind, Step};
 use crate::schematic::{Cell, Schematic};
 
+/// What a tile operation does to one tile: the new tile, or `None` to leave it alone.
+type TileFn<'a> = dyn FnMut((u32, u32), &TileData) -> Option<TileData> + 'a;
+
 /// Largest number of tile changes one step may hold.
 pub const MAX_CHANGES: u64 = 1_000_000;
 
@@ -78,12 +81,7 @@ impl Session {
 
     /// Applies `f` to the tiles at `points` as one step. `f` gets the position and tile and returns the new tile,
     /// or `None` to leave it alone. Tiles of objects and of ungenerated areas are skipped and counted.
-    fn edit_tiles(
-        &mut self,
-        mut label: Label,
-        points: impl IntoIterator<Item = (u32, u32)>,
-        mut f: impl FnMut((u32, u32), &TileData) -> Option<TileData>,
-    ) -> Result<Outcome> {
+    fn edit_tiles(&mut self, mut label: Label, points: Vec<(u32, u32)>, f: &mut TileFn<'_>) -> Result<Outcome> {
         let (w, h) = (self.width(), self.height());
         let mut out = Outcome::default();
         let mut changes = Vec::new();
@@ -137,7 +135,7 @@ impl Session {
         Self::check_brush(&brush)?;
         let name = describe(brush.tile, brush.contents, brush.layer);
         let l = label(kind, (kind != OpKind::Remove).then_some(name), None);
-        self.edit_tiles(l, points.iter().copied(), |_, t| (!only_solid || !is_open(t)).then(|| brush.apply(t)))
+        self.edit_tiles(l, points.to_vec(), &mut |_, t| (!only_solid || !is_open(t)).then(|| brush.apply(t)))
     }
 
     /// Fills a rectangle with `brush`.
@@ -145,13 +143,15 @@ impl Session {
         Self::check_area(&r)?;
         Self::check_brush(&brush)?;
         let l = label(OpKind::Fill, Some(describe(brush.tile, brush.contents, brush.layer)), None);
-        self.edit_tiles(l, r.tiles(), |_, t| Some(brush.apply(t)))
+        self.edit_tiles(l, r.tiles().collect(), &mut |_, t| Some(brush.apply(t)))
     }
 
     /// Removes the foreground of a rectangle (air, no contents).
     pub fn clear(&mut self, r: Rect) -> Result<Outcome> {
         Self::check_area(&r)?;
-        self.edit_tiles(label(OpKind::Clear, None, None), r.tiles(), |_, t| Some(Brush::eraser().apply(t)))
+        self.edit_tiles(label(OpKind::Clear, None, None), r.tiles().collect(), &mut |_, t| {
+            Some(Brush::eraser().apply(t))
+        })
     }
 
     fn area_points(&mut self, area: Option<Rect>) -> Result<Vec<(u32, u32)>> {
@@ -195,7 +195,7 @@ impl Session {
             Some(describe(m.tile, m.contents.unwrap_or(0), m.layer)),
             Some(describe(to.tile, to.contents, to.layer)),
         );
-        self.edit_tiles(l, pts, |_, t| m.matches(t).then(|| to.apply(t)))
+        self.edit_tiles(l, pts, &mut |_, t| m.matches(t).then(|| to.apply(t)))
     }
 
     /// Copies a rectangle into a schematic.
@@ -214,7 +214,9 @@ impl Session {
     /// Copies a rectangle and clears it (one step).
     pub fn cut(&mut self, r: Rect) -> Result<(Schematic, Outcome)> {
         let s = self.copy(r)?;
-        let o = self.edit_tiles(label(OpKind::Cut, None, None), r.tiles(), |_, t| Some(Brush::eraser().apply(t)))?;
+        let o = self.edit_tiles(label(OpKind::Cut, None, None), r.tiles().collect(), &mut |_, t| {
+            Some(Brush::eraser().apply(t))
+        })?;
         Ok((s, o))
     }
 
@@ -234,14 +236,14 @@ impl Session {
             }
         }
         let name = (!s.meta.name.is_empty()).then(|| s.meta.name.clone());
-        self.edit_tiles(label(OpKind::Paste, name, None), order, |p, t| Some(cells[&p].apply(t)))
+        self.edit_tiles(label(OpKind::Paste, name, None), order, &mut |p, t| Some(cells[&p].apply(t)))
     }
 
     fn blockhead_name(&self, player: &str, id: u64) -> Option<String> {
         self.world.players.list().into_iter().find(|b| b.player == player && b.unique_id == id).map(|b| b.name)
     }
 
-    fn edit_blockhead(&mut self, player: &str, id: u64, f: impl FnOnce(&mut Session) -> Result<()>) -> Result<()> {
+    fn edit_blockhead(&mut self, player: &str, id: u64, f: &mut dyn FnMut(&mut Session) -> Result<()>) -> Result<()> {
         let before =
             self.world.players.dict(player, id).cloned().ok_or_else(|| Error::Invalid(format!("no blockhead {id}")))?;
         f(self)?;
@@ -257,7 +259,7 @@ impl Session {
         if x >= self.width() || y >= self.height() {
             return Err(Error::Invalid("outside the world".into()));
         }
-        self.edit_blockhead(player, id, |s| Ok(s.world.players.set_pos(player, id, x as i64, y as i64)?))
+        self.edit_blockhead(player, id, &mut |s| Ok(s.world.players.set_pos(player, id, x as i64, y as i64)?))
     }
 
     /// Sets a blockhead's needs (each clamped to 0..1).
@@ -269,7 +271,7 @@ impl Session {
             fullness: c(stats.fullness),
             energy: c(stats.energy),
         };
-        self.edit_blockhead(player, id, |me| Ok(me.world.players.set_stats(player, id, s)?))
+        self.edit_blockhead(player, id, &mut |me| Ok(me.world.players.set_stats(player, id, s)?))
     }
 
     /// Sets an inventory slot to `count` items of `item` (0 empties it).
@@ -296,7 +298,7 @@ impl Session {
         self.world.players.set_inventory(player, id, inv.clone());
     }
 
-    fn edit_record(&mut self, f: impl FnOnce(&mut bhw_content::WorldRecord) -> Result<()>) -> Result<()> {
+    fn edit_record(&mut self, f: &mut dyn FnMut(&mut bhw_content::WorldRecord) -> Result<()>) -> Result<()> {
         let rec = self.world.record.as_mut().ok_or_else(|| Error::Invalid("the world has no record".into()))?;
         let before = rec.dict.clone();
         f(rec)?;
@@ -312,12 +314,12 @@ impl Session {
 
     /// Renames the world.
     pub fn set_name(&mut self, name: &str) -> Result<()> {
-        self.edit_record(|r| Ok(r.set_name(name)?))
+        self.edit_record(&mut |r| Ok(r.set_name(name)?))
     }
 
     /// Sets the time of day (hour 0..24).
     pub fn set_time_of_day(&mut self, hour: f64) -> Result<()> {
-        self.edit_record(|r| Ok(r.set_time_of_day(hour)?))
+        self.edit_record(&mut |r| Ok(r.set_time_of_day(hour)?))
     }
 
     fn apply_change(&mut self, c: &Change, forward: bool) -> Result<()> {

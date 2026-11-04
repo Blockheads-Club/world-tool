@@ -147,6 +147,7 @@ fn players_and_settings() {
     assert!(s.move_blockhead("", 77, 1, 1).is_err());
     assert_eq!(s.world.players.list()[0].pos, (10, 600));
     assert_eq!(s.history().0[0].a.as_deref(), Some("ADA"));
+    assert!(s.changed_tiles().is_empty(), "no tiles in a blockhead step");
     s.set_stats("", 9, Stats { health: 2.0, happiness: -1.0, fullness: f32::NAN, energy: 0.5 }).unwrap();
     let st = s.world.players.list()[0].stats.unwrap();
     assert_eq!((st.health, st.happiness, st.fullness, st.energy), (1.0, 0.0, 0.0, 0.5));
@@ -175,4 +176,6 @@ fn players_and_settings() {
     env.named.get_mut(&b"main"[..]).unwrap().entries.remove(0);
     let mut bare = Session::new(WorldContent::load(env).unwrap());
     assert!(bare.set_name("x").is_err());
+    assert!(bare.set_time_of_day(1.0).is_err());
+    assert!(s.set_stats("", 77, Stats { health: 1.0, happiness: 1.0, fullness: 1.0, energy: 1.0 }).is_err());
 }
