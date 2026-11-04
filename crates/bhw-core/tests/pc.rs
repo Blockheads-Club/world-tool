@@ -17,7 +17,7 @@ fn pc_env_with(phone: &[(&str, &str)], worlds: &[(&str, &str)], game_db: bool, r
         |_| {},
         |l| {
             if running {
-                l.on("comm=", Reply::ok("bhpc-run\n"));
+                l.on("comm=", Reply::ok("bhpc-run\n")).on("CSV", Reply::ok("\"bhpc-run.exe\",\"1\"\n"));
             }
         },
     );

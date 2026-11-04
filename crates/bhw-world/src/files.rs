@@ -312,7 +312,8 @@ pub(crate) mod tests {
         assert_eq!(ids, [ID, ID2]);
     }
 
-    #[cfg(unix)]
+    // APFS (macOS) refuses non-UTF-8 file names, so the case cannot be created there.
+    #[cfg(all(unix, not(target_os = "macos")))]
     #[test]
     fn non_utf8_names_are_rejected() {
         use std::os::unix::ffi::OsStrExt;

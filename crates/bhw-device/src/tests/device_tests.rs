@@ -207,7 +207,11 @@ fn watcher_thread_delivers_and_stops() {
     let got = Arc::new(Mutex::new(Vec::new()));
     let g = got.clone();
     let h = DeviceWatcher::new(adb(&r)).spawn(Duration::from_millis(30), move |ev| g.lock().unwrap().push(ev.is_ok()));
-    std::thread::sleep(Duration::from_millis(150));
+    // Wait for the first event plus at least one error; slow CI runners need more than a fixed sleep.
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    while got.lock().unwrap().len() < 3 && std::time::Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(20));
+    }
     h.stop();
     let got = got.lock().unwrap();
     assert_eq!(got[0], true);
