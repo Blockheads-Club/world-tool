@@ -11,8 +11,7 @@
 
   function setStat(i: number, v: string) {
     const bh = b!;
-    const pct = Number(v);
-    if (!Number.isFinite(pct)) return;
+    const pct = Number(v) || 0;
     const stats = [...(bh.stats as [number, number, number, number])] as [number, number, number, number];
     stats[i] = Math.max(0, Math.min(100, pct)) / 100;
     void ed.edit({ op: 'set_stats', player: bh.player, id: bh.id, stats });

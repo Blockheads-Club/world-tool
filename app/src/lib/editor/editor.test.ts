@@ -125,7 +125,7 @@ describe('World editor (viewer)', () => {
     expect(screen.getByText('Players · 2 blockheads')).toBeInTheDocument();
     await fireEvent.click(screen.getByRole('button', { name: /ADA/ }));
     expect(screen.getByRole('spinbutton', { name: 'Food' })).toHaveValue(72);
-    expect(screen.getByRole('img', { name: 'Stick' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Stick · 12' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Empty slot' })).toBeInTheDocument();
     await fireEvent.click(screen.getByRole('button', { name: 'Show on the map' }));
     await fireEvent.click(screen.getByRole('button', { name: /BEN/ }));
@@ -163,7 +163,7 @@ describe('World editor (viewer)', () => {
     // inventory icons from the items atlas
     await fireEvent.click(screen.getByRole('radio', { name: 'Players' }));
     await fireEvent.click(screen.getByRole('button', { name: /ADA/ }));
-    expect(screen.getByRole('img', { name: 'Stick' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Stick · 12' })).toBeInTheDocument();
     await fireEvent.click(screen.getByRole('radio', { name: 'Tile' }));
     await store.editor.inspect(-1, 0);
     await store.editor.inspect(3, 3);

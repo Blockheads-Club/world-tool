@@ -4,8 +4,9 @@
   import Button from '../ui/Button.svelte';
   import Check from '../ui/Check.svelte';
   import Seg from '../ui/Seg.svelte';
-  import type { Brush, IdInfo, Layer } from '../types';
-  import { contentsName, nameMatches, tileName } from './names';
+  import type { Brush, Catalog, IdInfo, Layer } from '../types';
+  import { brushName, contentsName, nameMatches, tileName } from './names';
+  import { oreBrush } from './geom';
   import Swatch from './Swatch.svelte';
 
   /** Left panel: the block palette and the options of the current tool (brush, selection, paste, replace, schematics). */
@@ -16,17 +17,16 @@
 
   /** Palette entries: tile types (air included), then plain ores and gems in rock. */
   const entries = $derived.by(() => {
-    if (!cat) return [];
-    const tiles = cat.tiles.filter((x) => x.id > 0).map((x) => ({ brush: { layer: 'front' as Layer, tile: x.id, contents: 0 }, info: x, name: tileName(cat, x.id), english: x.name }));
-    const ores = cat.contents
-      .filter((c) => c.placeable)
-      .map((c) => ({ brush: { layer: 'front' as Layer, tile: c.id === 1 || c.id === 2 ? 6 : c.id === 64 ? 12 : 1, contents: c.id }, info: c as IdInfo, name: contentsName(cat, c.id), english: c.name }));
+    const c = cat as Catalog;
+    const tiles = c.tiles.filter((x) => x.id > 0).map((x) => ({ brush: { layer: 'front' as Layer, tile: x.id, contents: 0 }, info: x, name: tileName(c, x.id), english: x.name }));
+    const ores = c.contents
+      .filter((x) => x.placeable)
+      .map((x) => ({ brush: oreBrush(x.id), info: x as IdInfo, name: contentsName(c, x.id), english: x.name }));
     return [...tiles, ...ores].filter((e) => nameMatches(e.name, e.english, query));
   });
 
-  const same = (a: Brush, b: Brush) => a.tile === b.tile && (a.contents ?? 0) === (b.contents ?? 0);
-  const blockName = $derived(ed.block.contents ? contentsName(cat, ed.block.contents) : tileName(cat, ed.block.tile));
-  const tileOptions = $derived(cat ? cat.tiles.filter((x) => x.id > 0).map((x) => ({ id: x.id, name: tileName(cat, x.id) })) : []);
+  const same = (a: Brush, b: Brush) => a.tile === b.tile && a.contents === b.contents;
+  const blockName = $derived(brushName(cat, ed.block));
 
   function choose(b: Brush) {
     ed.block = { ...b, layer: ed.block.layer === 'back' && !b.contents ? 'back' : 'front' };
@@ -115,11 +115,8 @@
 {#if ed.tool === 'replace'}
   <section aria-labelledby="rp-h">
     <h3 id="rp-h">{t('edv.replace')}</h3>
-    <label class="ff">{t('edv.replaceFrom')}
-      <select class="input" value={ed.replaceFrom.tile} onchange={(e) => { ed.replaceFrom = { layer: ed.block.layer, tile: Number((e.currentTarget as HTMLSelectElement).value), contents: null }; ed.clearPreview(); }}>
-        {#each tileOptions as o (o.id)}<option value={o.id}>{o.name}</option>{/each}
-      </select>
-    </label>
+    <p class="hint">{t('edv.replaceWhat', { name: brushName(cat, { layer: ed.replaceFrom.layer, tile: ed.replaceFrom.tile, contents: ed.replaceFrom.contents ?? 0 }) })}</p>
+    <Button size="sm" icon="swap" onclick={() => { ed.replaceFrom = { layer: ed.block.layer, tile: ed.block.tile, contents: ed.block.contents || null }; ed.clearPreview(); }}>{t('edv.replaceSet', { name: blockName })}</Button>
     <p class="hint">{t('edv.replaceWith', { name: blockName })}</p>
     <Seg
       label={t('edv.where')}

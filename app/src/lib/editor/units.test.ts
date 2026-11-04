@@ -185,5 +185,16 @@ describe('editor flow loading', () => {
     await pending;
     expect(f.blocks.size).toBe(0);
     expect(failed).toEqual([]);
+    // a request that fails after the world was closed is not reported
+    api.editorRegion = slow;
+    await f.open(world);
+    api.editorRegion = async () => {
+      f.close();
+      throw { code: 'io' };
+    };
+    f.world = { ...(await api.editorOpen(world.id)) };
+    f.panTiles(300, 0);
+    await f.ensure();
+    expect(failed).toEqual([]);
   });
 });

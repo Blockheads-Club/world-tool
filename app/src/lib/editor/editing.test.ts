@@ -225,7 +225,8 @@ describe('World editor (editing)', () => {
     await drag(map, [sx - 6, sy - 8], [sx + 6, sy - 6]);
     await fireEvent.keyDown(window, { key: 'r' });
     expect(screen.getByText(/With: Rock/)).toBeInTheDocument();
-    await fireEvent.change(screen.getByRole('combobox', { name: 'Replace' }), { target: { value: '1' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Use Rock as the block to replace' }));
+    expect(screen.getByText('Replace: Rock')).toBeInTheDocument();
     await fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
     await waitFor(() => expect(screen.getByText(/tiles will change/)).toBeInTheDocument());
     // pick dirt as the replacement from the palette (search)
@@ -416,5 +417,63 @@ describe('World editor (editing)', () => {
     await openEditor('Sunny isle');
     await fireEvent.click(screen.getByRole('button', { name: 'Save as new world' }));
     await waitFor(() => expect(store.screen).toBe('worlds'));
+  });
+
+  it('covers the remaining paths: toolbar, dialogs closed with Escape, edge cases', async () => {
+    const { mock } = await setup();
+    const map = await openEditor();
+    const [sx, sy] = ed().world!.spawn!;
+    for (const name of ['Brush (B)', 'Select (S)', 'Inspect (I)']) await fireEvent.click(screen.getByRole('button', { name }));
+    expect(ed().tool).toBe('inspect');
+    // out of range and empty strokes do nothing
+    await ed().inspect(5, -1);
+    await ed().inspect(5, 5000);
+    ed().tool = 'pencil';
+    ed().stroke = [[0, -5]];
+    await ed().commitStroke();
+    expect(steps()).toBe(0);
+    // an edit while the compare view is on refreshes it
+    await ed().showCompare();
+    await ed().edit({ op: 'paint', kind: 'pencil', points: [[sx + 1, sy + 30]], brush: { layer: 'front', tile: 1, contents: 0 } });
+    await waitFor(() => expect(ed().compare?.length).toBe(1));
+    // replace in the whole world
+    ed().replaceWhole = true;
+    ed().replaceFrom = { layer: 'front', tile: 1, contents: null };
+    ed().block = { layer: 'front', tile: 6, contents: 0 };
+    await ed().applyReplace();
+    expect(ed().ed.history.at(-1)?.kind).toBe('replace');
+    // search for an ore and for a back wall
+    ed().searchKind = 'blocks';
+    ed().block = { layer: 'front', tile: 1, contents: 61 };
+    await ed().search();
+    ed().block = { layer: 'back', tile: 9, contents: 0 };
+    await ed().search();
+    expect(ed().resultsTotal).toBeGreaterThan(0);
+    // dialogs closed with Escape: item picker, remove, save
+    await fireEvent.click(screen.getByRole('radio', { name: 'Players' }));
+    await fireEvent.click(screen.getByRole('button', { name: /ADA/ }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Stick · 12' }));
+    let dlg = await screen.findByRole('dialog');
+    await fireEvent.keyDown(dlg, { key: 'Escape' });
+    await waitFor(() => expect(ed().itemPick).toBeNull());
+    await fireEvent.click(screen.getByRole('button', { name: 'Remove blockhead' }));
+    dlg = await screen.findByRole('alertdialog');
+    await fireEvent.keyDown(dlg, { key: 'Escape' });
+    await waitFor(() => expect(ed().removeAsk).toBeNull());
+    await fireEvent.click(screen.getByRole('button', { name: 'Back to Worlds' }));
+    dlg = await screen.findByRole('alertdialog');
+    await fireEvent.keyDown(dlg, { key: 'Escape' });
+    await waitFor(() => expect(ed().saveAsk).toBe(false));
+    // schematics: none left, one without a name, loading fails
+    mock.schematics = [];
+    await ed().loadSchematics();
+    await fireEvent.keyDown(window, { key: 's' });
+    expect(screen.getByText(/No schematics yet/)).toBeInTheDocument();
+    mock.schematics = [{ file: 'x.bhwschem', name: '', width: 1, height: 1, source_world: null, created: 0 }];
+    await ed().loadSchematics();
+    expect(await screen.findByText('x.bhwschem')).toBeInTheDocument();
+    vi.spyOn(mock, 'editorSchematics').mockRejectedValueOnce({ code: 'io' });
+    await ed().loadSchematics();
+    expect(map).toBeInTheDocument();
   });
 });

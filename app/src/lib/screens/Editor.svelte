@@ -39,7 +39,7 @@
     const i = ((h.y % 32) * 32 + (h.x % 32)) * 4;
     return tileName(ed.catalog, b.data[i] === 2 && b.data[i + 1] !== 2 ? b.data[i + 1] : b.data[i]);
   });
-  const title = $derived(ed.ed.name ?? (w ? w.name : ed.source ? ed.source.name : ''));
+  const title = $derived(ed.ed.name ?? (ed.source ? ed.source.name : ''));
   const toolLabel = (tool: Tool) => t(`edv.tool.${tool}`);
 
   /** A game version the editor was not made for, else `null`. */
@@ -184,7 +184,7 @@
       </Dialog>
     {/if}
     {#if ed.itemPick}<ItemPicker />{/if}
-    {#if ed.saveAsk}<SaveDialog />{/if}
+    {#if ed.saveAsk}<SaveDialog name={title} />{/if}
   {/if}
 </div>
 

@@ -13,6 +13,10 @@
   const tile = $derived(ed.tile);
   const cat = $derived(ed.catalog);
 
+  function objectName(kind: number, name: string | null): string {
+    return name ? pretty(name) : t('edv.unknown', { id: kind });
+  }
+
   async function copy() {
     await navigator.clipboard.writeText(`${tile!.x} ${tile!.y}`);
     toast(t('edv.copied'));
@@ -43,10 +47,10 @@
         <ul class="objs">
           {#each tile.objects as o, i (i)}
             <li>
-              <b>{o.kind_name ? pretty(o.kind_name) : t('edv.unknown', { id: o.kind })}</b> <span class="mono hint">{`X ${o.x} · Y ${o.y}`}</span>{#if o.text}<span class="hint">{`“${o.text}”`}</span>{/if}
+              <b>{objectName(o.kind, o.kind_name)}</b> <span class="mono hint">{`X ${o.x} · Y ${o.y}`}</span>{#if o.text}<span class="hint">{`“${o.text}”`}</span>{/if}
               {#if o.slots}
                 <span class="hint">{t('edv.contentsSlots', { n: o.slots.filter((s) => s[1] > 0).length, of: o.slots.length })}</span>
-                <Slots slots={o.slots} title={pretty(o.kind_name ?? '')} onset={(slot, item, count) => ed.edit({ op: 'set_container_stack', key: o.key, index: o.index, slot, item, count })} />
+                <Slots slots={o.slots} title={objectName(o.kind, o.kind_name)} onset={(slot, item, count) => ed.edit({ op: 'set_container_stack', key: o.key, index: o.index, slot, item, count })} />
               {/if}
             </li>
           {/each}

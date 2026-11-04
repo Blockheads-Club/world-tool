@@ -478,10 +478,6 @@ export class EditorFlow {
 
   // ------------------------------------------------------------ replace
 
-  replaceMatch(): TileMatch {
-    return this.replaceFrom;
-  }
-
   async previewReplace() {
     const area = this.replaceWhole ? null : this.selection;
     try {

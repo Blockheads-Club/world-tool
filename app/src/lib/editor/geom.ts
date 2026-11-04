@@ -1,6 +1,12 @@
 /** Tile geometry for the tools (same rules as `bhw_editor::geom`). */
 
-import type { Rect } from '../types';
+import type { Brush, Rect } from '../types';
+
+/** The brush for painting an ore or gem: in its usual rock (flint and clay in dirt, oil in limestone). */
+export function oreBrush(contents: number): Brush {
+  const tile = contents === 1 || contents === 2 ? 6 : contents === 64 ? 12 : 1;
+  return { layer: 'front', tile, contents };
+}
 
 /** The rectangle spanned by two corner tiles (inclusive, any order). */
 export function rectOf(a: [number, number], b: [number, number]): Rect {

@@ -4,7 +4,7 @@
  */
 
 import { i18n, t } from '../i18n.svelte';
-import type { Catalog } from '../types';
+import type { Brush, Catalog, IdInfo } from '../types';
 import { pretty } from './data';
 import { kk } from './names-kk';
 import { ru } from './names-ru';
@@ -31,6 +31,18 @@ export function contentsName(cat: Catalog | null, id: number): string {
 export function itemName(cat: Catalog | null, id: number): string {
   const n = cat?.items.find((i) => i.id === id)?.name;
   return n ? (local('items', n) ?? pretty(n)) : t('edv.unknown', { id });
+}
+
+/** The name of a palette block (an ore names its contents). */
+export function brushName(cat: Catalog | null, b: Brush): string {
+  return b.contents ? contentsName(cat, b.contents) : tileName(cat, b.tile);
+}
+
+/** The picture of an item: its Items atlas cell, or for block items the tile's TileMap cell. */
+export function itemInfo(cat: Catalog, id: number): { info: IdInfo | undefined; items: boolean } {
+  const i = cat.items.find((x) => x.id === id);
+  if (!i || i.cell || i.tile === undefined) return { info: i, items: true };
+  return { info: cat.tiles[i.tile], items: false };
 }
 
 /** True if `query` (lower case) is part of the shown name or of the English id/name. */

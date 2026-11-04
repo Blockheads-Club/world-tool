@@ -9,7 +9,7 @@
   const w = $derived(ed.world!);
   const two = (n: number) => String(Math.floor(n)).padStart(2, '0');
   const hour = $derived(ed.ed.time_of_day);
-  let name = $state(store.editor.ed.name ?? '');
+  let name = $state(store.editor.ed.name as string);
 
   function rename() {
     if (name.trim() && name.trim().toUpperCase() !== ed.ed.name) void ed.edit({ op: 'set_name', name });

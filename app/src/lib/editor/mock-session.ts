@@ -107,7 +107,7 @@ export class MockSession {
       time_of_day: this.hour,
       history: this.steps.map((s) => s.label),
       cursor: this.cursor,
-      unsaved: Math.abs(this.cursor - this.saved),
+      unsaved: this.saved < 0 ? Math.max(this.cursor, 1) : Math.abs(this.cursor - this.saved),
       clipboard: this.clipboard ? [this.clipboard.w, this.clipboard.h] : null
     };
   }
@@ -141,8 +141,10 @@ export class MockSession {
     const before = this.snapshot();
     const changes: Step['tiles'] = [];
     const created: string[] = [];
+    const seen = new Set<string>();
     for (const [x, y] of points) {
-      if (changes.some((c) => c[0] === key(x, y))) continue;
+      if (seen.has(key(x, y))) continue;
+      seen.add(key(x, y));
       let t = x >= 0 && x < WIDTH && y >= 0 && y < 1024 ? this.tile(x, y) : null;
       if (!t) {
         const pos = `${Math.floor(x / MACRO)},${Math.floor(y / MACRO)}`;

@@ -2,12 +2,18 @@
   import { t } from '../i18n.svelte';
   import { store } from '../store.svelte';
   import { pretty } from './data';
-  import { contentsName, tileName } from './names';
+  import { brushName } from './names';
+  import type { EditorObject } from '../types';
 
   /** Search the world: chests, signs by text, any object, or the selected block type; Enter jumps to a result. */
   const ed = $derived(store.editor);
   const KINDS = ['chests', 'signs', 'objects', 'blocks'] as const;
-  const blockName = $derived(ed.block.contents ? contentsName(ed.catalog, ed.block.contents) : tileName(ed.catalog, ed.block.tile));
+  const blockName = $derived(brushName(ed.catalog, ed.block));
+
+  function text(o: EditorObject | null, label: string): string {
+    const name = o === null ? blockName : o.kind_name ? pretty(o.kind_name) : t('edv.unknown', { id: o.kind });
+    return label ? `${name} · “${label}”` : name;
+  }
 </script>
 
 <section aria-labelledby="sp-h">
@@ -25,7 +31,7 @@
     <ol class="list">
       {#each ed.results as r, i (i)}
         <li><button type="button" class="hrow" onclick={() => { ed.goTo(r.x, r.y, false); void ed.inspect(r.x, r.y, true); }}>
-          <span>{r.object ? (r.object.kind_name ? pretty(r.object.kind_name) : t('edv.unknown', { id: r.object.kind })) : blockName}{r.label ? ` · “${r.label}”` : ''}</span>
+          <span>{text(r.object, r.label)}</span>
           <span class="mono hint">{`X ${r.x} · Y ${r.y}`}</span>
         </button></li>
       {/each}

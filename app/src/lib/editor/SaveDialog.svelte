@@ -6,11 +6,12 @@
   import { stepText } from './history';
 
   /** "Save changes to …?" when leaving with unsaved changes. */
+  let { name }: { name: string } = $props();
   const ed = $derived(store.editor);
   const steps = $derived(ed.ed.history.slice(0, ed.ed.cursor).slice(-8));
 </script>
 
-<Dialog title={t('edv.saveAsk', { name: ed.ed.name ?? ed.world?.name ?? '' })} icon="save" alert busy={ed.saving} onclose={() => (ed.saveAsk = false)}>
+<Dialog title={t('edv.saveAsk', { name })} icon="save" alert busy={ed.saving} onclose={() => (ed.saveAsk = false)}>
   <p>{t('edv.saveAskText', { n: ed.ed.unsaved })}</p>
   <ul class="ol">
     {#each steps as l, i (i)}<li>{stepText(ed.catalog, l)}</li>{/each}

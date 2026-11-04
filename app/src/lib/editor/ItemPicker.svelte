@@ -3,7 +3,7 @@
   import { store } from '../store.svelte';
   import Button from '../ui/Button.svelte';
   import Dialog from '../ui/Dialog.svelte';
-  import { itemName, nameMatches } from './names';
+  import { itemInfo, itemName, nameMatches } from './names';
   import Swatch from './Swatch.svelte';
 
   /** Item picker: search an item, choose a count, apply to an inventory or container slot. */
@@ -13,7 +13,7 @@
   let item = $state(store.editor.itemPick!.item);
   let count = $state(String(store.editor.itemPick!.count || 1));
   const items = $derived(
-    (ed.catalog?.items ?? [])
+    ed.catalog!.items
       .map((i) => ({ i, name: itemName(ed.catalog, i.id) }))
       .filter((x) => nameMatches(x.name, x.i.name, query))
       .slice(0, 200)
@@ -21,14 +21,6 @@
   const n = $derived(Number(count));
   const bad = $derived(!Number.isInteger(n) || n < 0 || n > 999);
 
-  function info(id: number) {
-    const i = ed.catalog?.items.find((x) => x.id === id);
-    return i?.cell ? i : i?.tile !== undefined ? ed.catalog?.tiles[i.tile] : i;
-  }
-  function atlasOf(id: number) {
-    const i = ed.catalog?.items.find((x) => x.id === id);
-    return i?.cell ? ed.itemsAtlas : ed.atlas;
-  }
   function apply() {
     pick.apply(n === 0 ? 0 : item, n);
     ed.itemPick = null;
@@ -39,8 +31,9 @@
   <input class="input" type="search" aria-label={t('edv.findItem')} placeholder={t('edv.findItem')} bind:value={query} data-autofocus />
   <div class="grid" role="listbox" aria-label={t('edv.items')}>
     {#each items as x (x.i.id)}
+      {@const pic = itemInfo(ed.catalog!, x.i.id)}
       <button type="button" class="it" role="option" aria-selected={x.i.id === item} title={x.name} onclick={() => (item = x.i.id)}>
-        <Swatch info={info(x.i.id)} atlas={atlasOf(x.i.id)} size={30} label={x.name} decorative />
+        <Swatch info={pic.info} atlas={pic.items ? ed.itemsAtlas : ed.atlas} size={30} label="" decorative={true} />
         <span>{x.name}</span>
       </button>
     {/each}

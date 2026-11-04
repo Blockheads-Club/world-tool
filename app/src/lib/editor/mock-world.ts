@@ -36,7 +36,8 @@ export function mockCatalog(): Catalog {
   const items: IdInfo[] = [
     { id: 4, name: 'STICK', cell: [4, 0] },
     { id: 21, name: 'APPLE' },
-    { id: 52, name: 'WOODEN DOOR' }
+    { id: 52, name: 'WOODEN DOOR' },
+    { id: 1047, name: 'ROCK', tile: 1 }
   ];
   return { tiles, contents, items };
 }
@@ -96,7 +97,7 @@ export function mockOverview(scale: number): ArrayBuffer {
 
 export function mockBlockheads(): EditorBlockhead[] {
   return [
-    { player: '', id: 9, name: 'ADA', x: 205, y: surface(205) + 1, stats: [1, 0.5, 0.72, 0.9], inventory: [[4, 12], [21, 3], [0, 0], [52, 1]] },
+    { player: '', id: 9, name: 'ADA', x: 205, y: surface(205) + 1, stats: [1, 0.5, 0.72, 0.9], inventory: [[4, 12], [21, 3], [0, 0], [1047, 5]] },
     { player: '', id: 10, name: 'BEN', x: 260, y: surface(260) + 1, stats: null, inventory: null }
   ];
 }
