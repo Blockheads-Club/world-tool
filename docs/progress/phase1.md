@@ -28,4 +28,4 @@ Build with `CARGO_TARGET_DIR=<repo>/target` (also for `app/src-tauri`).
 
 ### Next
 - UI: AdbDialog, verify steps, restore_declined dialog, 2-option root setting, i18n, mock, tests (in progress).
-- docs/adb-download.md (replaces docs/adb-sidecar.md).
+

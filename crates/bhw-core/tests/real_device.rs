@@ -315,7 +315,10 @@ fn root_phase(serial: &str, before: &[String]) {
     assert_eq!(after.len(), before.len() + 1, "{after:?}");
 
     // The game starts and stays up with the written files.
-    adb_out(serial, &["shell", "monkey", "-p", "com.noodlecake.blockheads", "-c", "android.intent.category.LAUNCHER", "1"]);
+    adb_out(
+        serial,
+        &["shell", "monkey", "-p", "com.noodlecake.blockheads", "-c", "android.intent.category.LAUNCHER", "1"],
+    );
     std::thread::sleep(Duration::from_secs(20));
     assert!(!adb_out(serial, &["shell", "pidof", "com.noodlecake.blockheads"]).trim().is_empty(), "game died");
     if let Ok(shot) = std::env::var("BHW_DEVICE_SCREENSHOT") {

@@ -29,7 +29,7 @@ Branch `feat/core`. Build with `CARGO_TARGET_DIR=<repo>/target`
   `pm path` + `adb pull`, split APKs into a folder).
 - `app/src-tauri` is thin glue over `bhw_core::Core`: blocking tasks, `Channel<Progress>`, cancel registry,
   `devices-changed` polling (3 s), dialog plugin pickers, `show_in_folder` via the OS file manager, adb sidecar
-  lookup next to the exe (`docs/adb-sidecar.md`). Settings moved into bhw-core. `rust-version` 1.90 (dialog plugin);
+  lookup next to the exe (superseded: adb is downloaded on first run, `docs/adb-download.md`). Settings moved into bhw-core. `rust-version` 1.90 (dialog plugin);
   `[profile.dev.package]` opt-level 3 for pbkdf2/sha2/hmac/aes.
 - UI: new error codes `game_running`, `game_stopped`, `not_supported_yet`, `adb_missing` (toasts, en/tr/ru/kk).
 - Tests: `crates/bhw-core/tests/{phone,pc,library,misc}.rs` on a scripted phone (`bhw_device::fake`, `backup -f`
@@ -63,13 +63,13 @@ Branch `feat/core`. Build with `CARGO_TARGET_DIR=<repo>/target`
 | app_info, get/set_settings, take_open_files, restart_app, cancel, list_devices (+ devices-changed), wifi_discover, wifi_pair, paired_devices, forget_paired, restart_adb, open_device_manager (Windows), ios_backups, ios_open, diagnostics, read_worlds, save_to_library, export_worlds, free_space, source_worlds, transfer_plan, transfer, list/rename/duplicate/delete_world, show_in_folder, inspect_import, import_worlds, list/restore/delete_backup, list/clear_activity, game_files, use_apk, apk_from_device, reextract, clear_game_files, pick_folder, pick_import, pick_apk | check_update, download_update (`not_implemented`; updater not wired) |
 
 ### Next
-- Updater (`tauri-plugin-updater`) for check/download_update; CI workflow; ship adb (`docs/adb-sidecar.md`).
-- Root read/write path (bhw-device has `root_pull`/`root_push`; core always uses adb backup, `Device.root` is false).
+- Updater (`tauri-plugin-updater`) for check/download_update; CI workflow; ~~ship adb~~ (adb download done in `feat/phase1`).
+- ~~Root read/write path~~ (done in `feat/phase1`, `docs/progress/phase1.md`).
 - Progress `elapsed` while waiting on the phone is sent once (no ticker yet).
 - Real phone (not emulator) and real iPhone backup runs.
 
 ### Open questions
-- Restores are not verified by reading the phone again (Android gives no signal when "Restore my data" is
+- (Resolved in `feat/phase1`: every restore is checked with a fresh backup.) Restores are not verified by reading the phone again (Android gives no signal when "Restore my data" is
   declined); the core assumes success and keeps the rewritten backup as the phone's read session.
 - `game_db` inside the backup is replaced while its old `lock.mdb` stays; fine with both meta pages current, but a
   zeroed lock could be written too.
