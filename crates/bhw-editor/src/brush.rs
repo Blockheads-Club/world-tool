@@ -49,7 +49,8 @@ impl Brush {
             Layer::Front => {
                 n.set_fg(self.tile);
                 n.set_contents(self.contents);
-                n.0[4] = 0; // partial content left
+                // what is left to dig out: full for every solid tile, 0 for air (as the game stores it)
+                n.0[4] = if self.tile == AIR { 0 } else { 255 };
                 n.0[5] = 0; // gather progress
                 n.0[0x16] = 0; // on fire
             }
@@ -135,7 +136,8 @@ mod tests {
     fn brushes() {
         let t = tile(1, 1, 61);
         let n = Brush::front(6).apply(&t);
-        assert_eq!((n.fg(), n.bg(), n.contents(), n.0[4]), (6, 1, 0, 0));
+        assert_eq!((n.fg(), n.bg(), n.contents(), n.0[4]), (6, 1, 0, 255));
+        assert_eq!(Brush::eraser().apply(&t).0[4], 0);
         let n = Brush { layer: Layer::Back, tile: 9, contents: 5 }.apply(&t);
         assert_eq!((n.fg(), n.bg(), n.contents(), n.0[4]), (1, 9, 61, 7));
         assert_eq!(Brush::eraser().apply(&t).fg(), AIR);

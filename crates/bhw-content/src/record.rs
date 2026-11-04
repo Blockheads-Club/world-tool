@@ -5,8 +5,9 @@ use plist::{Dictionary, Value};
 use crate::error::{Error, Result};
 use crate::stored::{self, Encoding};
 
-/// Length of a game day in `worldTime` seconds. Assumed (24 minutes of play), not yet confirmed in the game.
-pub const DAY_SECONDS: f64 = 1440.0;
+/// Length of a game day in `worldTime` seconds; `worldTime` 0 is midnight. Checked in the game (1.7.6 emulator):
+/// 3600 shows night, 4500 dawn, 5400 noon.
+pub const DAY_SECONDS: f64 = 3600.0;
 
 /// The parsed world record.
 #[derive(Debug, Clone, PartialEq)]
@@ -136,9 +137,9 @@ pub(crate) mod tests {
         assert_eq!(r.spawn(), Some((40, 520)));
         assert_eq!(r.created(), Some(1_700_000_000));
         assert_eq!(r.saved(), Some(-100));
-        assert!((r.time_of_day().unwrap() - 2.0).abs() < 1e-9);
+        assert!((r.time_of_day().unwrap() - 20.0).abs() < 1e-9);
         r.set_time_of_day(12.0).unwrap();
-        assert_eq!(r.world_time(), Some(3600.0));
+        assert_eq!(r.world_time(), Some(1800.0));
         assert!(r.set_time_of_day(24.0).is_err());
         r.set_name("  pirate cove ").unwrap();
         assert_eq!(r.name(), Some("PIRATE COVE"));
@@ -151,6 +152,6 @@ pub(crate) mod tests {
         assert_eq!((empty.name(), empty.width_macro(), empty.spawn(), empty.created()), (None, None, None, None));
         assert_eq!(empty.time_of_day(), None);
         empty.set_time_of_day(6.0).unwrap();
-        assert_eq!(empty.world_time(), Some(360.0));
+        assert_eq!(empty.world_time(), Some(900.0));
     }
 }

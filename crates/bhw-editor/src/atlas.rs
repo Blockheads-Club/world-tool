@@ -25,6 +25,24 @@ pub struct Entry {
     pub src: String,
 }
 
+/// Items whose icon sits at column `id % 32`, row `id / 32` of `Items.png`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ItemsGrid {
+    /// Ids below this follow the grid.
+    pub below: u16,
+    /// How it was found.
+    pub src: String,
+}
+
+/// An item shown as a block of a tile type (block items such as ROCK, DIRT, GLASS).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ItemTile {
+    /// The tile type.
+    pub tile: u8,
+    /// How it was found.
+    pub src: String,
+}
+
 /// The table.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Atlas {
@@ -36,9 +54,23 @@ pub struct Atlas {
     pub contents: BTreeMap<u16, Entry>,
     /// Item type id → `Items.png` cell.
     pub items: BTreeMap<u16, Entry>,
+    /// The grid rule for item icons.
+    #[serde(default)]
+    pub items_grid: Option<ItemsGrid>,
+    /// Block items drawn as a tile.
+    #[serde(default)]
+    pub item_tiles: BTreeMap<u16, ItemTile>,
 }
 
 impl Atlas {
+    /// The `Items.png` cell of an item: an explicit entry, else the grid rule.
+    pub fn item_cell(&self, id: u16) -> Option<[u8; 2]> {
+        self.items.get(&id).map(|e| e.cell).or_else(|| {
+            let g = self.items_grid.as_ref()?;
+            (id < g.below).then(|| [(id % ITEMS_GRID.0 as u16) as u8, (id / ITEMS_GRID.0 as u16) as u8])
+        })
+    }
+
     /// Parses and checks a table: every cell must lie inside its atlas grid.
     pub fn parse(json: &str) -> Result<Atlas, String> {
         let a: Atlas = serde_json::from_str(json).map_err(|e| e.to_string())?;
@@ -54,6 +86,9 @@ impl Atlas {
         check(&a.tiles, TILEMAP_GRID, "tile")?;
         check(&a.contents, TILEMAP_GRID, "contents")?;
         check(&a.items, ITEMS_GRID, "item")?;
+        if a.items_grid.as_ref().is_some_and(|g| g.below as u32 > ITEMS_GRID.0 as u32 * ITEMS_GRID.1 as u32) {
+            return Err("item grid larger than the atlas".into());
+        }
         Ok(a)
     }
 
@@ -110,6 +145,9 @@ pub struct IdInfo {
     /// Atlas cell, if known.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cell: Option<[u8; 2]>,
+    /// For block items: the tile type whose picture stands for the item.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tile: Option<u8>,
     /// For contents: may be painted with a brush.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub placeable: bool,
@@ -126,6 +164,7 @@ impl Catalog {
                 name: names::tile_name(i).unwrap_or("none").into(),
                 color: bhw_save::tiles::TileType(i).color(),
                 cell: cell(&atlas.tiles, i as u16),
+                tile: None,
                 placeable: false,
             })
             .collect();
@@ -135,6 +174,7 @@ impl Catalog {
                 name: names::contents_name(i as u8).unwrap_or("unknown").into(),
                 color: contents_color(i as u8),
                 cell: cell(&atlas.contents, i),
+                tile: None,
                 placeable: crate::brush::placeable_contents(i as u8),
             })
             .collect();
@@ -144,7 +184,8 @@ impl Catalog {
                     id: i,
                     name: names::item_name(i)?.into(),
                     color: None,
-                    cell: cell(&atlas.items, i),
+                    cell: atlas.item_cell(i),
+                    tile: atlas.item_tiles.get(&i).map(|t| t.tile),
                     placeable: false,
                 })
             })
@@ -186,6 +227,14 @@ mod tests {
         assert!(Atlas::parse(&bad("contents", "[0,32]")).unwrap_err().contains("contents 1"));
         assert!(Atlas::parse(&bad("items", "[0,16]")).unwrap_err().contains("item 1"));
         assert!(Atlas::parse(&bad("items", "[31,15]")).is_ok());
+        let grid = r#"{"version":1,"tiles":{},"contents":{},"items":{},"items_grid":{"below":513,"src":"game"}}"#;
+        assert!(Atlas::parse(grid).unwrap_err().contains("grid"));
+        assert_eq!(a.item_cell(37), Some([5, 1]));
+        assert_eq!(a.item_cell(1047), None);
+        assert!(a.item_tiles.values().all(|t| bhw_content::names::tile_name(t.tile).is_some()));
+        let mut no_grid = a.clone();
+        no_grid.items_grid = None;
+        assert_eq!(no_grid.item_cell(37), None);
     }
 
     #[test]
@@ -199,6 +248,8 @@ mod tests {
         assert!(!c.contents[4].placeable && c.contents[4].color.is_none());
         assert!(c.items.iter().all(|i| i.name != "UNKNOWN"));
         assert!(c.items.len() > 300, "{}", c.items.len());
+        let rock = c.items.iter().find(|i| i.id == 1047).unwrap();
+        assert_eq!((rock.tile, rock.cell), (Some(1), None));
         let json = serde_json::to_string(&c).unwrap();
         assert!(json.contains("\"placeable\":true"));
         for id in [1, 2, 45, 51, 53, 55, 57, 59, 61, 62, 63, 64, 65, 77, 106, 107] {

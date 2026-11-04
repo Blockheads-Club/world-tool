@@ -51,7 +51,7 @@ impl Cell {
         for (f, p) in Face::ALL.iter().zip(self.paint) {
             n.set_paint(*f, p);
         }
-        n.0[4] = 0;
+        n.0[4] = if self.fg == bhw_content::tile::AIR { 0 } else { 255 };
         n.0[5] = 0;
         n.0[0x16] = 0;
         n
@@ -243,7 +243,8 @@ mod tests {
         let mut d = TileData::default();
         d.0[4] = 5;
         let n = c.apply(&d);
-        assert_eq!((n.fg(), n.bg(), n.contents(), n.paint(Face::Left), n.0[4]), (1, 1, 61, 3, 0));
+        assert_eq!((n.fg(), n.bg(), n.contents(), n.paint(Face::Left), n.0[4]), (1, 1, 61, 3, 255));
+        assert_eq!(Cell { fg: 2, ..c }.apply(&d).0[4], 0);
     }
 
     #[test]
