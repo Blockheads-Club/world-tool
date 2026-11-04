@@ -2,7 +2,7 @@
 //! application logic. Long commands run on blocking threads and report progress through a `Channel`; `cancel`
 //! goes to the core's cancel registry. Pickers use the dialog plugin; updates are not wired yet.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -30,9 +30,30 @@ pub fn open_args(args: impl IntoIterator<Item = String>) -> Vec<String> {
         .collect()
 }
 
-/// Where the bundled adb sidecar sits: next to the app's executable (Tauri `externalBin`, see `docs/adb-sidecar.md`).
-pub fn sidecar_adb(exe: &Path) -> Option<PathBuf> {
-    Some(exe.parent()?.join(bhw_device::adb::adb_file_name()))
+/// Downloads over HTTPS for the core (Google's Platform-Tools, `docs/adb-download.md`).
+struct HttpFetch(reqwest::blocking::Client);
+
+impl HttpFetch {
+    fn new() -> HttpFetch {
+        let ua = concat!("BH-World-Tool/", env!("CARGO_PKG_VERSION"));
+        HttpFetch(reqwest::blocking::Client::builder().user_agent(ua).timeout(None).build().unwrap_or_default())
+    }
+}
+
+fn http_error(e: reqwest::Error) -> std::io::Error {
+    std::io::Error::other(e)
+}
+
+impl bhw_core::adb_tools::Fetch for HttpFetch {
+    fn size(&self, url: &str) -> std::io::Result<Option<u64>> {
+        let r = self.0.head(url).send().and_then(|r| r.error_for_status()).map_err(http_error)?;
+        Ok(r.content_length().filter(|&n| n > 0))
+    }
+    fn open(&self, url: &str) -> std::io::Result<(Box<dyn std::io::Read + Send>, Option<u64>)> {
+        let r = self.0.get(url).send().and_then(|r| r.error_for_status()).map_err(http_error)?;
+        let len = r.content_length();
+        Ok((Box::new(r), len))
+    }
 }
 
 /// The command that shows `path` in the system file manager.
@@ -126,6 +147,25 @@ async fn forget_paired(state: State<'_, AppState>, id: String) -> Res<()> {
 #[tauri::command]
 async fn restart_adb(state: State<'_, AppState>) -> Res<()> {
     blocking(state, |c| c.restart_adb()).await
+}
+
+#[tauri::command]
+fn adb_status(state: State<'_, AppState>) -> bhw_core::adb_tools::AdbStatus {
+    state.core.adb_status()
+}
+
+#[tauri::command]
+async fn adb_download_info(state: State<'_, AppState>) -> Res<bhw_core::adb_tools::AdbDownload> {
+    blocking(state, |c| c.adb_download_info()).await
+}
+
+#[tauri::command]
+async fn download_adb(
+    state: State<'_, AppState>,
+    op: String,
+    on_progress: Channel<Progress>,
+) -> Res<bhw_core::adb_tools::AdbStatus> {
+    blocking(state, move |c| c.download_adb(&op, &mut sink(on_progress))).await
 }
 
 #[tauri::command]
@@ -375,12 +415,15 @@ fn core_config(app: &tauri::App) -> tauri::Result<CoreConfig> {
     let config = app.path().app_config_dir()?;
     let cache = app.path().app_cache_dir()?;
     let docs = app.path().document_dir().unwrap_or_else(|_| config.clone());
-    let sidecar = std::env::current_exe().ok().and_then(|e| sidecar_adb(&e));
+    let data = app.path().app_data_dir()?;
     Ok(CoreConfig {
         config_dir: config,
         cache_dir: cache,
         default_worlds_folder: docs.join("BH World Tool"),
-        adb: bhw_device::Adb::locate(sidecar.as_deref()).ok(),
+        adb: bhw_core::adb_tools::locate(&data),
+        data_dir: data,
+        make_adb: Arc::new(|p| bhw_device::Adb::new(p, Arc::new(bhw_device::process::SystemRunner))),
+        fetch: Arc::new(HttpFetch::new()),
         runner: Arc::new(bhw_device::process::SystemRunner),
         pc_locator: Arc::new(|| bhw_device::PcInstall::locate().map(|p| p.data_dir)),
         ios_locator: Arc::new(bhw_ios::default_backup_dirs),
@@ -422,6 +465,9 @@ pub fn run() {
             wifi_pair,
             forget_paired,
             restart_adb,
+            adb_status,
+            adb_download_info,
+            download_adb,
             open_device_manager,
             ios_open,
             diagnostics,
@@ -477,14 +523,6 @@ mod tests {
     fn open_args_keeps_worlds() {
         let a = open_args(["app", "--flag", "/x/A.BHWORLD", "/x/b.txt"].map(String::from));
         assert_eq!(a, vec!["/x/A.BHWORLD".to_string()]);
-    }
-
-    #[test]
-    fn sidecar_sits_next_to_the_exe() {
-        let p = sidecar_adb(Path::new("/opt/bh/bh-world-tool")).unwrap();
-        assert_eq!(p.parent().unwrap(), Path::new("/opt/bh"));
-        assert!(p.file_name().unwrap().to_string_lossy().starts_with("adb"));
-        assert_eq!(sidecar_adb(Path::new("")), None);
     }
 
     #[test]

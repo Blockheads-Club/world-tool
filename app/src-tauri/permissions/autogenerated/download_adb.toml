@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-download-adb"
+description = "Enables the download_adb command without any pre-configured scope."
+commands.allow = ["download_adb"]
+
+[[permission]]
+identifier = "deny-download-adb"
+description = "Denies the download_adb command without any pre-configured scope."
+commands.deny = ["download_adb"]
