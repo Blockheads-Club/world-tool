@@ -49,3 +49,6 @@ extracted from the user's own APK. GPL-3.0-or-later. Not affiliated with Majic J
   `restorecon`); verified on the emulator (`adb root`), the game starts afterwards.
 - adb is not shipped (Platform-Tools license): downloaded from Google on first run (`docs/adb-download.md`).
 - Android APK: package `com.noodlecake.blockheads`, targetSdk 27, allowBackup default true, armeabi-v7a only.
+- Materials live in fixed tiles (flint/clay in dirt, oil in limestone, ores in rock); gems are a promise in byte
+  0x0b of a cave air tile, uncovered by the game. The game opens a world at its saved camera (`translation`), so the
+  editor moves the camera with a moved blockhead (`docs/client-save-format.md`, emulator 2026-11-05).
