@@ -1,6 +1,6 @@
 # Core stream (`crates/bhw-core` + `app/src-tauri` wiring)
 
-Branch `feat/core`. Build with `CARGO_TARGET_DIR=/home/kahverengi/Projects/blockheads-club/world-tool/target`
+Branch `feat/core`. Build with `CARGO_TARGET_DIR=<repo>/target`
 (also for `app/src-tauri`).
 
 ## 2026-11-03

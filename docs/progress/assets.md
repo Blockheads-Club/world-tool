@@ -1,6 +1,6 @@
 # APK game files stream (`crates/bhw-assets`)
 
-Branch `feat/assets`. Build with `CARGO_TARGET_DIR=/home/kahverengi/Projects/blockheads-club/world-tool/target`.
+Branch `feat/assets`. Build with `CARGO_TARGET_DIR=<repo>/target`.
 Research results: `docs/game-files.md`.
 
 ## 2026-11-03

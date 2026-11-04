@@ -1,6 +1,6 @@
 # LMDB stream (`crates/bhw-lmdb`)
 
-Branch `feat/lmdb`. Build with `CARGO_TARGET_DIR=/home/kahverengi/Projects/blockheads-club/world-tool/target`.
+Branch `feat/lmdb`. Build with `CARGO_TARGET_DIR=<repo>/target`.
 
 ## 2026-11-03
 

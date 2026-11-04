@@ -1,7 +1,7 @@
 # Stream: Android backup (.ab) + world files (`feat/backup`)
 
 Crates: `crates/bhw-backup`, `crates/bhw-world`. Build with
-`CARGO_TARGET_DIR=/home/kahverengi/Projects/blockheads-club/world-tool/target` (shared target dir, disk is tight).
+`CARGO_TARGET_DIR=<repo>/target` (shared target dir, disk is tight).
 
 ## 2026-11-03
 

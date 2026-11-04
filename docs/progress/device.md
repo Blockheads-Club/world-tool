@@ -1,6 +1,6 @@
 # Devices stream (`crates/bhw-device`)
 
-Branch `feat/device`. Build with `CARGO_TARGET_DIR=/home/kahverengi/Projects/blockheads-club/world-tool/target`.
+Branch `feat/device`. Build with `CARGO_TARGET_DIR=<repo>/target`.
 Moves bytes only: raw `.ab` streams and plain directories in/out; parsing is `bhw-backup` / `bhw-world`'s job.
 
 ## Transport decision (2026-11-03): spawn the `adb` binary
