@@ -45,11 +45,23 @@
         "description": "The Blockheads world",
         "role": "Editor",
         "mimeType": "application/x-bhworld",
-        "rank": "Owner"
+        "rank": "Owner",
+        "exportedType": { "identifier": "club.blockheads.worldtool.bhworld", "conformsTo": ["public.data", "public.zip-archive"] }
       }
     ],
     "macOS": { "minimumSystemVersion": "11.0" },
+    "linux": {
+      "deb": { "desktopTemplate": "linux/bh-world-tool.desktop", "files": { "/usr/share/mime/packages/bh-world-tool.xml": "linux/bh-world-tool-mime.xml" } },
+      "rpm": { "desktopTemplate": "linux/bh-world-tool.desktop", "files": { "/usr/share/mime/packages/bh-world-tool.xml": "linux/bh-world-tool-mime.xml" } }
+    },
     "windows": { "nsis": { "installMode": "currentUser" } }
   },
-  "mainBinaryName": "bh-world-tool"
+  "mainBinaryName": "bh-world-tool",
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEYyQUFDMTI3OEI0NTNDMkIKUldRclBFV0xKOEdxOG9FN0hjRkxDM1VreUwrVEViYUw4SzNPeVhHcWRKQ3RDYzg4ZkpQVGh0bTIK",
+      "endpoints": ["https://github.com/Blockheads-Club/world-tool/releases/latest/download/latest.json"],
+      "windows": { "installMode": "passive" }
+    }
+  }
 }

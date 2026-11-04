@@ -1,0 +1,4 @@
+# Release scripts (scripts/*.ts): `bun test --coverage scripts`. Never lower the threshold.
+[test]
+coverageThreshold = 1.0
+coverageSkipTestFiles = true

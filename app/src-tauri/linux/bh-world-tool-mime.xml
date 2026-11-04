@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Lets the file manager recognise .bhworld files (deb/rpm install it to /usr/share/mime/packages). -->
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+  <mime-type type="application/x-bhworld">
+    <comment>The Blockheads world</comment>
+    <sub-class-of type="application/zip"/>
+    <glob pattern="*.bhworld"/>
+  </mime-type>
+</mime-info>

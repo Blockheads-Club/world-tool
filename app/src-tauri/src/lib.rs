@@ -1,6 +1,6 @@
 //! BH World Tool desktop shell: thin glue between the UI (`src/lib/api.ts`) and `bhw-core`, which holds all the
 //! application logic. Long commands run on blocking threads and report progress through a `Channel`; `cancel`
-//! goes to the core's cancel registry. Pickers use the dialog plugin; updates are not wired yet.
+//! goes to the core's cancel registry. Pickers use the dialog plugin; updates use the updater plugin (`update.rs`).
 
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
@@ -14,6 +14,9 @@ use serde_json::{json, Map, Value};
 use tauri::ipc::Channel;
 use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_dialog::DialogExt;
+use tauri_plugin_updater::UpdaterExt;
+
+pub mod update;
 
 type Res<T> = Result<T, AppError>;
 
@@ -88,8 +91,12 @@ fn take_open_files(state: State<'_, AppState>) -> Vec<String> {
     std::mem::take(&mut *state.open_files.lock().unwrap_or_else(|e| e.into_inner()))
 }
 
+/// Restarts the app, installing a downloaded update first (on Windows the installer exits and restarts the app).
 #[tauri::command]
-fn restart_app(app: AppHandle) {
+fn restart_app(app: AppHandle, updates: State<'_, Updates>) -> Res<()> {
+    if let Some((u, bytes)) = updates.take_downloaded() {
+        u.install(bytes).map_err(update_error)?;
+    }
     app.restart()
 }
 
@@ -344,15 +351,47 @@ async fn pick_apk(app: AppHandle) -> Option<String> {
     tauri::async_runtime::spawn_blocking(move || d.blocking_pick_file().and_then(path_string)).await.ok().flatten()
 }
 
-#[tauri::command]
-fn check_update() -> Res<Value> {
-    not_implemented()
+type Updates = update::Slot<tauri_plugin_updater::Update>;
+
+fn update_error(e: tauri_plugin_updater::Error) -> AppError {
+    AppError::with(ErrorCode::Offline, e)
 }
 
 #[tauri::command]
-fn download_update(op: String, on_progress: Channel<Progress>) -> Res<()> {
-    let _ = (op, on_progress);
-    not_implemented()
+async fn check_update(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    updates: State<'_, Updates>,
+) -> Res<Option<update::UpdateInfo>> {
+    let found = app.updater().map_err(update_error)?.check().await.map_err(update_error)?;
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default();
+    let mut patch = Map::new();
+    patch.insert("last_update_check".into(), json!(now.as_millis() as u64));
+    state.core.set_settings(&patch)?;
+    let info = found.as_ref().map(|u| {
+        let date = u.date.map(|d| (d.unix_timestamp_nanos() / 1_000_000) as i64);
+        update::info(&u.version, date, u.body.as_deref(), &u.raw_json, &u.target)
+    });
+    updates.offer(found);
+    Ok(info)
+}
+
+#[tauri::command]
+async fn download_update(updates: State<'_, Updates>, op: String, on_progress: Channel<Progress>) -> Res<()> {
+    let _ = op;
+    let u = updates.offered().ok_or_else(|| AppError::new(ErrorCode::NotFound))?;
+    let mut counter = update::Counter::default();
+    let bytes = u
+        .download(
+            |len, total| {
+                let _ = on_progress.send(counter.chunk(len, total));
+            },
+            || {},
+        )
+        .await
+        .map_err(update_error)?;
+    updates.set_downloaded(u, bytes);
+    Ok(())
 }
 
 /// Sends `devices-changed` whenever the device list changes (polled every few seconds).
@@ -398,6 +437,8 @@ pub fn error_json(e: &AppError) -> Value {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .manage(Updates::default())
         .setup(|app| {
             let core = Arc::new(Core::new(core_config(app)?));
             watch_devices(app.handle().clone(), core.clone());
