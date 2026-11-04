@@ -63,3 +63,7 @@ release workflows, semantic-release, Tauri updater) and blockheads-server (works
 - No arm64 Windows/Linux builds (patcher has them; add matrix rows + `UPDATER_PLATFORMS` entries if wanted).
 - src-tauri coverage gate (lib.rs is untested command glue; needs mock-runtime tests first).
 - First real release run not done (nothing pushed from this stream).
+- 2026-11-04 (lead): per user decisions, adb is never bundled (removed scripts/fetch-adb.sh and the release step;
+  feat/phase1 adds download-on-first-run), and auto-release is paused (workflow_dispatch only) until v0.1.0, which
+  ships with the Phase 2 editor. Before the first release: set TAURI_SIGNING_PRIVATE_KEY(_PASSWORD) secrets, tag
+  v0.1.0, re-enable the workflow_run trigger.

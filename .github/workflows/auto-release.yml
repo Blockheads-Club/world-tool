@@ -5,11 +5,14 @@ name: auto-release
 # version (scripts/set-version.ts), commits "chore(release): vX.Y.Z", tags it and opens a draft GitHub release with
 # the generated notes. Pushes made with GITHUB_TOKEN start no workflows, so this then dispatches release.yml (build
 # every bundle, attach, write latest.json, publish).
+# Paused until the first release (v0.1.0 ships with the Phase 2 editor): manual dispatch only. To enable, restore the
+# workflow_run trigger below.
+#   workflow_run:
+#     workflows: [ci]
+#     types: [completed]
+#     branches: [dev]
 on:
-  workflow_run:
-    workflows: [ci]
-    types: [completed]
-    branches: [dev]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -20,7 +23,7 @@ concurrency:
 
 jobs:
   release:
-    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
     runs-on: ubuntu-latest
     permissions:
       contents: write
