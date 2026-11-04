@@ -296,7 +296,7 @@ impl Core {
             items,
             backup_name: target.name.clone(),
             backup_size,
-            needs_phone: target.kind == DeviceKind::Android,
+            needs_phone: target.kind == DeviceKind::Android && !target.root,
         };
         let keys = offered.into_iter().map(|o| o.world.id).collect();
         let state = PlanState { plan: plan.clone(), source: source.clone(), target, keys };

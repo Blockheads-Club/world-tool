@@ -6,7 +6,7 @@
 
 pub mod activity;
 pub mod adb_tools;
-mod backups;
+pub mod backups;
 mod devices;
 pub mod error;
 mod files;
@@ -19,7 +19,7 @@ pub mod settings;
 mod transfer;
 pub mod types;
 pub mod util;
-mod verify;
+pub mod verify;
 pub mod worlds;
 
 pub use error::{AppError, ErrorCode, Result};

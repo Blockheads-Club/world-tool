@@ -90,6 +90,7 @@ impl Core {
     }
 
     /// Copies the game's `saves/` and `game_db/` into `dir` (laid out like a Blockheads PC data folder).
+    #[allow(clippy::too_many_arguments)]
     fn root_pull_all(
         &self,
         adb: &Adb,
@@ -173,20 +174,11 @@ impl Core {
                 progress(Progress::bytes(Stage::Writing, p.bytes, None));
             }
         };
+        // Both folders exist locally: `saves/` from the pull, `game_db/` written before every push.
         for part in PARTS {
             let src = local.support_dir().join(part);
-            if src.is_dir() {
-                adb.root_push(
-                    serial,
-                    t.style,
-                    &src,
-                    &t.saves.support_dir,
-                    part,
-                    IfRunning::Stop,
-                    &mut on,
-                    &cancel.device,
-                )?;
-            }
+            let (style, sup) = (t.style, &t.saves.support_dir);
+            adb.root_push(serial, style, &src, sup, part, IfRunning::Stop, &mut on, &cancel.device)?;
         }
         progress(Progress::stage(Stage::Verifying));
         let mut found = adb.root_find_saves(serial, t.style).map(|s| s.worlds).unwrap_or_default();

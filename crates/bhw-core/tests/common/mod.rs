@@ -188,6 +188,8 @@ User 0: installed=true stopped=false\n";
 pub struct Phone {
     pub runner: ScriptedRunner,
     pub ab: Arc<Mutex<Vec<u8>>>,
+    /// The next restore is declined on the phone (nothing changes).
+    pub decline: Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl Phone {
@@ -197,6 +199,8 @@ impl Phone {
         custom(&runner);
         let ab = Arc::new(Mutex::new(phone_ab(data, None)));
         let (w, r) = (ab.clone(), ab.clone());
+        let decline = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let d = decline.clone();
         runner
             .on("devices -l", Reply::ok(DEVICES))
             .on("getprop", sh(DETAILS, 0))
@@ -214,7 +218,9 @@ impl Phone {
             .on(
                 " restore ",
                 Reply::ok("").on_spawn(move |args| {
-                    *r.lock().unwrap() = std::fs::read(args.last().unwrap()).unwrap();
+                    if !d.swap(false, std::sync::atomic::Ordering::SeqCst) {
+                        *r.lock().unwrap() = std::fs::read(args.last().unwrap()).unwrap();
+                    }
                 }),
             )
             .on("pm path", sh("package:/data/app/x/base.apk\n", 0))
@@ -236,7 +242,7 @@ impl Phone {
             .on("version", Reply::ok("Android Debug Bridge version 1.0.41\nVersion 36\n"))
             .on("shell (id)", sh("uid=2000(shell) gid=2000(shell)", 0))
             .on("shell (su ", sh("/system/bin/sh: su: not found", 127));
-        Phone { runner, ab }
+        Phone { runner, ab, decline }
     }
 
     pub fn adb(&self) -> Adb {
@@ -347,6 +353,7 @@ pub fn platform_tools_zip(with_adb: bool) -> Vec<u8> {
     let exe = SimpleFileOptions::default().unix_permissions(0o755);
     let plain = SimpleFileOptions::default().unix_permissions(0o644);
     z.add_directory("platform-tools/", plain).unwrap();
+    z.add_directory("platform-tools/docs/", plain).unwrap();
     if with_adb {
         z.start_file(format!("platform-tools/{}", bhw_device::adb::adb_file_name()), exe).unwrap();
         z.write_all(b"#!/bin/sh\n").unwrap();
@@ -399,7 +406,7 @@ fn quoted_after(line: &str, marker: &str) -> String {
 
 /// Rules for a phone rooted through `adb root`, its data in `dir` (see [`fill_device_dir`]).
 pub fn rooted(r: &ScriptedRunner, dir: &Path) {
-    let (d1, d2, d3) = (dir.to_path_buf(), dir.to_path_buf(), dir.to_path_buf());
+    let (d1, d2, d3, d4) = (dir.to_path_buf(), dir.to_path_buf(), dir.to_path_buf(), dir.to_path_buf());
     let runner = r.clone();
     r.on("shell (id)", sh("uid=0(root) gid=0(root)", 0))
         .on(
@@ -436,7 +443,8 @@ pub fn rooted(r: &ScriptedRunner, dir: &Path) {
                 let _ = std::fs::remove_dir_all(d3.join(&rel));
                 std::fs::rename(tmp.path().join("x"), d3.join(&rel)).unwrap();
             }),
-        );
+        )
+        .on("[ -d", Reply::dynamic(move |_| sh(if d4.join("saves").is_dir() { "yes\n" } else { "" }, 0)));
 }
 
 /// World names in a rooted fake phone's folder.

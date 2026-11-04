@@ -20,7 +20,7 @@ pub const TERMS_URL: &str = "https://developer.android.com/tools/releases/platfo
 /// Refuse downloads larger than this (the zip is about 7–15 MB).
 pub const MAX_DOWNLOAD: u64 = 200 << 20;
 /// Refuse zips that unpack to more than this.
-pub const MAX_UNPACKED: u64 = 500 << 20;
+pub const MAX_UNPACKED: u64 = 200 << 20;
 /// The folder inside the zip and inside the app's data folder.
 pub const DIR: &str = "platform-tools";
 
@@ -124,10 +124,7 @@ pub fn unpack(zip_file: &Path, dest: &Path) -> Result<usize> {
         }
         std::fs::create_dir_all(out.parent().unwrap_or(dest))?;
         let mut f = std::fs::File::create(&out)?;
-        std::io::copy(&mut e, &mut f).map_err(|x| match x.kind() {
-            std::io::ErrorKind::InvalidData => download_failed(x),
-            _ => AppError::from(x),
-        })?;
+        std::io::copy(&mut e, &mut f).map_err(download_failed)?;
         set_mode(&out, e.unix_mode())?;
         files += 1;
     }
@@ -190,10 +187,12 @@ impl Core {
         let cancel = &guard.cancel;
         let url = self.adb_url()?;
         progress(Progress::bytes(Stage::Downloading, 0, None));
-        let (mut body, len) = self.cfg.fetch.open(&url).map_err(download_failed)?;
+        let (body, len) = self.cfg.fetch.open(&url).map_err(download_failed)?;
         if len.is_some_and(|l| l > MAX_DOWNLOAD) {
             return Err(download_failed("the download is too large"));
         }
+        // A server that announces no size is cut off at the limit (the zip then fails to open).
+        let mut body = body.take(MAX_DOWNLOAD);
         let zip_file = TempPath(self.tmp_dir()?.join(format!("{}.zip", unique_id("adb"))));
         {
             let mut out = std::io::BufWriter::new(std::fs::File::create(&zip_file.0)?);
@@ -205,9 +204,6 @@ impl Core {
                     break;
                 }
                 done += n as u64;
-                if done > MAX_DOWNLOAD {
-                    return Err(download_failed("the download is too large"));
-                }
                 out.write_all(&buf[..n])?;
                 if t.pass(done, false) {
                     progress(Progress::bytes(Stage::Downloading, done, len));
