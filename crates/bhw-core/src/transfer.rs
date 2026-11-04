@@ -21,6 +21,7 @@ use crate::types::{
     Source, Stage, TransferPlan, TransferRequest, TransferResult,
 };
 use crate::util::{lock, unique_id, Cancel, TempPath, Throttle};
+use crate::verify::Expect;
 use crate::worlds::{register, set_identity};
 use crate::Core;
 
@@ -179,7 +180,7 @@ pub fn plan_items(existing: &[Existing], offered: &[Offered]) -> (Vec<PlanItem>,
     (conflicts.into_iter().chain(stays).chain(added).collect(), total_after)
 }
 
-fn existing_of(worlds: &[crate::read::SessionWorld]) -> Vec<Existing> {
+pub(crate) fn existing_of(worlds: &[crate::read::SessionWorld]) -> Vec<Existing> {
     worlds
         .iter()
         .map(|w| Existing { id: w.info.world_id.clone(), name: w.info.name.clone(), size: w.info.size })
@@ -303,7 +304,7 @@ impl Core {
         Ok(plan)
     }
 
-    fn incoming(&self, p: &PlanState) -> Result<Vec<(String, WorldFiles, String)>> {
+    pub(crate) fn incoming(&self, p: &PlanState) -> Result<Vec<(String, WorldFiles, String)>> {
         p.keys
             .iter()
             .map(|k| {
@@ -328,7 +329,10 @@ impl Core {
         let mut backup = None;
         let r = match p.target.kind {
             DeviceKind::Pc => self.transfer_pc(&p, req, progress, &mut backup),
-            _ => self.transfer_android(&p, req, progress, &guard.cancel, &mut backup),
+            _ => match self.root_target(&p.target.id) {
+                Some(t) => self.transfer_root(&p, &t, req, progress, &guard.cancel, &mut backup),
+                None => self.transfer_android(&p, req, progress, &guard.cancel, &mut backup),
+            },
         };
         let r = r.map_err(|e| e.device(&p.target.name).backup(backup.as_ref().map(|b: &crate::Backup| b.id.as_str())));
         let r = r.map(|mut res| {
@@ -350,7 +354,8 @@ impl Core {
     ) -> Result<TransferResult> {
         let serial = &p.target.id;
         let before = TempPath(self.tmp_dir()?.join(format!("{}-before.ab", unique_id("t"))));
-        self.backup_phone(serial, &before.0, Stage::BackingUp, Some(p.plan.backup_size), progress, cancel)?;
+        let size = Some(p.plan.backup_size);
+        self.backup_phone(serial, &before.0, Stage::PhoneBackup, Stage::BackingUp, size, progress, cancel)?;
         let password = self.latest_session(serial).and_then(|s| s.password.clone());
         let saves = pick_saves(open_ab(&before.0, password.as_deref())?);
         let (prefix, existing, mut game_db) = match &saves {
@@ -376,10 +381,16 @@ impl Core {
         }
         cancel.check()?;
         self.restore_phone(serial, &after.0, progress, cancel)?;
-        progress(Progress::stage(Stage::Checking));
         self.drop_sessions(serial);
+        let expect = Expect {
+            registered: changes.puts.iter().map(|w| w.id.clone()).collect(),
+            absent: changes.removes.clone(),
+            present: changes.puts,
+        };
+        let check = self.verify_restore(serial, &expect, password.as_deref(), progress, cancel)?;
+        progress(Progress::stage(Stage::Checking));
         let version = p.target.game_version.clone().unwrap_or_default();
-        let s = self.session_from_backup(&p.target, after, password, &version)?;
+        let s = self.session_from_backup(&p.target, check, password, &version)?;
         self.add_session(s);
         Ok(changes.result)
     }

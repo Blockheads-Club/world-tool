@@ -10,6 +10,9 @@ use std::time::Duration;
 /// Side effect run when a matching command starts (e.g. writing the file `adb backup -f` names).
 pub type Hook = Arc<dyn Fn(&[String]) + Send + Sync>;
 
+/// Builds the reply at spawn time from the arguments (e.g. a tar of the files a fake device holds now).
+pub type Maker = Arc<dyn Fn(&[String]) -> Reply + Send + Sync>;
+
 /// The canned behaviour of one process.
 #[derive(Clone, Default)]
 pub struct Reply {
@@ -31,6 +34,8 @@ pub struct Reply {
     pub spawn_error: Option<io::ErrorKind>,
     /// Stdout fails once with this error kind after the chunks.
     pub read_error: Option<io::ErrorKind>,
+    /// When set, the reply actually used is built by this at spawn time.
+    pub make: Option<Maker>,
 }
 
 impl Reply {
@@ -65,6 +70,10 @@ impl Reply {
     pub fn then_hang(mut self) -> Reply {
         self.hang = true;
         self
+    }
+    /// A reply built at spawn time from the arguments.
+    pub fn dynamic(f: impl Fn(&[String]) -> Reply + Send + Sync + 'static) -> Reply {
+        Reply { make: Some(Arc::new(f)), ..Reply::default() }
     }
     /// Sets a spawn hook.
     pub fn on_spawn(mut self, f: impl Fn(&[String]) + Send + Sync + 'static) -> Reply {
@@ -276,6 +285,10 @@ impl Runner for ScriptedRunner {
             } else {
                 rules[i].reply.clone()
             }
+        };
+        let reply = match &reply.make {
+            Some(make) => make(args),
+            None => reply,
         };
         let call = Call { program: program.display().to_string(), args: args.to_vec(), stdin: Arc::default() };
         self.calls.lock().unwrap().push(call.clone());

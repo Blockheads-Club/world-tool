@@ -98,6 +98,33 @@ fn names(core: &Core, serial: &str) -> (String, Vec<String>) {
     (r.read_id, n)
 }
 
+fn adb() -> Adb {
+    let mut adb = Adb::locate(None).expect("adb not found");
+    adb.timeouts.confirm = Duration::from_secs(120);
+    adb
+}
+
+/// A core on real adb with `root_mode` set.
+fn core_in(dir: &std::path::Path, root_mode: &str) -> Core {
+    let core = Core::new(CoreConfig {
+        config_dir: dir.join("config"),
+        cache_dir: dir.join("cache"),
+        data_dir: dir.join("data"),
+        default_worlds_folder: dir.join("Worlds"),
+        adb: Some(adb()),
+        make_adb: Arc::new(|p| Adb::new(p, Arc::new(SystemRunner))),
+        fetch: Arc::new(bhw_core::adb_tools::NoFetch),
+        runner: Arc::new(SystemRunner),
+        pc_locator: Arc::new(|| None),
+        ios_locator: Arc::new(Vec::new),
+        android_dir: None,
+        app_version: "test".into(),
+    });
+    let patch = serde_json::json!({ "root_mode": root_mode });
+    core.set_settings(patch.as_object().unwrap()).unwrap();
+    core
+}
+
 #[test]
 fn read_copy_and_restore() {
     let Some(serial) = std::env::var("BHW_DEVICE_SERIAL").ok().filter(|s| !s.is_empty()) else {
@@ -106,19 +133,7 @@ fn read_copy_and_restore() {
     };
     ensure_launched(&serial);
     let tmp = tempfile::tempdir().unwrap();
-    let mut adb = Adb::locate(None).expect("adb not found");
-    adb.timeouts.confirm = Duration::from_secs(120);
-    let core = Core::new(CoreConfig {
-        config_dir: tmp.path().join("config"),
-        cache_dir: tmp.path().join("cache"),
-        default_worlds_folder: tmp.path().join("Worlds"),
-        adb: Some(adb),
-        runner: Arc::new(SystemRunner),
-        pc_locator: Arc::new(|| None),
-        ios_locator: Arc::new(Vec::new),
-        android_dir: None,
-        app_version: "test".into(),
-    });
+    let core = core_in(tmp.path(), "never");
 
     let dev = core.list_devices().into_iter().find(|d| d.id == serial).expect("device listed");
     eprintln!("device: {dev:?}");

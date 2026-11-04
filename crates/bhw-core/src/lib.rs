@@ -5,6 +5,7 @@
 //! scripted adb answers).
 
 pub mod activity;
+pub mod adb_tools;
 mod backups;
 mod devices;
 pub mod error;
@@ -13,10 +14,12 @@ mod gamefiles;
 mod ios;
 pub mod library;
 pub mod read;
+mod root;
 pub mod settings;
 mod transfer;
 pub mod types;
 pub mod util;
+mod verify;
 pub mod worlds;
 
 pub use error::{AppError, ErrorCode, Result};
@@ -24,11 +27,11 @@ pub use settings::Settings;
 pub use types::*;
 
 use std::collections::HashMap;
-use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex, OnceLock};
 
 use bhw_device::process::Runner;
-use bhw_device::{Adb, PcInstall};
+use bhw_device::{Adb, PcInstall, RootStyle};
 use serde_json::{Map, Value};
 
 use crate::activity::ActivityLog;
@@ -38,6 +41,12 @@ use crate::util::{lock, Ops};
 /// Finds the default Blockheads PC data folder (injectable for tests).
 pub type PcLocator = Arc<dyn Fn() -> Option<PathBuf> + Send + Sync>;
 
+/// Makes an [`Adb`] for a binary path (real processes in the app, a scripted runner in tests).
+pub type AdbFactory = Arc<dyn Fn(&Path) -> Adb + Send + Sync>;
+
+/// Root access of a phone, probed once per connection (`None` inside = no root).
+type RootProbe = Arc<OnceLock<Option<RootStyle>>>;
+
 /// Everything the core needs from its host.
 pub struct CoreConfig {
     /// `settings.json`, `activity.json`.
@@ -46,8 +55,14 @@ pub struct CoreConfig {
     pub cache_dir: PathBuf,
     /// Worlds folder used until the user picks one.
     pub default_worlds_folder: PathBuf,
-    /// The adb client, `None` when it was not found.
+    /// Persistent app data (a downloaded adb in `platform-tools/`).
+    pub data_dir: PathBuf,
+    /// The adb client, `None` when it was not found (the UI then offers to download it).
     pub adb: Option<Adb>,
+    /// Makes an adb client for a binary (after downloading Platform-Tools).
+    pub make_adb: AdbFactory,
+    /// Downloads (Google's Platform-Tools).
+    pub fetch: Arc<dyn adb_tools::Fetch>,
     /// Starts local processes (is Blockheads PC running?).
     pub runner: Arc<dyn Runner>,
     /// Default Blockheads PC data folder (when the settings name none).
@@ -63,6 +78,8 @@ pub struct CoreConfig {
 /// The application service.
 pub struct Core {
     cfg: CoreConfig,
+    adb: Mutex<Option<Adb>>,
+    root: Mutex<HashMap<String, RootProbe>>,
     settings: Mutex<Settings>,
     activity: ActivityLog,
     ops: Ops,
@@ -85,6 +102,8 @@ impl Core {
         let _ = std::fs::remove_dir_all(cfg.cache_dir.join("reads"));
         let _ = std::fs::remove_dir_all(cfg.cache_dir.join("tmp"));
         Core {
+            adb: Mutex::new(cfg.adb.clone()),
+            root: Mutex::new(HashMap::new()),
             cfg,
             settings: Mutex::new(settings),
             activity,
@@ -131,8 +150,8 @@ impl Core {
         Lib::open(&self.settings().worlds_dir())
     }
 
-    fn adb(&self) -> Result<&Adb> {
-        self.cfg.adb.as_ref().ok_or(AppError::from(bhw_device::DeviceError::AdbNotFound))
+    fn adb(&self) -> Result<Adb> {
+        lock(&self.adb).clone().ok_or(AppError::from(bhw_device::DeviceError::AdbNotFound))
     }
 
     /// The Blockheads PC data folder in use, if the game has run there.

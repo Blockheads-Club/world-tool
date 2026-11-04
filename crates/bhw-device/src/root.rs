@@ -174,11 +174,14 @@ impl Adb {
         sent?;
         code.ok_or(DeviceError::Disconnected)?;
         let dest = sh_quote(&format!("{support_dir}/{rel}"));
+        // The support dir's SELinux context (with the app's MLS categories) is read before anything below it is
+        // relabelled: files root creates get the creating process's level, so `chcon` copies the context back.
         let finish = format!(
-            "[ -d {tmp}/x ] && rm -rf {dest} && mkdir -p \"$(dirname {dest})\" && mv {tmp}/x {dest} && rm -rf {tmp} \
+            "ctx=$(ls -Zd {support} | cut -d' ' -f1); \
+             [ -d {tmp}/x ] && rm -rf {dest} && mkdir -p \"$(dirname {dest})\" && mv {tmp}/x {dest} && rm -rf {tmp} \
              && chown -R {owner} {support} && chmod -R u+rwX {dest} \
              && {{ restorecon -R {support} 2>/dev/null; \
-             ctx=$(ls -Zd {support} | cut -d' ' -f1); [ -n \"$ctx\" ] && chcon -R \"$ctx\" {support} 2>/dev/null; true; }}"
+             [ -n \"$ctx\" ] && chcon -R \"$ctx\" {support} 2>/dev/null; true; }}"
         );
         match self.shell_timeout(serial, &root.wrap(&finish), self.timeouts.confirm)? {
             out if out.code == 0 => Ok(moved),

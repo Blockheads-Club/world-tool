@@ -38,7 +38,7 @@ impl Core {
             connection: if wifi { Connection::Wifi } else { Connection::Usb },
             address: wifi.then(|| l.serial.clone()),
             game_version: details.and_then(|x| x.game).map(|g| g.version_name),
-            root: false,
+            root: self.known_root(&l.serial),
             read_only: false,
             encrypted: false,
             last_seen: None,
@@ -75,6 +75,12 @@ impl Core {
     /// problems leave the phones out (the diagnostics say why).
     pub fn list_devices(&self) -> Vec<Device> {
         let phones = self.adb().and_then(|a| Ok(a.discover(false)?)).unwrap_or_default();
+        let ready: Vec<String> = phones
+            .iter()
+            .filter(|d| d.details.as_ref().is_some_and(|x| x.game.is_some()))
+            .map(|d| d.listed.serial.clone())
+            .collect();
+        self.watch_root(&ready);
         let mut out: Vec<Device> = phones.into_iter().map(|d| self.android_device(d)).collect();
         out.extend(self.pc_device());
         out.extend(lock(&self.ios).iter().cloned());

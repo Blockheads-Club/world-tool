@@ -34,6 +34,10 @@ pub enum ErrorCode {
     NotSupportedYet,
     /// No adb binary was found.
     AdbMissing,
+    /// Downloading Google's Platform-Tools (adb) failed.
+    DownloadFailed,
+    /// After `adb restore` the phone does not have the worlds: "Restore my data" was probably not tapped.
+    RestoreDeclined,
 }
 
 /// A failure as the UI receives it.

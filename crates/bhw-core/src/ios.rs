@@ -99,6 +99,7 @@ impl Core {
             id: unique_id("r"),
             device: device.clone(),
             backup: None,
+            dir: None,
             password: None,
             game_version: String::new(),
             worlds,

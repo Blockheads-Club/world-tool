@@ -233,12 +233,19 @@ impl Phone {
             .on("connect ", Reply::ok("connected to 10.0.0.2:41000"))
             .on("kill-server", Reply::ok(""))
             .on("start-server", Reply::ok(""))
-            .on("version", Reply::ok("Android Debug Bridge version 1.0.41\nVersion 36\n"));
+            .on("version", Reply::ok("Android Debug Bridge version 1.0.41\nVersion 36\n"))
+            .on("shell (id)", sh("uid=2000(shell) gid=2000(shell)", 0))
+            .on("shell (su ", sh("/system/bin/sh: su: not found", 127));
         Phone { runner, ab }
     }
 
     pub fn adb(&self) -> Adb {
-        let mut a = Adb::new("adb", Arc::new(self.runner.clone()));
+        self.adb_at("adb")
+    }
+
+    /// The scripted adb, as if it were the binary at `program`.
+    pub fn adb_at(&self, program: impl Into<PathBuf>) -> Adb {
+        let mut a = Adb::new(program, Arc::new(self.runner.clone()));
         a.timeouts = Timeouts {
             command: Duration::from_secs(5),
             confirm: Duration::from_secs(5),
@@ -296,6 +303,154 @@ pub struct Env {
     pub phone: Phone,
     pub local: ScriptedRunner,
     pub pc: Option<PathBuf>,
+    pub fetch: Arc<FakeFetch>,
+    /// A rooted phone's data folder ([`Env::rooted`]).
+    pub device: Option<tempfile::TempDir>,
+}
+
+/// A scripted download server: `body` (None = network error), announced length `len` (None = the body's).
+#[derive(Default)]
+pub struct FakeFetch {
+    pub body: Mutex<Option<Vec<u8>>>,
+    pub len: Mutex<Option<Option<u64>>>,
+    pub urls: Mutex<Vec<String>>,
+}
+
+impl FakeFetch {
+    pub fn serve(&self, body: Option<Vec<u8>>, len: Option<Option<u64>>) {
+        *self.body.lock().unwrap() = body;
+        *self.len.lock().unwrap() = len;
+    }
+    fn announced(&self) -> std::io::Result<Option<u64>> {
+        let body = self.body.lock().unwrap().clone().ok_or(std::io::Error::other("offline"))?;
+        Ok(self.len.lock().unwrap().unwrap_or(Some(body.len() as u64)))
+    }
+}
+
+impl bhw_core::adb_tools::Fetch for FakeFetch {
+    fn size(&self, url: &str) -> std::io::Result<Option<u64>> {
+        self.urls.lock().unwrap().push(url.to_string());
+        self.announced()
+    }
+    fn open(&self, url: &str) -> std::io::Result<(Box<dyn std::io::Read + Send>, Option<u64>)> {
+        self.urls.lock().unwrap().push(url.to_string());
+        let len = self.announced()?;
+        let body = self.body.lock().unwrap().clone().unwrap();
+        Ok((Box::new(std::io::Cursor::new(body)), len))
+    }
+}
+
+/// A Platform-Tools zip (`platform-tools/adb` + extras), `with_adb` false leaves adb out.
+pub fn platform_tools_zip(with_adb: bool) -> Vec<u8> {
+    use zip::write::SimpleFileOptions;
+    let mut z = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+    let exe = SimpleFileOptions::default().unix_permissions(0o755);
+    let plain = SimpleFileOptions::default().unix_permissions(0o644);
+    z.add_directory("platform-tools/", plain).unwrap();
+    if with_adb {
+        z.start_file(format!("platform-tools/{}", bhw_device::adb::adb_file_name()), exe).unwrap();
+        z.write_all(b"#!/bin/sh\n").unwrap();
+    }
+    z.start_file("platform-tools/lib64/libc++.so", plain).unwrap();
+    z.write_all(b"lib").unwrap();
+    z.start_file("platform-tools/NOTICE.txt", plain).unwrap();
+    z.write_all(b"notice").unwrap();
+    z.start_file("other/readme", plain).unwrap();
+    z.write_all(b"x").unwrap();
+    z.start_file("platform-tools/../evil", plain).unwrap();
+    z.write_all(b"x").unwrap();
+    z.finish().unwrap().into_inner()
+}
+
+/// Where a rooted fake phone keeps the game's data.
+pub const SUP: &str = "/data/data/com.noodlecake.blockheads/files/Library/Application Support";
+
+/// Writes a phone's saves and `game_db` into a local folder standing for the rooted phone's support dir.
+pub fn fill_device_dir(dir: &Path, p: &PhoneData) {
+    for (id, name, remote) in &p.worlds {
+        let mut f = FileMap::new();
+        f.insert(
+            "world_db/data.mdb".into(),
+            bhw_lmdb::write_env(&client_env(id, name, *remote, true), Layout::Bits32).unwrap(),
+        );
+        bhw_save::save::write_dir_files(&dir.join("saves").join(id), &f).unwrap();
+    }
+    std::fs::create_dir_all(dir.join("saves")).unwrap();
+    if p.game_db {
+        let names: Vec<(&str, &str)> = p.worlds.iter().map(|(i, n, _)| (i.as_str(), n.as_str())).collect();
+        write(&dir.join("game_db/data.mdb"), &game_db_bytes(&names));
+    }
+    std::fs::create_dir_all(dir.join("game")).unwrap();
+}
+
+fn tar_dir(dir: &Path, rel: &str) -> Vec<u8> {
+    let mut b = tar::Builder::new(Vec::new());
+    if dir.join(rel).is_dir() {
+        b.append_dir_all(rel, dir.join(rel)).unwrap();
+    }
+    b.into_inner().unwrap()
+}
+
+/// The quoted text after `marker` in a command line.
+fn quoted_after(line: &str, marker: &str) -> String {
+    let rest = &line[line.find(marker).unwrap() + marker.len()..];
+    rest[..rest.find('\'').unwrap()].to_string()
+}
+
+/// Rules for a phone rooted through `adb root`, its data in `dir` (see [`fill_device_dir`]).
+pub fn rooted(r: &ScriptedRunner, dir: &Path) {
+    let (d1, d2, d3) = (dir.to_path_buf(), dir.to_path_buf(), dir.to_path_buf());
+    let runner = r.clone();
+    r.on("shell (id)", sh("uid=0(root) gid=0(root)", 0))
+        .on(
+            "find",
+            Reply::dynamic(move |_| {
+                let mut out = String::new();
+                for e in std::fs::read_dir(d1.join("saves")).into_iter().flatten().flatten() {
+                    if e.path().join("world_db").is_dir() {
+                        out += &format!("{SUP}/saves/{}/world_db\n", e.file_name().to_string_lossy());
+                    }
+                }
+                sh(&out, 0)
+            }),
+        )
+        .on(
+            "exec-out",
+            Reply::dynamic(move |args| {
+                let line = args.join(" ");
+                let rel = quoted_after(&line, "-cf - '");
+                Reply::ok(tar_dir(&d2, &rel))
+            }),
+        )
+        .on("stat -c", sh("10123:10123\n", 0))
+        .on("exec-in", Reply::ok(""))
+        .on(
+            "chown -R",
+            sh("", 0).on_spawn(move |args| {
+                let line = args.join(" ");
+                let dest = quoted_after(&line, "/x '");
+                let rel = dest.strip_prefix(&format!("{SUP}/")).unwrap().to_string();
+                let tar = runner.calls().iter().rev().find(|c| c.line().contains("exec-in")).unwrap().stdin_bytes();
+                let tmp = tempfile::tempdir().unwrap();
+                tar::Archive::new(&tar[..]).unpack(tmp.path()).unwrap();
+                let _ = std::fs::remove_dir_all(d3.join(&rel));
+                std::fs::rename(tmp.path().join("x"), d3.join(&rel)).unwrap();
+            }),
+        );
+}
+
+/// World names in a rooted fake phone's folder.
+pub fn device_names(dir: &Path) -> Vec<String> {
+    let mut n: Vec<String> = std::fs::read_dir(dir.join("saves"))
+        .unwrap()
+        .flatten()
+        .map(|e| {
+            let w = WorldFiles::load_dir(&e.path(), e.file_name().to_string_lossy().into_owned()).unwrap();
+            bhw_core::worlds::inspect(&w, None).unwrap().name
+        })
+        .collect();
+    n.sort();
+    n
 }
 
 impl Env {
@@ -308,7 +463,29 @@ impl Env {
         let l = ScriptedRunner::new();
         local(&l);
         l.on("comm=", Reply::ok("bash\ninit\n")).on("CSV", Reply::ok("\"x.exe\",\"1\"\n"));
-        Env { tmp, phone: Phone::new(data, custom), local: l, pc: None }
+        Env { tmp, phone: Phone::new(data, custom), local: l, pc: None, fetch: Arc::default(), device: None }
+    }
+
+    /// A phone rooted through `adb root` (its data in [`Env::dev`]); `custom` rules win over the root rules.
+    pub fn rooted(data: &PhoneData, custom: impl FnOnce(&ScriptedRunner)) -> Env {
+        let dev = tempfile::tempdir().unwrap();
+        fill_device_dir(dev.path(), data);
+        let p = dev.path().to_path_buf();
+        let mut env = Env::with(
+            data,
+            |r| {
+                custom(r);
+                rooted(r, &p);
+            },
+            |_| {},
+        );
+        env.device = Some(dev);
+        env
+    }
+
+    /// The rooted phone's data folder.
+    pub fn dev(&self) -> PathBuf {
+        self.device.as_ref().unwrap().path().to_path_buf()
     }
 
     pub fn path(&self, p: &str) -> PathBuf {
@@ -322,7 +499,22 @@ impl Env {
             config_dir: self.path("config"),
             cache_dir: self.path("cache"),
             default_worlds_folder: self.path("Worlds"),
+            data_dir: self.path("data"),
             adb: adb.then(|| self.phone.adb()),
+            make_adb: {
+                let phone = self.phone.runner.clone();
+                Arc::new(move |p: &Path| {
+                    let mut a = Adb::new(p, Arc::new(phone.clone()));
+                    a.timeouts = Timeouts {
+                        command: Duration::from_secs(5),
+                        confirm: Duration::from_secs(5),
+                        stall: Duration::from_secs(5),
+                        stop: Duration::from_millis(300),
+                    };
+                    a
+                })
+            },
+            fetch: self.fetch.clone(),
             runner: Arc::new(self.local.clone()),
             pc_locator: Arc::new(move || pc.clone()),
             ios_locator: Arc::new(move || vec![ios.clone()]),
