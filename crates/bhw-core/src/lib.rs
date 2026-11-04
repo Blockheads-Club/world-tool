@@ -7,6 +7,7 @@
 pub mod activity;
 mod backups;
 mod devices;
+pub mod editor;
 pub mod error;
 mod files;
 mod gamefiles;
@@ -73,6 +74,8 @@ pub struct Core {
     ios: Mutex<Vec<Device>>,
     /// Wrong password attempts per iOS backup.
     ios_attempts: Mutex<HashMap<String, u32>>,
+    /// Open world editor sessions.
+    editors: editor::Sessions,
 }
 
 impl Core {
@@ -94,6 +97,7 @@ impl Core {
             devices: Mutex::new(Vec::new()),
             ios: Mutex::new(Vec::new()),
             ios_attempts: Mutex::new(HashMap::new()),
+            editors: Mutex::new(HashMap::new()),
         }
     }
 

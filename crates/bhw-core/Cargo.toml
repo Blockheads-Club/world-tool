@@ -14,6 +14,9 @@ bhw-device = { path = "../bhw-device" }
 bhw-ios = { path = "../bhw-ios" }
 bhw-lmdb = { path = "../bhw-lmdb" }
 bhw-save = { path = "../bhw-save" }
+bhw-content = { path = "../bhw-content" }
+bhw-editor = { path = "../bhw-editor" }
+plist = "1.7"
 bhw-world = { path = "../bhw-world" }
 base64 = "0.22"
 serde = { version = "1", features = ["derive"] }
@@ -25,6 +28,7 @@ zip = { version = "4.6", default-features = false, features = ["deflate-flate2-z
 [dev-dependencies]
 bhw-assets = { path = "../bhw-assets", features = ["test-util"] }
 bhw-ios = { path = "../bhw-ios", features = ["test-util"] }
+bhw-content = { path = "../bhw-content", features = ["test-util"] }
 plist = "1.7"
 tempfile = "3"
 
