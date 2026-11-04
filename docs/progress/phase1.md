@@ -26,6 +26,19 @@ Build with `CARGO_TARGET_DIR=<repo>/target` (also for `app/src-tauri`).
   without confirm screens; 40 entries owned by the app uid with `app_data_file:s0:c512,c768`; game starts; ends with
   the original 2 worlds.
 
-### Next
-- UI: AdbDialog, verify steps, restore_declined dialog, 2-option root setting, i18n, mock, tests (in progress).
+- UI: `AdbDialog` (source URL, size, destination, Google terms page, progress, cancel, retry), "Phone tool needed"
+  notice on Devices, Settings row (where adb is / download), `adb_missing` opens the dialog; transfer/restore show
+  "Tap “Back up my data” once more" (`phone_check`) and the "Check the worlds are on the phone" step;
+  `restore_declined` dialog with "Try again"; root setting is Automatic / Backup method. i18n en/tr/ru/kk. Mock:
+  `?adb=missing`, `fail.adb`, `fail.verify`.
+- Tests: bhw-core 100 % lines (2362/2362) and functions; bhw-device 100 % lines (1374/1374); workspace clippy
+  -D warnings + fmt clean; src-tauri clippy clean, 4 tests; app 94 vitest tests, 100 % statements/branches/
+  functions/lines, svelte-check 0 errors.
 
+### Next
+- Real (non-emulator) rooted phone with Magisk (`su -c`): check the grant dialog during the background probe and the
+  `chcon` path; Android 6 toybox may lack `tar` (falls back? no: root then fails → backup method only if it fails
+  before writing).
+- The emulator check backup after restore needs a third tap on the phone; consider `bu`/root alternatives later.
+- App vitest suite is timing-sensitive under heavy machine load (default 1 s `findBy` timeouts); `--maxWorkers=2`
+  passes reliably.
