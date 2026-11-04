@@ -35,6 +35,18 @@ pub struct Loaded {
     pub source_kind: SourceKind,
 }
 
+/// `p` as an absolute path comparable with disk mount points. Unix: symlinks resolved. Windows: `canonicalize` would
+/// give a verbatim `\\?\C:\...` path that never starts with a mount point such as `C:\`.
+#[cfg(not(windows))]
+fn absolute(p: &Path) -> std::io::Result<PathBuf> {
+    std::fs::canonicalize(p)
+}
+
+#[cfg(windows)]
+fn absolute(p: &Path) -> std::io::Result<PathBuf> {
+    std::path::absolute(p)
+}
+
 const PLACEHOLDER_ID: &str = "00000000000000000000000000000000";
 
 /// Loads a `.bhworld` or a world folder (Blockheads Server or game); server worlds are converted.
@@ -242,7 +254,7 @@ impl Core {
         while !p.exists() {
             p = p.parent().map(Path::to_path_buf).ok_or(AppError::not_found(folder))?;
         }
-        let p = std::fs::canonicalize(&p)?;
+        let p = absolute(&p)?;
         let disks = sysinfo::Disks::new_with_refreshed_list();
         disks
             .list()

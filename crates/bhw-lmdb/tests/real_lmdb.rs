@@ -89,7 +89,9 @@ fn ours_reads_real_lmdb() {
 #[test]
 fn ours_reads_real_lmdb_with_free_pages() {
     let sample = normalize(sample());
-    let env = RealEnv::open(Some(&real_write(&sample)), 0, false);
+    // Real LMDB writes with the OS page size: with 16 KiB pages (macOS on Apple silicon) the copy-on-write rounds
+    // below outgrow the sample's 16 MiB map (MDB_MAP_FULL), so give them room.
+    let env = RealEnv::open(Some(&real_write(&sample)), 1 << 26, false);
     for round in 0..3 {
         let txn = env.txn(false);
         let dbi = txn.dbi(Some(b"plain"), 0).unwrap();

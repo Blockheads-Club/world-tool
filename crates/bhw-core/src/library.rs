@@ -171,7 +171,9 @@ impl Lib {
                 w
             })
             .collect();
-        out.sort_by(|a, b| b.added.cmp(&a.added).then_with(|| a.base.id.cmp(&b.base.id)));
+        // One closure (no `then_with`): a tie-break closure only runs when two worlds share a timestamp, which made
+        // function coverage depend on file-system timing.
+        out.sort_by(|a, b| (b.added, &a.base.id).cmp(&(a.added, &b.base.id)));
         Ok(out)
     }
 

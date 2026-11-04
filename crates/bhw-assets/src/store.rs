@@ -433,11 +433,25 @@ mod tests {
         fs::remove_file(gf.root().join(CURRENT)).unwrap();
         fs::create_dir(gf.root().join(CURRENT)).unwrap();
         assert!(matches!(gf.current(), Err(Error::Io(_))));
-        // The cache root is a file: extraction and clear fail with I/O errors.
+        // The cache root is below a file: extraction fails with an I/O error.
         let blocked = GameFiles::new(&bad);
-        assert!(matches!(blocked.clear(), Err(Error::Io(_))));
         let apk_path = d.path().join("game.apk");
         assert!(matches!(blocked.extract(&apk_path, &mut noop, &CancelToken::new()), Err(Error::Io(_))));
+        // ... and so does clear (ENOTDIR; Windows reports such a path as not found, i.e. already clear).
+        #[cfg(unix)]
+        assert!(matches!(blocked.clear(), Err(Error::Io(_))));
+        #[cfg(windows)]
+        {
+            // A file held open without delete sharing cannot be removed.
+            use std::os::windows::fs::OpenOptionsExt;
+            let held = GameFiles::new(&d.path().join("held"));
+            fs::create_dir_all(held.root()).unwrap();
+            let f =
+                fs::OpenOptions::new().write(true).create_new(true).share_mode(0).open(held.root().join("f")).unwrap();
+            assert!(matches!(held.clear(), Err(Error::Io(_))));
+            drop(f);
+            held.clear().unwrap();
+        }
     }
 
     #[test]
