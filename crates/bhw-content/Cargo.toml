@@ -1,0 +1,25 @@
+[package]
+name = "bhw-content"
+description = "World contents of The Blockheads saves (terrain tiles, dynamic objects, blockheads, inventories, world record) for BH World Tool's editor"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[features]
+# Exposes the synthetic fixtures to other crates' tests.
+test-util = []
+
+[dependencies]
+bhw-lmdb = { path = "../bhw-lmdb" }
+bhw-save = { path = "../bhw-save" }
+flate2 = { workspace = true }
+plist = "1.7"
+thiserror = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3"
+
+[lints]
+workspace = true

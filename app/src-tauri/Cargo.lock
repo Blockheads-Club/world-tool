@@ -149,6 +149,7 @@ version = "0.1.0"
 dependencies = [
  "bhw-core",
  "bhw-device",
+ "bhw-editor",
  "bhw-ios",
  "reqwest",
  "serde",
@@ -185,17 +186,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "bhw-content"
+version = "0.1.0"
+dependencies = [
+ "bhw-lmdb",
+ "bhw-save",
+ "flate2",
+ "plist",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "bhw-core"
 version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
  "bhw-assets",
  "bhw-backup",
+ "bhw-content",
  "bhw-device",
+ "bhw-editor",
  "bhw-ios",
  "bhw-lmdb",
  "bhw-save",
  "bhw-world",
+ "plist",
  "serde",
  "serde_json",
  "sysinfo",
@@ -214,6 +229,20 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.21",
  "toml 0.8.2",
+]
+
+[[package]]
+name = "bhw-editor"
+version = "0.1.0"
+dependencies = [
+ "bhw-content",
+ "bhw-lmdb",
+ "bhw-save",
+ "flate2",
+ "plist",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
 ]
 
 [[package]]

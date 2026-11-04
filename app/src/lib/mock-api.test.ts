@@ -6,6 +6,15 @@ const m = (o: ConstructorParameters<typeof MockBackend>[0] = {}) => new MockBack
 const stages = (list: Progress[]) => [...new Set(list.map((p) => p.stage))];
 
 describe('mock backend', () => {
+  it('serves an editor session', async () => {
+    const b = m();
+    const w = await b.editorOpen((await b.listWorlds())[0].id);
+    expect((await b.editorState(w.session)).unsaved).toBe(0);
+    expect((await b.editorBlockheads(w.session)).length).toBe(2);
+    await b.editorClose(w.session);
+    await expect(b.editorState(w.session)).rejects.toMatchObject({ code: 'not_found' });
+  });
+
   it('starts with the design data, or empty / fresh', async () => {
     const full = m();
     expect((await full.listDevices()).length).toBe(7);

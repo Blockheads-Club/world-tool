@@ -434,6 +434,90 @@ async fn download_update(updates: State<'_, Updates>, op: String, on_progress: C
     Ok(())
 }
 
+// ---- world editor (Phase 2) ----
+
+#[tauri::command]
+async fn editor_open(state: State<'_, AppState>, id: String) -> Res<bhw_core::editor::EditorWorld> {
+    blocking(state, move |c| c.editor_open(&id)).await
+}
+
+#[tauri::command]
+fn editor_close(state: State<'_, AppState>, session: String) {
+    state.core.editor_close(&session)
+}
+
+#[tauri::command]
+async fn editor_region(state: State<'_, AppState>, session: String, rect: [u32; 4]) -> Res<tauri::ipc::Response> {
+    let [x0, y0, x1, y1] = rect;
+    blocking(state, move |c| c.editor_region(&session, x0, y0, x1, y1)).await.map(tauri::ipc::Response::new)
+}
+
+#[tauri::command]
+async fn editor_overview(state: State<'_, AppState>, session: String, scale: u32) -> Res<tauri::ipc::Response> {
+    blocking(state, move |c| c.editor_overview(&session, scale)).await.map(tauri::ipc::Response::new)
+}
+
+#[tauri::command]
+async fn editor_tile(state: State<'_, AppState>, session: String, x: u32, y: u32) -> Res<bhw_core::editor::EditorTile> {
+    blocking(state, move |c| c.editor_tile(&session, x, y)).await
+}
+
+#[tauri::command]
+fn editor_catalog(state: State<'_, AppState>) -> bhw_editor::atlas::Catalog {
+    state.core.editor_catalog()
+}
+
+/// The atlas image, or an empty body when the game files are not set up.
+#[tauri::command]
+async fn editor_atlas(state: State<'_, AppState>, which: String) -> Res<tauri::ipc::Response> {
+    blocking(state, move |c| c.editor_atlas(&which)).await.map(|b| tauri::ipc::Response::new(b.unwrap_or_default()))
+}
+
+#[tauri::command]
+fn editor_state(state: State<'_, AppState>, session: String) -> Res<bhw_core::editor::EditorState> {
+    state.core.editor_state(&session)
+}
+
+#[tauri::command]
+fn editor_blockheads(state: State<'_, AppState>, session: String) -> Res<Vec<bhw_core::editor::EditorBlockhead>> {
+    state.core.editor_blockheads(&session)
+}
+
+#[tauri::command]
+async fn editor_edit(
+    state: State<'_, AppState>,
+    session: String,
+    req: bhw_core::editor::EditRequest,
+) -> Res<bhw_core::editor::EditResult> {
+    blocking(state, move |c| c.editor_edit(&session, req)).await
+}
+
+#[tauri::command]
+async fn editor_find(
+    state: State<'_, AppState>,
+    session: String,
+    target: bhw_editor::Match,
+    area: Option<bhw_editor::Rect>,
+    limit: usize,
+) -> Res<(Vec<[u32; 2]>, u64)> {
+    blocking(state, move |c| c.editor_find(&session, target, area, limit)).await
+}
+
+#[tauri::command]
+async fn editor_history(state: State<'_, AppState>, session: String, to: usize) -> Res<bhw_core::editor::EditorState> {
+    blocking(state, move |c| c.editor_history(&session, to)).await
+}
+
+#[tauri::command]
+fn editor_changes(state: State<'_, AppState>, session: String) -> Res<Vec<[u32; 2]>> {
+    state.core.editor_changes(&session)
+}
+
+#[tauri::command]
+async fn editor_save(state: State<'_, AppState>, session: String, as_new: bool) -> Res<bhw_core::World> {
+    blocking(state, move |c| c.editor_save(&session, as_new)).await
+}
+
 /// Sends `devices-changed` whenever the device list changes (polled every few seconds).
 fn watch_devices(app: AppHandle, core: Arc<Core>) {
     std::thread::spawn(move || {
@@ -537,6 +621,20 @@ pub fn run() {
             pick_apk,
             check_update,
             download_update,
+            editor_open,
+            editor_close,
+            editor_region,
+            editor_overview,
+            editor_tile,
+            editor_catalog,
+            editor_atlas,
+            editor_state,
+            editor_blockheads,
+            editor_edit,
+            editor_find,
+            editor_history,
+            editor_changes,
+            editor_save,
         ])
         .build(tauri::generate_context!())
         .expect("error while building BH World Tool")

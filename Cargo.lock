@@ -60,13 +60,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "bhw-content"
+version = "0.1.0"
+dependencies = [
+ "bhw-lmdb",
+ "bhw-save",
+ "flate2",
+ "plist",
+ "tempfile",
+ "thiserror",
+]
+
+[[package]]
 name = "bhw-core"
 version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
  "bhw-assets",
  "bhw-backup",
+ "bhw-content",
  "bhw-device",
+ "bhw-editor",
  "bhw-ios",
  "bhw-lmdb",
  "bhw-save",
@@ -92,6 +106,20 @@ dependencies = [
  "tempfile",
  "thiserror",
  "toml",
+]
+
+[[package]]
+name = "bhw-editor"
+version = "0.1.0"
+dependencies = [
+ "bhw-content",
+ "bhw-lmdb",
+ "bhw-save",
+ "flate2",
+ "plist",
+ "serde",
+ "serde_json",
+ "thiserror",
 ]
 
 [[package]]

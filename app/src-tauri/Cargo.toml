@@ -27,6 +27,7 @@ reqwest = { version = "0.13", features = ["blocking"] }
 bhw-core = { path = "../../crates/bhw-core" }
 bhw-device = { path = "../../crates/bhw-device" }
 bhw-ios = { path = "../../crates/bhw-ios" }
+bhw-editor = { path = "../../crates/bhw-editor" }
 
 [profile.release]
 opt-level = 3

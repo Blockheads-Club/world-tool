@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-editor-region"
+description = "Enables the editor_region command without any pre-configured scope."
+commands.allow = ["editor_region"]
+
+[[permission]]
+identifier = "deny-editor-region"
+description = "Denies the editor_region command without any pre-configured scope."
+commands.deny = ["editor_region"]

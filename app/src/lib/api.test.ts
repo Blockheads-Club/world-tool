@@ -82,7 +82,16 @@ describe('tauri backend', () => {
       [() => b.pickImport(true), 'pick_import', { folders: true }],
       [() => b.pickApk(), 'pick_apk', undefined],
       [() => b.checkUpdate(), 'check_update', undefined],
-      [() => b.restartApp(), 'restart_app', undefined]
+      [() => b.restartApp(), 'restart_app', undefined],
+      [() => b.editorOpen('w'), 'editor_open', { id: 'w' }],
+      [() => b.editorClose('s'), 'editor_close', { session: 's' }],
+      [() => b.editorRegion('s', [0, 1, 2, 3]), 'editor_region', { session: 's', rect: [0, 1, 2, 3] }],
+      [() => b.editorOverview('s', 4), 'editor_overview', { session: 's', scale: 4 }],
+      [() => b.editorTile('s', 1, 2), 'editor_tile', { session: 's', x: 1, y: 2 }],
+      [() => b.editorCatalog(), 'editor_catalog', undefined],
+      [() => b.editorAtlas('tiles'), 'editor_atlas', { which: 'tiles' }],
+      [() => b.editorState('s'), 'editor_state', { session: 's' }],
+      [() => b.editorBlockheads('s'), 'editor_blockheads', { session: 's' }]
     ];
     for (const [call, name, args] of calls) {
       await call();

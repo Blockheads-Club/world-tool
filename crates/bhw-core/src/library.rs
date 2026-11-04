@@ -244,6 +244,22 @@ impl Lib {
         self.save_index(&idx)
     }
 
+    /// Replaces the world in library file `id` with an edited version (manifest kept, preview redrawn) and marks
+    /// it as edited now.
+    pub fn save_edit(&self, id: &str, world: &WorldFiles) -> Result<World> {
+        let path = self.path(id)?;
+        let old = open_bhworld(&path, &Limits::default())?;
+        let info = inspect(world, None)?;
+        let mut manifest = old.manifest;
+        manifest.world.name = Some(info.name.clone());
+        bhw_world::bhworld::save_with_manifest(&path, world, manifest, info.preview_png.as_deref())?;
+        let carry = self.carried(id).map(|mut w| {
+            w.edited = Some(now_ms());
+            w
+        });
+        self.reindex(&path, carry)
+    }
+
     /// Deletes world `id`.
     pub fn delete(&self, id: &str) -> Result<()> {
         self.inner.delete_world(&self.path(id)?)?;

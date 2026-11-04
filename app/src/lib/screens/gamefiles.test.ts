@@ -6,7 +6,7 @@ import { setup } from '../test-utils';
 afterEach(() => cleanup());
 
 async function edit(name = 'Sunny Isle') {
-  await fireEvent.click(screen.getByRole('button', { name: 'Worlds' }));
+  await fireEvent.click(screen.getAllByRole('button', { name: 'Worlds' })[0]);
   const card = await screen.findByRole('listitem', { name });
   await fireEvent.click(within(card).getByRole('button', { name: 'Edit' }));
 }
@@ -29,15 +29,13 @@ describe('Game files (APK) before the editor', () => {
     expect(ready).toHaveTextContent('1084 images');
     await fireEvent.click(within(ready).getByRole('button', { name: 'Open Sunny Isle' }));
     expect(store.screen).toBe('editor');
-    expect(screen.getByRole('heading', { name: 'The world editor comes in a later version' })).toBeInTheDocument();
-    await fireEvent.click(screen.getByRole('button', { name: 'Game files' }));
-    expect(store.screen).toBe('settings');
-    store.screen = 'editor';
-    await fireEvent.click(await screen.findByRole('button', { name: 'Back to Worlds' }));
+    expect(await screen.findByRole('application', { name: /World map/ })).toBeInTheDocument();
+    await fireEvent.click(screen.getByRole('button', { name: 'Back to Worlds' }));
+    expect(store.screen).toBe('worlds');
     // now ready: Edit goes straight to the editor
     await edit('Deep Mine');
     expect(store.editing?.name).toBe('Deep Mine');
-    expect(screen.getByText('World editor')).toBeInTheDocument();
+    expect(await screen.findByText('DEEP MINE')).toBeInTheDocument();
   });
 
   it('shows the APK errors: wrong app, unsupported, damaged (with phone), other; cancel and not now', async () => {
@@ -109,6 +107,6 @@ describe('Game files (APK) before the editor', () => {
     store.editing = null;
     store.screen = 'editor';
     store.gameFiles.close();
-    expect(await screen.findByRole('heading', { name: 'World editor', level: 1 })).toBeInTheDocument();
+    expect(await screen.findByText('Viewing a copy · from Worlds')).toBeInTheDocument();
   });
 });
