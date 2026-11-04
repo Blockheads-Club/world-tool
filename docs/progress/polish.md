@@ -20,3 +20,7 @@ review tr/ru/kk, (5) restore-check wording.
   `BHW_PC_KEEP=<dir>` the edited copy was opened in the real game headless (AppImage's `bhpc-run --data-dir`,
   Xvfb, scripted clicks): "SUNSET VALLEYS (2)" is in the world list and loads with the edited stone platform.
   Real data verified unchanged by sha256 (131 files) + config + APK.
+- (2) `bhw_world::library::windows_safe(stem, fallback)`: no trailing dots/spaces, reserved device names (CON, PRN,
+  AUX, NUL, COM1–9, LPT1–9 incl. ¹²³, any case, also before an extension) get a `_`. Used by `slug()` (exported
+  `.bhworld` files, library files, backup names; it already replaced `<>:"/\|?*`, control chars and capped at 60
+  chars) and by schematic file names (`schematic_file`). The schematic save dialog gets the already-safe file name.
