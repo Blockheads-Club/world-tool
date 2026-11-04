@@ -86,3 +86,28 @@ undo/redo, schematics); (3) renderer data (tile → atlas table + colour fallbac
 ### Next
 - Edit tools in the UI (pencil/brush/eraser/select/fill/replace/paste, palette, history panel, save dialog).
 - Emulator check of an edited world; atlas table calibration in the game.
+
+## 2026-11-04 — milestone: steps 1–3 + read-only viewer (stop point, reported)
+
+### State
+- Commits on `feat/editor` (not pushed): content crate, edit model, render data/atlas table, core service, viewer UI.
+- Checked with the user's own 1.7.6 atlas locally (not committed): the viewer draws textures; dirt/grass/rock/ore
+  cells look plausible, but the table is only by eye.
+- `cargo test --workspace --no-fail-fast`: all pass except `bhw-backup/tests/java_xcheck.rs` (JDK 27 on this
+  machine; not touched by this stream). clippy -D warnings and rustfmt clean.
+
+### Next (in order)
+1. Edit tools in the UI (WT-Editor states): tool bar (I/P/B/E/S/F/R/V), block palette with search, brush size/shape,
+   selection rectangle + copy/cut/paste/rotate/flip/fill/clear, replace with preview, history panel (go to step),
+   unsaved count, save dialog (Save to Worlds / Save as new world / Don't save), blockhead move/needs/inventory
+   editing with an item picker, world name/time settings, compare view (`editor_changes`), search panel,
+   schematics saved as `.bhwschem` files (core commands still to add), full screen (F11), Tab hides panels.
+2. Emulator: inject an edited synthetic world into `bhwt_api30`, confirm it loads (block version 0 vs 8, update
+   counter, light fields), and calibrate the atlas table (`src: game`).
+3. Horizontal wrap of the world in the map view (the game's worlds wrap around).
+
+### Open questions for the user
+- Time-of-day setting: day length in `worldTime` is assumed to be 1440 s — keep the setting hidden until confirmed?
+- Tile/item names: the UI shows the game's English ids prettified ("Dirt grass"); translate tile names too?
+- Should edits be allowed in areas the game never generated (we refuse now), and on tiles that belong to objects
+  (trees, doors, chests: protected now)?
