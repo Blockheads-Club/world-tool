@@ -1,6 +1,6 @@
 //! A whole world's contents, loaded from a `world_db` and written back record by record.
 
-use bhw_lmdb::{Database, EnvContents};
+use bhw_lmdb::EnvContents;
 
 use crate::blocks::BlockStore;
 use crate::error::{Error, Result};
@@ -76,7 +76,7 @@ impl WorldContent {
         if main_changes.is_empty() {
             return Ok(self.base.clone());
         }
-        let main = base.named.entry(b"main".to_vec()).or_insert_with(|| Database::new(0));
+        let main = base.named.entry(b"main".to_vec()).or_default();
         for (k, v) in main_changes {
             match main.entries.iter_mut().find(|(key, _)| *key == k) {
                 Some(e) => e.1 = v,
@@ -101,7 +101,7 @@ fn replace_all(env: &mut EnvContents, db: &str, new: Vec<(Vec<u8>, Vec<u8>)>) {
     if new.is_empty() && !env.named.contains_key(db.as_bytes()) {
         return;
     }
-    let d = env.named.entry(db.as_bytes().to_vec()).or_insert_with(|| Database::new(0));
+    let d = env.named.entry(db.as_bytes().to_vec()).or_default();
     let mut map: std::collections::HashMap<Vec<u8>, Vec<u8>> = new.iter().cloned().collect();
     let mut out = Vec::with_capacity(new.len());
     for (k, _) in &d.entries {
