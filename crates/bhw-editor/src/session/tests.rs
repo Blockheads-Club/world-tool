@@ -1,5 +1,6 @@
 use super::*;
 use crate::brush::Layer;
+use crate::session::EditOptions;
 use bhw_content::fixtures::world_env;
 
 fn session() -> Session {
@@ -17,7 +18,7 @@ fn paint_undo_redo() {
     let o = s
         .paint(OpKind::Pencil, &[(1, Y), (1, Y), (2, Y), (40, Y), (100, Y), (500, Y)], Brush::front(6), false)
         .unwrap();
-    assert_eq!(o, Outcome { changed: 3, protected: 0, missing: 2 });
+    assert_eq!(o, Outcome { changed: 3, protected: 0, missing: 2, ..Default::default() });
     assert_eq!(s.tile(1, Y).unwrap().unwrap().fg(), 6);
     assert_eq!(s.unsaved(), 1);
     // only solid: air at 40 is skipped
@@ -91,7 +92,7 @@ fn replace_and_find() {
     let l = &s.history().0[0];
     assert_eq!((l.a.as_deref(), l.b.as_deref()), (Some("rock"), Some("rock + copper")));
     let o = s.replace(rock, Brush::front(6), None).unwrap();
-    assert_eq!(o.changed, 1024);
+    assert_eq!((o.changed, o.protected), (1023, 1), "the chest's tile is protected");
     assert!(s.replace(rock, Brush::front(0), None).is_err());
 }
 
@@ -178,4 +179,56 @@ fn players_and_settings() {
     assert!(bare.set_name("x").is_err());
     assert!(bare.set_time_of_day(1.0).is_err());
     assert!(s.set_stats("", 77, Stats { health: 1.0, happiness: 1.0, fullness: 1.0, energy: 1.0 }).is_err());
+}
+
+#[test]
+fn generate_and_objects() {
+    let mut s = session();
+    // ungenerated: refused by default, created when allowed (filled with the world's sky)
+    let o = s.paint(OpKind::Pencil, &[(70, Y)], Brush::front(6), false).unwrap();
+    assert_eq!(o.missing, 1);
+    s.options = EditOptions { generate: true, objects: false };
+    // painting air into an ungenerated area creates nothing
+    assert_eq!(s.paint(OpKind::Pencil, &[(70, Y)], Brush::front(2), false).unwrap(), Outcome::default());
+    let o = s.paint(OpKind::Pencil, &[(70, Y), (71, Y), (5000, Y)], Brush::front(6), false).unwrap();
+    assert_eq!((o.changed, o.created, o.missing), (2, 1, 1));
+    assert_eq!(s.tile(70, Y).unwrap().unwrap().fg(), 6);
+    assert_eq!(s.tile(75, Y).unwrap().unwrap().fg(), 2);
+    s.undo().unwrap();
+    assert_eq!(s.tile(70, Y).unwrap(), None);
+    s.redo().unwrap();
+    assert_eq!(s.tile(71, Y).unwrap().unwrap().fg(), 6);
+    let env = s.save().unwrap();
+    assert!(env.named[&b"blocks"[..]].entries.iter().any(|(k, _)| k == b"2_16"));
+
+    // objects: a tree owning two tiles, and the chest standing on tile (3, 520)
+    let mut s = session();
+    for (x, y, c) in [(10, Y, 4u8), (11, Y + 1, 3)] {
+        let mut t = s.tile(x, y).unwrap().unwrap();
+        t.set_contents(c);
+        t.0[0x28] = 5;
+        s.world.blocks.set_tile(x, y, t).unwrap();
+    }
+    let o = s.paint(OpKind::Pencil, &[(10, Y), (3, 520)], Brush::front(6), false).unwrap();
+    assert_eq!((o.changed, o.protected), (0, 2));
+    s.options.objects = true;
+    let o = s.paint(OpKind::Pencil, &[(10, Y)], Brush::front(6), false).unwrap();
+    assert_eq!((o.changed, o.removed), (2, 1));
+    let t = s.tile(11, Y + 1).unwrap().unwrap();
+    assert_eq!((t.contents(), t.owner()), (0, 0));
+    let t = s.tile(10, Y).unwrap().unwrap();
+    assert_eq!((t.fg(), t.contents(), t.owner()), (6, 0, 0));
+    assert!(s.world.objects.all().0.is_empty());
+    s.undo().unwrap();
+    assert_eq!(s.world.objects.all().0.len(), 1);
+    assert_eq!(s.tile(11, Y + 1).unwrap().unwrap().owner(), 5);
+    s.redo().unwrap();
+    assert!(s.world.objects.all().0.is_empty());
+    s.undo().unwrap();
+    // painting air over the chest's tile leaves it; a solid tile removes it
+    assert_eq!(s.paint(OpKind::Remove, &[(3, 520)], Brush::eraser(), false).unwrap().removed, 0);
+    let o = s.paint(OpKind::Pencil, &[(3, 520), (4, 520)], Brush::front(6), false).unwrap();
+    assert_eq!((o.changed, o.removed), (4, 1), "the chest's owned tiles are cleared too");
+    let saved = s.save().unwrap();
+    assert!(saved.named[&b"dw"[..]].entries.is_empty());
 }

@@ -85,6 +85,24 @@ pub enum Change {
         /// New inventory.
         after: Inventory,
     },
+    /// A block created where the game had not generated one (undo removes it).
+    BlockCreated {
+        /// Macro block position.
+        pos: (u32, u32),
+        /// The tile the new block was filled with.
+        fill: TileData,
+    },
+    /// A dynamic object removed (or put back).
+    Object {
+        /// Its `dw` record key.
+        key: String,
+        /// Index in the record.
+        index: usize,
+        /// The object's dictionary (`Some` = present before).
+        before: Option<Dictionary>,
+        /// After the change.
+        after: Option<Dictionary>,
+    },
     /// The world record's dictionary.
     Record {
         /// Old dictionary.
