@@ -3,6 +3,8 @@ import { listen } from '@tauri-apps/api/event';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import type {
   Activity,
+  AdbDownload,
+  AdbStatus,
   AppInfo,
   Backup,
   Device,
@@ -49,6 +51,12 @@ export interface Backend {
   pairedDevices(): Promise<PairedDevice[]>;
   forgetPaired(id: string): Promise<void>;
   restartAdb(): Promise<void>;
+  /** Whether adb was found (Android SDK, PATH or an earlier download). */
+  adbStatus(): Promise<AdbStatus>;
+  /** Source and size of Google's Platform-Tools download (asks the server). */
+  adbDownloadInfo(): Promise<AdbDownload>;
+  /** Downloads Platform-Tools into the app's data folder and starts using its adb. */
+  downloadAdb(op: string, onProgress: OnProgress): Promise<AdbStatus>;
   openDeviceManager(): Promise<void>;
   iosBackups(folder: string | null): Promise<IosBackup[]>;
   /** Opens (decrypts) an iPhone backup; it then shows up as a read-only device. */
@@ -132,6 +140,9 @@ export const tauriBackend: Backend = {
   pairedDevices: () => invoke('paired_devices'),
   forgetPaired: (id) => invoke('forget_paired', { id }),
   restartAdb: () => invoke('restart_adb'),
+  adbStatus: () => invoke('adb_status'),
+  adbDownloadInfo: () => invoke('adb_download_info'),
+  downloadAdb: (op, onProgress) => invoke('download_adb', { op, onProgress: channel(onProgress) }),
   openDeviceManager: () => invoke('open_device_manager'),
   iosBackups: (folder) => invoke('ios_backups', { folder }),
   iosOpen: (id, password) => invoke('ios_open', { id, password }),
@@ -196,6 +207,7 @@ export const tauriBackend: Backend = {
 export const COMMANDS = [
   'app_info', 'get_settings', 'set_settings',
   'list_devices', 'wifi_discover', 'wifi_pair', 'paired_devices', 'forget_paired', 'restart_adb',
+  'adb_status', 'adb_download_info', 'download_adb',
   'open_device_manager', 'ios_backups', 'ios_open', 'diagnostics',
   'read_worlds', 'save_to_library', 'export_worlds', 'free_space', 'cancel',
   'source_worlds', 'transfer_plan', 'transfer',

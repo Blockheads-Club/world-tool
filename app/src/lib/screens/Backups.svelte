@@ -80,6 +80,7 @@
 
   const isAndroid = $derived(store.devices.find((d) => d.id === target)?.kind === 'android');
   const prog = $derived(running && running !== 'start' ? running : null);
+  const waiting = $derived(prog?.stage === 'phone_backup' || prog?.stage === 'phone_restore' || prog?.stage === 'phone_check');
 </script>
 
 <Header title={t('nav.backups')} sub={list && list.length ? t('bk.sub', { n: list.length, size: bytes(total) }) : t('bk.subEmpty')}>
@@ -124,11 +125,11 @@
 
 {#if restoring}
   {@const b = restoring}
-  <Dialog title={t('bk.restoreTitle')} icon="history" busy={running !== null} wide={prog?.stage === 'phone_backup' || prog?.stage === 'phone_restore'} onclose={() => (restoring = null)}>
-    {#if prog && (prog.stage === 'phone_backup' || prog.stage === 'phone_restore')}
-      <PhoneWait screen={prog.stage === 'phone_backup' ? 'backup' : 'restore'} elapsed={zero(prog.elapsed)}
-        title={prog.stage === 'phone_backup' ? t('tr.phoneBackupTitle') : t('tr.phoneRestoreTitle')}
-        text={prog.stage === 'phone_backup' ? t('bk.phoneBackupText') : t('tr.phoneRestoreText')}>
+  <Dialog title={t('bk.restoreTitle')} icon="history" busy={running !== null} wide={waiting} onclose={() => (restoring = null)}>
+    {#if prog && waiting}
+      <PhoneWait screen={prog.stage === 'phone_restore' ? 'restore' : 'backup'} elapsed={zero(prog.elapsed)}
+        title={prog.stage === 'phone_backup' ? t('tr.phoneBackupTitle') : prog.stage === 'phone_check' ? t('tr.phoneCheckTitle') : t('tr.phoneRestoreTitle')}
+        text={prog.stage === 'phone_backup' ? t('bk.phoneBackupText') : prog.stage === 'phone_check' ? t('tr.phoneCheckText') : t('tr.phoneRestoreText')}>
         {#snippet actions()}<Button icon="x" onclick={() => void store.api.cancel(op)}>{t('common.cancel')}</Button>{/snippet}
       </PhoneWait>
     {:else if running}

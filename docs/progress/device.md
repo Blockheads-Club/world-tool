@@ -12,13 +12,13 @@ Evaluated `adb_client` 3.2.3 (MIT, crates.io) source:
   conflicts with a running adb server, Windows needs WinUSB driver anyway);
 - `rust-version = 1.88` > workspace 1.86.
 
-So we spawn `adb` (bundled sidecar path from config, else `$ANDROID_HOME`/`$ANDROID_SDK_ROOT/platform-tools`, else
+So we spawn `adb` (the copy the app downloaded, else `$ANDROID_HOME`/`$ANDROID_SDK_ROOT/platform-tools`, else
 `PATH`). It is what users already authorized, supports every feature (backup/restore, exec-out/exec-in, pair,
 connect, mdns) and is what Google maintains. Everything goes through `process::Runner` / `process::Child`
 traits; `fake::ScriptedRunner` scripts adb answers for tests (exported so the app can use it too).
 
 ## API summary
-- `Adb::locate(sidecar)`, `Adb::new(program, runner)`, `timeouts {command, confirm, stall}`, `run`, `shell`
+- `Adb::locate(preferred)`, `Adb::new(program, runner)`, `timeouts {command, confirm, stall}`, `run`, `shell`
   (exit code via `__BHW_RC=$?` marker, works without shell v2), `shell_ok`, `version`, `start/kill_server`.
 - Discovery: `list_devices` (`adb devices -l`: serial, state device/unauthorized/offline/no permissions/other,
   usb/wifi/emulator, model, transport id), `device_details` (model, Android release/SDK, game versionName/

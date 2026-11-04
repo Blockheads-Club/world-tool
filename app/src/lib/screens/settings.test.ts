@@ -21,7 +21,8 @@ describe('Settings', () => {
     await waitFor(() => expect(store.settings?.backup_before_write).toBe(false));
     await fireEvent.change(screen.getByRole('combobox', { name: 'Backups to keep per device' }), { target: { value: '10' } });
     await waitFor(() => expect(store.settings?.backups_to_keep).toBe(10));
-    await fireEvent.click(screen.getByRole('radio', { name: 'Always' }));
+    await fireEvent.click(screen.getByRole('radio', { name: 'Backup method' }));
+    await waitFor(() => expect(store.settings?.root_mode).toBe('never'));
     await fireEvent.click(screen.getByRole('radio', { name: 'Dark' }));
     await waitFor(() => expect(document.documentElement.dataset.theme).toBe('dark'));
     await fireEvent.click(screen.getByRole('switch', { name: 'Reduce motion' }));

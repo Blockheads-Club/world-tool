@@ -5,7 +5,8 @@
 
 export type Os = 'windows' | 'macos' | 'linux';
 export type ThemeChoice = 'system' | 'light' | 'dark';
-export type RootMode = 'auto' | 'always' | 'never';
+/** `auto`: root when the phone allows it, else the backup method; `never`: always the backup method. */
+export type RootMode = 'auto' | 'never';
 export type Lang = 'en' | 'tr' | 'ru' | 'kk';
 
 export interface AppInfo {
@@ -39,7 +40,9 @@ export type ErrorCode =
   | 'game_running' // Blockheads PC (or the game on the phone) is running
   | 'game_stopped' // Android "stopped" state: open the game once, then retry
   | 'not_supported_yet' // e.g. writing to an iPhone/iPad backup
-  | 'adb_missing';
+  | 'adb_missing'
+  | 'download_failed' // downloading Google's Platform-Tools (adb) failed
+  | 'restore_declined'; // after adb restore the worlds are not on the phone ("Restore my data" not tapped)
 
 export interface AppError {
   code: ErrorCode;
@@ -185,6 +188,8 @@ export interface Progress {
 export type Stage =
   | 'phone_backup' // waiting for "Back up my data"
   | 'phone_restore' // waiting for "Restore my data"
+  | 'phone_check' // waiting for "Back up my data" of the check after a restore
+  | 'verifying' // checking the worlds arrived on the phone
   | 'reading'
   | 'backing_up'
   | 'preparing'
@@ -363,6 +368,26 @@ export interface UpdateInfo {
   date: number;
   size: number;
   notes: string[];
+}
+
+// ---------------------------------------------------------------- adb (Google's Platform-Tools, downloaded on first run)
+
+export interface AdbStatus {
+  found: boolean;
+  path: string | null;
+  /** Downloaded by this app (into its data folder). */
+  managed: boolean;
+  /** Where a download comes from; null on an OS without Platform-Tools. */
+  url: string | null;
+  terms_url: string;
+}
+
+/** Shown before the user confirms the download. */
+export interface AdbDownload {
+  url: string;
+  size: number | null;
+  terms_url: string;
+  folder: string;
 }
 
 export type Unlisten = () => void;

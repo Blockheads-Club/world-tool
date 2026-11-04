@@ -42,4 +42,10 @@ extracted from the user's own APK. GPL-3.0-or-later. Not affiliated with Majic J
   tree (LMDB picks the meta page from the lock file's txnid); otherwise 1.7.6 crashes loading it (emulator, see
   `docs/progress/core.md`). bhw-lmdb writes both metas; bhw-core adds a zero-filled lock file.
 - `am kill` only kills the game once it left the "previous app" state (seconds after HOME); retry for a while.
+- Android gives no signal when "Restore my data" is declined (adb restore exits 0): bhw-core checks every restore with
+  a fresh backup (`restore_declined`); verified on the emulator by tapping "Do not restore".
+- Root writes: files root creates under the app's data get the creating process's SELinux level, so the app's
+  context (`app_data_file:s0:cX,cY`) is read before writing and restored with `chcon -R` (plus `chown`,
+  `restorecon`); verified on the emulator (`adb root`), the game starts afterwards.
+- adb is not shipped (Platform-Tools license): downloaded from Google on first run (`docs/adb-download.md`).
 - Android APK: package `com.noodlecake.blockheads`, targetSdk 27, allowBackup default true, armeabi-v7a only.

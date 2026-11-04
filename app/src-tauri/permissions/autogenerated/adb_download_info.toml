@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-adb-download-info"
+description = "Enables the adb_download_info command without any pre-configured scope."
+commands.allow = ["adb_download_info"]
+
+[[permission]]
+identifier = "deny-adb-download-info"
+description = "Denies the adb_download_info command without any pre-configured scope."
+commands.deny = ["adb_download_info"]

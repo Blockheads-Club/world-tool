@@ -32,6 +32,7 @@ describe('Backups', () => {
     expect(await screen.findByText('First the current game data is saved as a new backup, so you can still go back.')).toBeInTheDocument();
     expect(await screen.findByText('Look at your phone and tap “Restore my data”')).toBeInTheDocument();
     expect(await screen.findByRole('progressbar', { name: 'Restoring the backup' })).toBeInTheDocument();
+    expect(await screen.findByText('Tap “Back up my data” once more')).toBeInTheDocument();
     expect(await screen.findByText('Backup restored to Ada’s Pixel 8', {}, { timeout: 2000 })).toBeInTheDocument();
     await waitFor(() => expect(screen.getByText(/4 backups/)).toBeInTheDocument());
     // delete via the More menu

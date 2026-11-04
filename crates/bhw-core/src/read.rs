@@ -5,7 +5,7 @@ use std::io::BufReader;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use bhw_device::{AbMethod, AbOptions, IfRunning, Phase};
+use bhw_device::{AbMethod, AbOptions, IfRunning, PcInstall, Phase};
 use bhw_save::GameDb;
 use bhw_world::backup::{load_backup, BackupSaves};
 use bhw_world::{SourceKind, WorldFiles};
@@ -39,6 +39,8 @@ pub struct ReadSession {
     pub device: Device,
     /// The device backup (Android), removed with the session.
     pub backup: Option<TempPath>,
+    /// A local copy of the phone's saves (root reads), removed with the session.
+    pub dir: Option<TempPath>,
     pub password: Option<String>,
     pub game_version: String,
     pub worlds: Vec<SessionWorld>,
@@ -102,6 +104,26 @@ pub fn password(p: &str) -> Option<String> {
     Some(p.to_string()).filter(|p| !p.is_empty())
 }
 
+/// A read of a saves folder laid out like Blockheads PC's (worlds stay on disk until used).
+pub fn read_install(d: &Device, pc: &PcInstall, progress: &mut dyn FnMut(Progress)) -> Result<ReadSession> {
+    let game_db = GameDb::open(&pc.game_db()).ok();
+    let list = pc.list_worlds()?;
+    let mut worlds = Vec::new();
+    for (i, w) in list.iter().enumerate() {
+        progress(Progress::item(Stage::Reading, &w.id, i + 1, list.len()));
+        worlds.push(WorldFiles::load_dir(&w.path, w.id.clone())?);
+    }
+    Ok(ReadSession {
+        id: unique_id("r"),
+        device: d.clone(),
+        backup: None,
+        dir: None,
+        password: None,
+        game_version: d.game_version.clone().unwrap_or_default(),
+        worlds: summarise(worlds, game_db.as_ref()),
+    })
+}
+
 impl Core {
     /// The newest read session of a device.
     pub(crate) fn latest_session(&self, device_id: &str) -> Option<Arc<ReadSession>> {
@@ -126,17 +148,19 @@ impl Core {
         lock(&self.reads).retain(|s| s.device.id != device_id);
     }
 
-    fn reads_dir(&self) -> Result<PathBuf> {
+    pub(crate) fn reads_dir(&self) -> Result<PathBuf> {
         let d = self.cfg.cache_dir.join("reads");
         std::fs::create_dir_all(&d)?;
         Ok(d)
     }
 
-    /// `adb backup` of the game into `path`, reporting `phone_backup` while waiting and `stage` while bytes move.
+    /// `adb backup` of the game into `path`, reporting `wait` while the phone asks and `stage` while bytes move.
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn backup_phone(
         &self,
         serial: &str,
         path: &Path,
+        wait: Stage,
         stage: Stage,
         total: Option<u64>,
         progress: &mut dyn FnMut(Progress),
@@ -148,7 +172,7 @@ impl Core {
         let mut t = Throttle::default();
         let opts = AbOptions { method: AbMethod::AdbCommand, if_running: IfRunning::Stop };
         let mut on = |p: bhw_device::Progress| match p.phase {
-            Phase::WaitingForPhone => progress(Progress { elapsed: Some(0), ..Progress::stage(Stage::PhoneBackup) }),
+            Phase::WaitingForPhone => progress(Progress { elapsed: Some(0), ..Progress::stage(wait) }),
             _ => {
                 if t.pass(p.bytes, p.phase == Phase::Done) {
                     progress(Progress::bytes(stage, p.bytes, p.total.or(total)));
@@ -175,6 +199,7 @@ impl Core {
             id: unique_id("r"),
             device: device.clone(),
             backup: Some(backup),
+            dir: None,
             password,
             game_version: game_version.to_string(),
             worlds,
@@ -190,7 +215,7 @@ impl Core {
     ) -> Result<ReadSession> {
         let file = TempPath(self.reads_dir()?.join(format!("{}.ab", unique_id("read-"))));
         let total = self.latest_session(&d.id).map(|s| s.size());
-        self.backup_phone(&d.id, &file.0, Stage::Reading, total, progress, cancel)?;
+        self.backup_phone(&d.id, &file.0, Stage::PhoneBackup, Stage::Reading, total, progress, cancel)?;
         let version = d.game_version.clone().unwrap_or_default();
         self.session_from_backup(d, file, password(&req.password), &version)
     }
@@ -198,21 +223,7 @@ impl Core {
     /// A read of Blockheads PC's saves folder (worlds stay on disk until used).
     pub(crate) fn read_pc(&self, d: &Device, progress: &mut dyn FnMut(Progress)) -> Result<ReadSession> {
         let pc = self.pc().ok_or(AppError::not_found("Blockheads PC"))?;
-        let game_db = GameDb::open(&pc.game_db()).ok();
-        let list = pc.list_worlds()?;
-        let mut worlds = Vec::new();
-        for (i, w) in list.iter().enumerate() {
-            progress(Progress::item(Stage::Reading, &w.id, i + 1, list.len()));
-            worlds.push(WorldFiles::load_dir(&w.path, w.id.clone())?);
-        }
-        Ok(ReadSession {
-            id: unique_id("r"),
-            device: d.clone(),
-            backup: None,
-            password: None,
-            game_version: String::new(),
-            worlds: summarise(worlds, game_db.as_ref()),
-        })
+        read_install(d, &pc, progress)
     }
 
     /// Reads the worlds of a device.
@@ -225,8 +236,13 @@ impl Core {
             let s = match d.kind {
                 DeviceKind::Pc => self.add_session(self.read_pc(&d, progress)?),
                 DeviceKind::Ios => self.latest_session(&d.id).ok_or(AppError::not_found(&d.id))?,
-                DeviceKind::Android => self
-                    .add_session(self.read_android(&d, req, progress, &guard.cancel).map_err(|e| e.device(&d.name))?),
+                DeviceKind::Android => {
+                    let s = match self.root_target(&d.id) {
+                        Some(t) => self.read_root(&d, &t, progress, &guard.cancel),
+                        None => self.read_android(&d, req, progress, &guard.cancel),
+                    };
+                    self.add_session(s.map_err(|e| e.device(&d.name))?)
+                }
             };
             entry.worlds = s.worlds.iter().map(|w| w.info.name.clone()).collect();
             entry.size = Some(s.worlds.iter().map(|w| w.info.size).sum());

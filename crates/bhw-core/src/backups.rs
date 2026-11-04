@@ -7,15 +7,18 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use bhw_backup::saves::{DIR_MODE, FILE_MODE};
-use bhw_backup::{BackupOptions, BackupWriter, EntryKind, TarWriter};
+use bhw_backup::{rewrite_backup, BackupOptions, BackupWriter, EntryKind, TarWriter};
 use bhw_device::PcInstall;
 use bhw_save::GameDb;
+use bhw_world::WorldFiles;
 
 use crate::activity::Entry;
 use crate::error::Result;
 use crate::read::{backup_game_db, open_ab, pick_saves, SUPPORT_PREFIX};
+use crate::transfer::{backup_edit, Changes};
 use crate::types::{ActivityKind, ActivityResult, Backup, BackupReason, Device, DeviceKind, Progress, Stage};
 use crate::util::{child, file_name, mtime_ms, now_ms, unique_id, Cancel, TempPath};
+use crate::verify::Expect;
 use crate::worlds::register;
 use crate::Core;
 
@@ -173,7 +176,7 @@ impl Core {
     }
 
     /// Makes Blockheads PC's saves and world list equal to a backup's.
-    fn restore_pc(&self, pc: &PcInstall, file: &Path, progress: &mut dyn FnMut(Progress)) -> Result<()> {
+    pub(crate) fn restore_pc(&self, pc: &PcInstall, file: &Path, progress: &mut dyn FnMut(Progress)) -> Result<()> {
         let saves = pick_saves(open_ab(file, None)?);
         let (worlds, game_db) = match &saves {
             Some(s) => (s.worlds.clone(), backup_game_db(s)),
@@ -227,7 +230,13 @@ impl Core {
                     self.backup_pc(&pc, &d, BackupReason::BeforeRestore, None)?;
                     self.restore_pc(&pc, &path, progress)?;
                 }
-                _ => self.restore_android(&d, &path, progress, &guard.cancel).map_err(|e| e.device(&d.name))?,
+                _ => {
+                    let r = match self.root_target(&d.id) {
+                        Some(t) => self.restore_root(&d, &t, &path, progress, &guard.cancel),
+                        None => self.restore_android(&d, &path, progress, &guard.cancel),
+                    };
+                    r.map_err(|e| e.device(&d.name))?
+                }
             }
             self.drop_sessions(&d.id);
             Ok(())
@@ -235,6 +244,9 @@ impl Core {
         self.activity.record(&entry, r)
     }
 
+    /// `adb restore` of a stored backup, then a check backup. Backups without the app's `_manifest` (made from
+    /// Blockheads PC or through root) would be ignored by Android's restore, so their saves are put into the
+    /// fresh backup of the phone instead (like a copy that replaces every world).
     fn restore_android(
         &self,
         d: &Device,
@@ -243,9 +255,53 @@ impl Core {
         cancel: &Cancel,
     ) -> Result<()> {
         let before = TempPath(self.tmp_dir()?.join(format!("{}-before.ab", unique_id("b"))));
-        self.backup_phone(&d.id, &before.0, Stage::BackingUp, None, progress, cancel)?;
-        let worlds = self.latest_session(&d.id).map_or(0, |s| s.worlds.len());
-        self.store_backup(&before.0, d, BackupReason::BeforeRestore, None, worlds)?;
-        self.restore_phone(&d.id, path, progress, cancel)
+        self.backup_phone(&d.id, &before.0, Stage::PhoneBackup, Stage::BackingUp, None, progress, cancel)?;
+        let password = self.latest_session(&d.id).and_then(|s| s.password.clone());
+        let now = pick_saves(open_ab(&before.0, password.as_deref())?);
+        let now_ids: Vec<String> = now.as_ref().map_or(Vec::new(), |s| s.worlds.iter().map(|w| w.id.clone()).collect());
+        self.store_backup(&before.0, d, BackupReason::BeforeRestore, None, now_ids.len())?;
+        let stored = pick_saves(open_ab(path, password.as_deref())?);
+        let worlds: Vec<WorldFiles> = stored.as_ref().map_or(Vec::new(), |s| s.worlds.clone());
+        let mut expect = Expect {
+            absent: now_ids.iter().filter(|id| !worlds.iter().any(|w| &w.id == *id)).cloned().collect(),
+            ..Expect::default()
+        };
+        let rebuilt;
+        let file = if has_manifest(path, password.as_deref())? {
+            expect.present = worlds;
+            path
+        } else {
+            progress(Progress::stage(Stage::Preparing));
+            let mut game_db = stored.as_ref().and_then(backup_game_db).unwrap_or_default();
+            for w in &worlds {
+                register(&mut game_db, w)?;
+            }
+            let changes = Changes {
+                puts: worlds.into_iter().map(crate::transfer::with_lock).collect::<Result<_>>()?,
+                removes: expect.absent.clone(),
+                ..Changes::default()
+            };
+            let prefix = now.map_or(format!("{SUPPORT_PREFIX}saves/"), |s| s.prefix);
+            let edit = backup_edit(&prefix, &changes, &game_db, bhw_world::time::now_unix())?;
+            rebuilt = TempPath(self.tmp_dir()?.join(format!("{}-restore.ab", unique_id("b"))));
+            let input = std::io::BufReader::new(fs::File::open(&before.0)?);
+            let output = std::io::BufWriter::new(fs::File::create(&rebuilt.0)?);
+            rewrite_backup(Box::new(input), password.as_deref(), Box::new(output), password.as_deref(), &edit)?;
+            expect.registered = changes.puts.iter().map(|w| w.id.clone()).collect();
+            expect.present = changes.puts;
+            &rebuilt.0
+        };
+        self.restore_phone(&d.id, file, progress, cancel)?;
+        self.verify_restore(&d.id, &expect, password.as_deref(), progress, cancel)?;
+        Ok(())
     }
+}
+
+/// The app's manifest entry in an Android backup (`apps/<package>/_manifest`).
+pub const MANIFEST: &str = "apps/com.noodlecake.blockheads/_manifest";
+
+/// Whether a backup file holds the game's `_manifest` (made by Android, not synthesized).
+pub fn has_manifest(path: &Path, password: Option<&str>) -> Result<bool> {
+    let f = std::io::BufReader::new(fs::File::open(path)?);
+    Ok(bhw_backup::saves::scan(Box::new(f), password)?.entries.iter().any(|e| e.path == MANIFEST))
 }

@@ -116,4 +116,11 @@ fn fake_child_streams_in_small_reads_and_blocks_stdin() {
     assert_eq!(*seen.lock().unwrap(), vec!["k".to_string()]);
     k.kill();
     assert_eq!(k.try_wait().unwrap(), Some(-1));
+    // Replies built at spawn time see the arguments.
+    let dynamic = ScriptedRunner::new();
+    dynamic.on("d", Reply::dynamic(|a| Reply::ok(a.join("+"))));
+    let d = dynamic.spawn(Path::new("adb"), &s(&["d", "x"]), false).unwrap();
+    let mut out = String::new();
+    d.take_stdout().unwrap().read_to_string(&mut out).unwrap();
+    assert_eq!(out, "d+x");
 }

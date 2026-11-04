@@ -144,6 +144,10 @@ pub struct ExportedFile {
 pub enum Stage {
     PhoneBackup,
     PhoneRestore,
+    /// Waiting for "Back up my data" of the check after a restore.
+    PhoneCheck,
+    /// Reading the check backup after a restore.
+    Verifying,
     Reading,
     BackingUp,
     Preparing,

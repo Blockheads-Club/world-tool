@@ -51,7 +51,13 @@ impl Settings {
                 *slot = val.clone();
             }
         }
-        Ok(serde_json::from_value(v)?)
+        let mut s: Settings = serde_json::from_value(v)?;
+        // `root_mode`: "auto" (root when it works, else the backup method) or "never" (always the backup method);
+        // older values such as "always" mean "auto".
+        if s.root_mode != "never" {
+            s.root_mode = "auto".into();
+        }
+        Ok(s)
     }
 
     /// Loads saved settings, falling back to `defaults` for a missing or broken file.

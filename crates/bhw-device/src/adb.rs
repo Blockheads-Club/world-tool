@@ -60,15 +60,15 @@ const ADB_FILE_NAME: &str = "adb.exe";
 #[cfg(not(windows))]
 const ADB_FILE_NAME: &str = "adb";
 
-/// Finds adb: the bundled sidecar when it exists, then `$ANDROID_HOME`/`$ANDROID_SDK_ROOT` `platform-tools`,
+/// Finds adb: `preferred` (the copy the app downloaded) when it exists, then `$ANDROID_HOME`/`$ANDROID_SDK_ROOT` `platform-tools`,
 /// then every `PATH` entry. `env` reads environment variables, `exists` checks files (both injectable for tests).
 pub fn find_adb(
-    sidecar: Option<&Path>,
+    preferred: Option<&Path>,
     env: &dyn Fn(&str) -> Option<OsString>,
     exists: &dyn Fn(&Path) -> bool,
 ) -> Option<PathBuf> {
     let name = adb_file_name();
-    let mut candidates: Vec<PathBuf> = sidecar.map(Path::to_path_buf).into_iter().collect();
+    let mut candidates: Vec<PathBuf> = preferred.map(Path::to_path_buf).into_iter().collect();
     for var in ["ANDROID_HOME", "ANDROID_SDK_ROOT"] {
         if let Some(dir) = env(var).filter(|d| !d.is_empty()) {
             candidates.push(PathBuf::from(dir).join("platform-tools").join(name));
@@ -123,8 +123,8 @@ impl Adb {
     }
 
     /// Finds adb ([`find_adb`] with the process environment) and uses real processes.
-    pub fn locate(sidecar: Option<&Path>) -> Result<Adb> {
-        find_adb(sidecar, &|k| std::env::var_os(k), &|p| p.is_file())
+    pub fn locate(preferred: Option<&Path>) -> Result<Adb> {
+        find_adb(preferred, &|k| std::env::var_os(k), &|p| p.is_file())
             .map(|p| Adb::new(p, Arc::new(SystemRunner)))
             .ok_or(DeviceError::AdbNotFound)
     }

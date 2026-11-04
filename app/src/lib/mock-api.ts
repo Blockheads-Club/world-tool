@@ -1,5 +1,6 @@
 import { inTauri, tauriBackend, type Backend, type DragDrop, type OnProgress } from './api';
 import type {
+  AdbStatus,
   Activity,
   AppError,
   Backup,
@@ -52,6 +53,8 @@ export interface MockOptions {
   /** Start-up data: `full` (as in the designs), `empty` (first run, nothing found) or `fresh` (first run, devices). */
   scenario?: 'full' | 'empty' | 'fresh';
   now?: number;
+  /** adb not found (the UI offers the Platform-Tools download). */
+  noAdb?: boolean;
 }
 
 type FailKey =
@@ -65,7 +68,9 @@ type FailKey =
   | 'check'
   | 'import'
   | 'source'
-  | 'ios';
+  | 'ios'
+  | 'adb'
+  | 'verify';
 
 export class MockBackend implements Backend {
   tick: number;
@@ -83,6 +88,7 @@ export class MockBackend implements Backend {
   game: GameFiles;
   paired: PairedDevice[];
   ios: IosBackup[];
+  adb: AdbStatus;
   private reads = new Map<string, { device: Device; worlds: DeviceWorld[] }>();
   private plans = new Map<string, { plan: TransferPlan; source: Source; worlds: DeviceWorld[] }>();
   private cancelled = new Set<string>();
@@ -95,6 +101,11 @@ export class MockBackend implements Backend {
     this.tick = opts.tick ?? 120;
     this.now = opts.now ?? Date.now();
     const scenario = opts.scenario ?? 'full';
+    this.adb = {
+      found: !opts.noAdb, path: opts.noAdb ? null : '/usr/bin/adb', managed: false,
+      url: 'https://dl.google.com/android/repository/platform-tools-latest-linux.zip',
+      terms_url: 'https://developer.android.com/tools/releases/platform-tools'
+    };
     const t = this.now;
     const pv = mockPreview;
     const dw = (id: string, name: string, size: number, v: string, played: number | null, created: number, mode: 'normal' | 'expert', biome: Parameters<typeof mockPreview>[1] | null): DeviceWorld => ({
@@ -261,12 +272,25 @@ export class MockBackend implements Backend {
   }
 
   /** Waiting for "Back up my data" / "Restore my data" (skipped with root or for Blockheads PC). */
-  private async phone(op: string, d: Device, stage: 'phone_backup' | 'phone_restore', onProgress: OnProgress): Promise<void> {
-    if (d.kind !== 'android' || (d.root && this.settings.root_mode !== 'never')) return;
+  private async phone(op: string, d: Device, stage: 'phone_backup' | 'phone_restore' | 'phone_check', onProgress: OnProgress): Promise<void> {
+    if (!this.needsPhone(d)) return;
     for (let s = 0; s < 3; s++) {
       onProgress({ stage, elapsed: s });
       await this.step(op);
     }
+  }
+
+  private needsPhone(d: Device): boolean {
+    return d.kind === 'android' && !(d.root && this.settings.root_mode !== 'never');
+  }
+
+  /** After writing a phone: a check backup (only without root) and the comparison; `fail.verify` = declined. */
+  private async verify(op: string, d: Device, onProgress: OnProgress): Promise<void> {
+    if (d.kind !== 'android') return;
+    onProgress({ stage: 'verifying' });
+    await this.phone(op, d, 'phone_check', onProgress);
+    await this.step(op);
+    this.failing('verify');
   }
 
   private async bytes(op: string, stage: 'reading' | 'writing' | 'backing_up', total: number, onProgress: OnProgress): Promise<void> {
@@ -295,7 +319,7 @@ export class MockBackend implements Backend {
 
   async listDevices() {
     await this.sleep();
-    return this.devices.map((d) => ({ ...d }));
+    return this.devices.filter((d) => this.adb.found || d.kind !== 'android').map((d) => ({ ...d }));
   }
 
   async onDevicesChanged(cb: (d: Device[]) => void): Promise<Unlisten> {
@@ -338,6 +362,31 @@ export class MockBackend implements Backend {
 
   async restartAdb() {
     await this.sleep();
+  }
+
+  async adbStatus() {
+    return { ...this.adb };
+  }
+
+  async adbDownloadInfo() {
+    await this.sleep();
+    this.failing('adb');
+    return { url: this.adb.url as string, size: 7_340_032, terms_url: this.adb.terms_url, folder: '/home/ada/.local/share/club.blockheads.worldtool/platform-tools' };
+  }
+
+  async downloadAdb(op: string, onProgress: OnProgress) {
+    const total = 7_340_032;
+    for (let i = 0; i <= 4; i++) {
+      onProgress({ stage: 'downloading', done: Math.round((total * i) / 4), total });
+      await this.step(op);
+    }
+    onProgress({ stage: 'preparing' });
+    await this.step(op);
+    onProgress({ stage: 'checking' });
+    this.failing('adb');
+    this.adb = { ...this.adb, found: true, managed: true, path: '/home/ada/.local/share/club.blockheads.worldtool/platform-tools/adb' };
+    this.emitDevices();
+    return { ...this.adb };
   }
 
   async openDeviceManager() {}
@@ -461,7 +510,7 @@ export class MockBackend implements Backend {
     const plan: TransferPlan = {
       plan_id: this.id('p'), target: target.name, total_after: there.length + picked.length, items,
       size: items.reduce((s, i) => s + i.size, 0), backup_name: target.name, backup_size: there.reduce((s, w) => s + w.size, 0) + 20 * MB,
-      needs_phone: target.kind === 'android' && !(target.root && this.settings.root_mode !== 'never')
+      needs_phone: this.needsPhone(target)
     };
     this.plans.set(plan.plan_id, { plan, source, worlds: picked });
     return plan;
@@ -482,12 +531,13 @@ export class MockBackend implements Backend {
     await this.phone(op, target, 'phone_restore', onProgress);
     try {
       this.failing('transfer');
+      await this.bytes(op, 'writing', p.plan.size, onProgress);
+      await this.verify(op, target, onProgress);
     } catch (e) {
       const ae = e as AppError;
       this.log({ kind: 'copy', result: 'failed', device: target.name, worlds: p.worlds.map((w) => w.name), size: null, detail: ae.detail ?? ae.code, error: ae.code });
       throw { ...ae, device: target.name, backup_id: backup?.id };
     }
-    await this.bytes(op, 'writing', p.plan.size, onProgress);
     onProgress({ stage: 'checking' });
     await this.step(op);
     const there = (this.phoneWorlds[target.id] ??= []);
@@ -597,6 +647,7 @@ export class MockBackend implements Backend {
     await this.phone(op, d, 'phone_restore', onProgress);
     this.failing('restore');
     await this.bytes(op, 'writing', b.size, onProgress);
+    await this.verify(op, d, onProgress);
     this.log({ kind: 'restore', result: 'done', device: d.name, worlds: [], size: b.size, detail: null, error: null });
   }
 
@@ -721,12 +772,13 @@ export function chooseBackend(search: string): Backend {
   return inTauri() ? tauriBackend : mockFromUrl(search);
 }
 
-/** Dev options from the page URL: `?scenario=empty&tick=50&fail=read:declined&update=0.3.0`. */
+/** Dev options from the page URL: `?scenario=empty&tick=50&fail=read:declined&update=0.3.0&adb=missing`. */
 export function mockFromUrl(search: string): MockBackend {
   const q = new URLSearchParams(search);
   const scenario = q.get('scenario');
   const m = new MockBackend({
     scenario: scenario === 'empty' || scenario === 'fresh' ? scenario : 'full',
+    noAdb: q.get('adb') === 'missing',
     tick: q.has('tick') ? Number(q.get('tick')) : undefined
   });
   for (const f of q.getAll('fail')) {
