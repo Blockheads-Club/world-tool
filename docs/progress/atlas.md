@@ -55,3 +55,8 @@ the user's own atlas; scripts are local scratch, not committed).
 
 ### Next
 - Merge `feat/atlas` into `dev` after review.
+
+## 2026-11-05 (night) — leftovers done on `feat/finish`
+- Water 3 → [14,0] (wavy pair, game), ice 4 → [12,3] (game, seen before it melted; no cold biome in any save),
+  flax mats / fallen leaves are not drawn by the game at all, iron/steel/plaster faces are uniform: plain colours
+  measured in the game. Details in `docs/editor-atlas.md` and `docs/progress/finish.md`.
