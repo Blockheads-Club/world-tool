@@ -167,17 +167,7 @@ pub(crate) mod tests {
     use super::*;
 
     /// A stored block record whose tiles all have foreground `fg` and back wall `bg`.
-    pub fn record(x: u32, y: u32, fg: u8, bg: u8) -> (Vec<u8>, Vec<u8>) {
-        let mut b = MacroBlock::empty(x, y);
-        for ly in 0..32 {
-            for lx in 0..32 {
-                let t = b.tile_bytes_mut(lx, ly);
-                t[0] = fg;
-                t[1] = bg;
-            }
-        }
-        (block_key(x, y), b.encode())
-    }
+    pub use crate::fixtures::block_record as record;
 
     #[test]
     fn read_write() {

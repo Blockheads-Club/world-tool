@@ -124,23 +124,7 @@ impl WorldRecord {
 pub(crate) mod tests {
     use super::*;
 
-    pub fn record(name: &str, width: i64) -> Vec<u8> {
-        let mut d = Dictionary::new();
-        d.insert("worldName".into(), Value::String(name.into()));
-        d.insert("saveID".into(), Value::String("0123456789abcdef0123456789abcdef".into()));
-        d.insert("worldWidthMacro".into(), Value::Integer(width.into()));
-        d.insert("randomSeed".into(), Value::Integer(42.into()));
-        d.insert("saveVersion".into(), Value::Integer(1100.into()));
-        d.insert("startPortalPos.x".into(), Value::Integer(40.into()));
-        d.insert("startPortalPos.y".into(), Value::Integer(520.into()));
-        d.insert("worldTime".into(), Value::Real(3000.0));
-        d.insert("expertMode".into(), Value::Boolean(true));
-        let t = std::time::UNIX_EPOCH + std::time::Duration::from_secs(1_700_000_000);
-        d.insert("creationDate".into(), Value::Date(t.into()));
-        let before = std::time::UNIX_EPOCH - std::time::Duration::from_secs(100);
-        d.insert("saveDate".into(), Value::Date(before.into()));
-        stored::encode(&Value::Dictionary(d), Encoding::CLIENT).unwrap()
-    }
+    pub use crate::fixtures::world_record as record;
 
     #[test]
     fn fields() {

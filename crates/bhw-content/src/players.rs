@@ -358,30 +358,11 @@ pub(crate) mod tests {
     use super::*;
     use bhw_save::plistio::Dialect;
 
-    pub fn blockhead(id: u64, name: &str, x: i64, y: i64) -> Value {
-        let mut d = Dictionary::new();
-        d.insert("uniqueID".into(), Value::Integer(id.into()));
-        d.insert("name".into(), Value::String(name.into()));
-        d.insert("pos_x".into(), Value::Integer(x.into()));
-        d.insert("pos_y".into(), Value::Integer(y.into()));
-        let mut state = vec![0u8; 0x6c];
-        Stats { health: 1.0, happiness: 0.5, fullness: 0.75, energy: 0.25 }.write(&mut state);
-        d.insert("state".into(), Value::Data(state));
-        Value::Dictionary(d)
-    }
+    pub use crate::fixtures::blockhead;
 
-    pub fn list(objs: Vec<Value>, enc: Encoding) -> Vec<u8> {
-        let mut root = Dictionary::new();
-        root.insert("dynamicObjects".into(), Value::Array(objs));
-        stored::encode(&Value::Dictionary(root), enc).unwrap()
-    }
+    pub use crate::fixtures::blockheads_record as list;
 
-    pub fn inventory(enc: Encoding) -> Vec<u8> {
-        let mut first = Item::new(4).0;
-        first[7] = 0x11;
-        let inv = Inventory { slots: vec![vec![Item(first), Item::new(4)], vec![], vec![Item::new(12)]] };
-        stored::encode(&inv.to_value(), enc).unwrap()
-    }
+    pub use crate::fixtures::inventory_record as inventory;
 
     #[test]
     fn keys() {

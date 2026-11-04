@@ -7,6 +7,8 @@
 
 pub mod blocks;
 pub mod error;
+#[cfg(any(test, feature = "test-util"))]
+pub mod fixtures;
 pub mod names;
 mod names_gen;
 pub mod objects;

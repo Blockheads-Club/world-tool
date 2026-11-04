@@ -192,19 +192,9 @@ impl Objects {
 pub(crate) mod tests {
     use super::*;
 
-    pub fn obj(id: u64, x: i64, y: i64) -> Value {
-        let mut d = Dictionary::new();
-        d.insert("uniqueID".into(), Value::Integer(id.into()));
-        d.insert("pos_x".into(), Value::Integer(x.into()));
-        d.insert("pos_y".into(), Value::Integer(y.into()));
-        Value::Dictionary(d)
-    }
+    pub use crate::fixtures::object as obj;
 
-    pub fn record(objs: Vec<Value>) -> Vec<u8> {
-        let mut root = Dictionary::new();
-        root.insert("dynamicObjects".into(), Value::Array(objs));
-        stored::encode(&Value::Dictionary(root), Encoding::CLIENT).unwrap()
-    }
+    pub use crate::fixtures::objects_record as record;
 
     #[test]
     fn objects() {

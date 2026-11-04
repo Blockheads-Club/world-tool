@@ -29,3 +29,19 @@ undo/redo, schematics); (3) renderer data (tile → atlas table + colour fallbac
 - Length of a game day in `worldTime` (assumed 1440 s) — confirm in the game before shipping the time-of-day setting.
 - Byte 7 of an inventory item record is 0x11 on the first item of a stack in real saves (server writes 0); kept as is.
 - Whether the game accepts an edited block whose version byte is 0 (freshly generated) — check on the emulator.
+
+## 2026-11-04 — step 2: bhw-editor edit model
+
+### Done
+- `crates/bhw-editor`: `Session` over `WorldContent` with operations pencil/brush/eraser strokes (`paint`), `fill`,
+  `clear`, `find`/`replace` (selection or whole world), `copy`/`cut`/`paste` (skip air), blockhead move/needs,
+  inventory stacks, world name and time of day. Every operation is one history step of before/after values;
+  `undo`/`redo`/`go_to`, unsaved count, `changed_tiles` (compare view), `save()` → `EnvContents`.
+- Safety rules: tiles that belong to a dynamic object (owner id set or object contents such as trees, plants,
+  workbenches, doors, ladders, torches) are never changed and are counted as `protected`; ungenerated areas are
+  counted as `missing`; one step holds at most 1 000 000 tile changes (rolled back if exceeded); brushes may only
+  place plain contents (ores, gems, flint, clay, charcoal).
+- Schematics: `Schematic` (rotate, flip) and the `.bhwschem` file format, documented in `docs/schematic-format.md`.
+- `bhw-content` got a `test-util` feature with the synthetic fixtures.
+- Coverage: 100 % lines in `bhw-content`; `bhw-editor` 100 % of lines in `--show-missing-lines`
+  (the summary of the shared target dir counts 2 lines in `session.rs` that no report lists).

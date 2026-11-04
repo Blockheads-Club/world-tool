@@ -106,6 +106,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "bhw-editor"
+version = "0.1.0"
+dependencies = [
+ "bhw-content",
+ "bhw-lmdb",
+ "bhw-save",
+ "flate2",
+ "plist",
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
 name = "bhw-ios"
 version = "0.1.0"
 dependencies = [

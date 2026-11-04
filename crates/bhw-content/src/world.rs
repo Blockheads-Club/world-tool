@@ -121,36 +121,10 @@ fn replace_all(env: &mut EnvContents, db: &str, new: Vec<(Vec<u8>, Vec<u8>)>) {
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
-    use crate::{blocks, objects, players, record, stored::Encoding};
     use plist::Value;
 
     /// A small synthetic world: 4 macro blocks wide, two blocks stored, one object, one blockhead.
-    pub fn env() -> EnvContents {
-        let mut env = EnvContents::new(4096, 64 << 20);
-        env.named.insert(
-            b"blocks".to_vec(),
-            Database {
-                flags: Default::default(),
-                entries: vec![blocks::tests::record(0, 16, 1, 1), blocks::tests::record(1, 16, 2, 2)],
-            },
-        );
-        env.named.insert(
-            b"dw".to_vec(),
-            Database::new(0).with("0_16/46", objects::tests::record(vec![objects::tests::obj(5, 3, 520)])),
-        );
-        env.named.insert(
-            b"main".to_vec(),
-            Database::new(0)
-                .with("worldv2", record::tests::record("TEST", 4))
-                .with(
-                    "blockheads",
-                    players::tests::list(vec![players::tests::blockhead(9, "ADA", 40, 530)], Encoding::CLIENT),
-                )
-                .with("blockhead_9_inventory", players::tests::inventory(Encoding::CLIENT))
-                .with("dynamicWorldv2", b"kept".to_vec()),
-        );
-        env
-    }
+    pub use crate::fixtures::world_env as env;
 
     #[test]
     fn load_edit_save() {

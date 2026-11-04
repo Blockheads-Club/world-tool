@@ -7,6 +7,10 @@ rust-version.workspace = true
 license.workspace = true
 publish = false
 
+[features]
+# Exposes the synthetic fixtures to other crates' tests.
+test-util = []
+
 [dependencies]
 bhw-lmdb = { path = "../bhw-lmdb" }
 bhw-save = { path = "../bhw-save" }
