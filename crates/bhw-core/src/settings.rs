@@ -21,6 +21,10 @@ pub struct Settings {
     pub pc_folder: Option<String>,
     pub skipped_version: Option<String>,
     pub last_update_check: Option<u64>,
+    /// Editor: edits may create blocks where the game has not generated the world yet.
+    pub editor_generate: bool,
+    /// Editor: edits may change tiles of objects (trees, chests, doors…), removing those objects.
+    pub editor_objects: bool,
 }
 
 impl Settings {
@@ -39,6 +43,8 @@ impl Settings {
             pc_folder: None,
             skipped_version: None,
             last_update_check: None,
+            editor_generate: false,
+            editor_objects: true,
         }
     }
 

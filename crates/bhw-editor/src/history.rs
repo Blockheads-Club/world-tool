@@ -30,6 +30,10 @@ pub enum OpKind {
     Blockhead,
     /// An inventory changed.
     Inventory,
+    /// A blockhead removed.
+    RemoveBlockhead,
+    /// A chest's (or other container's) contents changed.
+    Container,
     /// World settings changed.
     Settings,
 }
@@ -102,6 +106,17 @@ pub enum Change {
         before: Option<Dictionary>,
         /// After the change.
         after: Option<Dictionary>,
+    },
+    /// A blockhead removed (undo puts it back with its inventory).
+    BlockheadRemoved {
+        /// Player id.
+        player: String,
+        /// Index in the player's list.
+        index: usize,
+        /// Its dictionary.
+        dict: Dictionary,
+        /// Its inventory, if it had one.
+        inventory: Option<Inventory>,
     },
     /// The world record's dictionary.
     Record {

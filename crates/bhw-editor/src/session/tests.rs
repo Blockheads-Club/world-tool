@@ -212,15 +212,18 @@ fn generate_and_objects() {
     let o = s.paint(OpKind::Pencil, &[(10, Y), (3, 520)], Brush::front(6), false).unwrap();
     assert_eq!((o.changed, o.protected), (0, 2));
     s.options.objects = true;
+    // a second object standing on the same tile goes too
+    let plant = bhw_content::fixtures::object(6, 10, Y as i64).into_dictionary().unwrap();
+    s.world.objects.insert("0_16/10", 0, plant).unwrap();
     let o = s.paint(OpKind::Pencil, &[(10, Y)], Brush::front(6), false).unwrap();
-    assert_eq!((o.changed, o.removed), (2, 1));
+    assert_eq!((o.changed, o.removed), (2, 2));
     let t = s.tile(11, Y + 1).unwrap().unwrap();
     assert_eq!((t.contents(), t.owner()), (0, 0));
     let t = s.tile(10, Y).unwrap().unwrap();
     assert_eq!((t.fg(), t.contents(), t.owner()), (6, 0, 0));
     assert!(s.world.objects.all().0.is_empty());
     s.undo().unwrap();
-    assert_eq!(s.world.objects.all().0.len(), 1);
+    assert_eq!(s.world.objects.all().0.len(), 2);
     assert_eq!(s.tile(11, Y + 1).unwrap().unwrap().owner(), 5);
     s.redo().unwrap();
     assert!(s.world.objects.all().0.is_empty());
@@ -230,5 +233,61 @@ fn generate_and_objects() {
     let o = s.paint(OpKind::Pencil, &[(3, 520), (4, 520)], Brush::front(6), false).unwrap();
     assert_eq!((o.changed, o.removed), (4, 1), "the chest's owned tiles are cleared too");
     let saved = s.save().unwrap();
-    assert!(saved.named[&b"dw"[..]].entries.is_empty());
+    assert_eq!(saved.named[&b"dw"[..]].entries.len(), 1, "the plant's record stays");
+
+    // erasing a tree tile (an open tile: the object list is not needed) clears an owned plain tile too
+    let mut s = session();
+    s.options.objects = true;
+    for (x, c) in [(20u32, 4u8), (21, 0)] {
+        let mut t = s.tile(x, Y).unwrap().unwrap();
+        t.set_contents(c);
+        t.0[0x28] = 5;
+        s.world.blocks.set_tile(x, Y, t).unwrap();
+    }
+    let o = s.paint(OpKind::Remove, &[(20, Y)], Brush::eraser(), false).unwrap();
+    assert_eq!((o.changed, o.removed), (2, 1));
+    assert_eq!(s.tile(21, Y).unwrap().unwrap().owner(), 0);
+}
+
+#[test]
+fn blockheads_and_containers() {
+    let mut s = session();
+    s.remove_blockhead("", 9).unwrap();
+    assert!(s.remove_blockhead("", 9).is_err());
+    assert!(s.world.players.list().is_empty());
+    s.undo().unwrap();
+    assert_eq!(s.world.players.list()[0].name, "ADA");
+    assert!(s.world.players.inventory("", 9).is_some());
+    s.redo().unwrap();
+    assert!(s.world.players.inventory("", 9).is_none());
+    assert_eq!(s.history().0[0].kind, OpKind::RemoveBlockhead);
+
+    // a chest with its slots under "chest", and one with them at the top level
+    let (all, _) = s.world.objects.all();
+    let key = all[0].key.clone();
+    let mut d = all[0].dict.clone();
+    let slots = bhw_content::Inventory { slots: vec![vec![]; 4] }.to_value();
+    let mut chest = plist::Dictionary::new();
+    chest.insert("saveItemSlots".into(), slots.clone());
+    d.insert("chest".into(), plist::Value::Dictionary(chest));
+    s.world.objects.set(&key, 0, d).unwrap();
+    assert_eq!(s.container(&key, 0).unwrap().unwrap().slots.len(), 4);
+    s.set_container_stack(&key, 0, 1, 21, 3).unwrap();
+    assert_eq!(s.container(&key, 0).unwrap().unwrap().slots[1].len(), 3);
+    s.undo().unwrap();
+    assert!(s.container(&key, 0).unwrap().unwrap().slots[1].is_empty());
+    s.redo().unwrap();
+    assert_eq!(s.history().0.last().unwrap().b.as_deref(), Some("APPLE"));
+    let mut top = plist::Dictionary::new();
+    top.insert("saveItemSlots".into(), slots);
+    s.world.objects.insert(&key, 1, top).unwrap();
+    s.set_container_stack(&key, 1, 0, 21, 1).unwrap();
+    assert_eq!(s.container(&key, 1).unwrap().unwrap().slots[0].len(), 1);
+    // errors: no such object, no slots, bad stacks
+    assert!(s.container(&key, 9).is_err());
+    s.world.objects.insert(&key, 2, plist::Dictionary::new()).unwrap();
+    assert_eq!(s.container(&key, 2).unwrap(), None);
+    assert!(s.set_container_stack(&key, 2, 0, 21, 1).is_err());
+    assert!(s.set_container_stack(&key, 1, 0, 21, 1000).is_err());
+    assert!(s.set_container_stack(&key, 1, 0, 0, 1).is_err());
 }

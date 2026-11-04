@@ -374,12 +374,7 @@ impl Session {
 
     /// Sets an inventory slot to `count` items of `item` (0 empties it).
     pub fn set_stack(&mut self, player: &str, id: u64, slot: usize, item: u16, count: usize) -> Result<()> {
-        if count > 999 {
-            return Err(Error::Invalid("a stack holds at most 999 items".into()));
-        }
-        if count > 0 && bhw_content::names::item_name(item).is_none() {
-            return Err(Error::Invalid(format!("unknown item {item}")));
-        }
+        check_stack(item, count)?;
         let before =
             self.world.players.inventory(player, id).cloned().ok_or_else(|| Error::Invalid("no inventory".into()))?;
         let mut after = before.clone();
@@ -389,6 +384,49 @@ impl Session {
         let item_name = bhw_content::names::item_name(item).map(str::to_string);
         let change = Change::Inventory { player: player.into(), id, before, after };
         self.history.push(Step { label: label(OpKind::Inventory, name, item_name), changes: vec![change] });
+        Ok(())
+    }
+
+    /// Removes a blockhead and its inventory.
+    pub fn remove_blockhead(&mut self, player: &str, id: u64) -> Result<()> {
+        let name = self.blockhead_name(player, id);
+        let (index, dict, inventory) = self.world.players.remove(player, id)?;
+        let change = Change::BlockheadRemoved { player: player.into(), index, dict, inventory };
+        self.history.push(Step { label: label(OpKind::RemoveBlockhead, name, None), changes: vec![change] });
+        Ok(())
+    }
+
+    /// The item slots of a container object (chest, safe…): `saveItemSlots` of the object or of its `chest`.
+    pub fn container(&mut self, key: &str, index: usize) -> Result<Option<Inventory>> {
+        let o = self.object(key, index)?;
+        Ok(container_inventory(&o))
+    }
+
+    fn object(&mut self, key: &str, index: usize) -> Result<plist::Dictionary> {
+        let (all, _) = self.world.objects.all();
+        all.into_iter()
+            .find(|o| o.key == key && o.index == index)
+            .map(|o| o.dict)
+            .ok_or_else(|| Error::Invalid(format!("no object {index} in {key}")))
+    }
+
+    /// Sets one slot of a container object to `count` items of `item`.
+    pub fn set_container_stack(&mut self, key: &str, index: usize, slot: usize, item: u16, count: usize) -> Result<()> {
+        check_stack(item, count)?;
+        let before = self.object(key, index)?;
+        let mut inv =
+            container_inventory(&before).ok_or_else(|| Error::Invalid("this object holds no items".into()))?;
+        inv.set_stack(slot, item, count)?;
+        let mut after = before.clone();
+        let target = match after.get_mut("chest").and_then(plist::Value::as_dictionary_mut) {
+            Some(chest) if chest.contains_key("saveItemSlots") => chest,
+            _ => &mut after,
+        };
+        target.insert("saveItemSlots".into(), inv.to_value());
+        self.world.objects.set(key, index, after.clone())?;
+        let item_name = bhw_content::names::item_name(item).map(str::to_string);
+        let change = Change::Object { key: key.into(), index, before: Some(before), after: Some(after) };
+        self.history.push(Step { label: label(OpKind::Container, None, item_name), changes: vec![change] });
         Ok(())
     }
 
@@ -438,12 +476,24 @@ impl Session {
                     self.world.blocks.remove(*pos);
                 }
             }
-            Change::Object { key, index, before, after } => match (forward, before, after) {
-                (true, _, Some(d)) | (false, Some(d), _) => self.world.objects.insert(key, *index, d.clone())?,
-                _ => {
-                    self.world.objects.remove(key, *index)?;
+            Change::Object { key, index, before, after } => {
+                let (to, from) = if forward { (after, before) } else { (before, after) };
+                match (to, from) {
+                    (Some(d), Some(_)) => self.world.objects.set(key, *index, d.clone())?,
+                    (Some(d), None) => self.world.objects.insert(key, *index, d.clone())?,
+                    (None, _) => {
+                        self.world.objects.remove(key, *index)?;
+                    }
                 }
-            },
+            }
+            Change::BlockheadRemoved { player, index, dict, inventory } => {
+                if forward {
+                    let id = dict.get("uniqueID").and_then(plist::Value::as_unsigned_integer).unwrap_or(0);
+                    self.world.players.remove(player, id)?;
+                } else {
+                    self.world.players.restore(player, *index, dict.clone(), inventory.clone())?;
+                }
+            }
             Change::Record { before, after } => {
                 self.world.record.as_mut().expect("record changes need a record").dict =
                     if forward { after } else { before }.clone();
@@ -508,6 +558,26 @@ impl Session {
         self.history.mark_saved();
         Ok(env)
     }
+}
+
+fn check_stack(item: u16, count: usize) -> Result<()> {
+    if count > 999 {
+        return Err(Error::Invalid("a stack holds at most 999 items".into()));
+    }
+    if count > 0 && bhw_content::names::item_name(item).is_none() {
+        return Err(Error::Invalid(format!("unknown item {item}")));
+    }
+    Ok(())
+}
+
+/// The item slots of a container object's dictionary (chest, safe…), if it has any.
+pub fn container_inventory(d: &plist::Dictionary) -> Option<Inventory> {
+    slots_of(d).and_then(|v| Inventory::from_value(v).ok())
+}
+
+/// `saveItemSlots` of a container object, directly or under `chest`.
+fn slots_of(d: &plist::Dictionary) -> Option<&plist::Value> {
+    d.get("saveItemSlots").or_else(|| d.get("chest")?.as_dictionary()?.get("saveItemSlots"))
 }
 
 #[cfg(test)]

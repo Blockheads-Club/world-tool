@@ -90,6 +90,9 @@ pub struct EditorWorld {
 /// One object near a tile.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct EditorObject {
+    /// `dw` record key and index (to edit or find it again).
+    pub key: String,
+    pub index: usize,
     pub kind: u32,
     pub kind_name: Option<String>,
     pub id: Option<u64>,
@@ -97,6 +100,32 @@ pub struct EditorObject {
     pub y: i64,
     /// Short text (sign text, owner name) when the object has one.
     pub text: Option<String>,
+    /// Container contents per slot `[item, count]` (chests, safes…).
+    pub slots: Option<Vec<[u32; 2]>>,
+}
+
+fn slots(inv: &bhw_content::Inventory) -> Vec<[u32; 2]> {
+    inv.slots.iter().map(|st| [st.first().map_or(0, |i| i.kind() as u32), st.len() as u32]).collect()
+}
+
+/// The editor's view of a dynamic object (`None` for objects without a position).
+pub fn editor_object(ob: &bhw_content::DynObject) -> Option<EditorObject> {
+    let (x, y) = ob.pos()?;
+    let text = ["text", "ownerName", "name"]
+        .iter()
+        .find_map(|k| ob.dict.get(k).and_then(plist::Value::as_string))
+        .map(str::to_string);
+    Some(EditorObject {
+        key: ob.key.clone(),
+        index: ob.index,
+        kind: ob.kind,
+        kind_name: bhw_content::names::object_type_name(ob.kind).map(str::to_string),
+        id: ob.unique_id(),
+        x,
+        y,
+        text,
+        slots: bhw_editor::session::container_inventory(&ob.dict).map(|i| slots(&i)),
+    })
 }
 
 /// A tile as the inspector shows it.
@@ -183,6 +212,17 @@ pub enum EditRequest {
         item: u16,
         count: usize,
     },
+    RemoveBlockhead {
+        player: String,
+        id: u64,
+    },
+    SetContainerStack {
+        key: String,
+        index: usize,
+        slot: usize,
+        item: u16,
+        count: usize,
+    },
     SetName {
         name: String,
     },
@@ -204,9 +244,7 @@ fn blockheads(s: &Session) -> Vec<EditorBlockhead> {
         .list()
         .into_iter()
         .map(|b| {
-            let inventory = s.world.players.inventory(&b.player, b.unique_id).map(|inv| {
-                inv.slots.iter().map(|st| [st.first().map_or(0, |i| i.kind() as u32), st.len() as u32]).collect()
-            });
+            let inventory = s.world.players.inventory(&b.player, b.unique_id).map(slots);
             EditorBlockhead {
                 player: b.player,
                 id: b.unique_id,
@@ -318,27 +356,15 @@ impl Core {
         let o = self.editor(id)?;
         let mut o = lock(&o);
         let t = o.session.tile(x, y)?;
-        let objects = o
-            .session
-            .world
-            .objects
-            .in_area(x as i64 - 1, y as i64 - 1, x as i64 + 2, y as i64 + 2)
-            .into_iter()
-            .filter_map(|ob| {
-                let (ox, oy) = ob.pos()?;
-                let text = ["text", "ownerName", "name"]
-                    .iter()
-                    .find_map(|k| ob.dict.get(k).and_then(plist::Value::as_string))
-                    .map(str::to_string);
-                Some(EditorObject {
-                    kind: ob.kind,
-                    kind_name: bhw_content::names::object_type_name(ob.kind).map(str::to_string),
-                    id: ob.unique_id(),
-                    x: ox,
-                    y: oy,
-                    text,
-                })
+        let owner = t.map_or(0, |t| t.owner());
+        let (all, _) = o.session.world.objects.all();
+        let objects = all
+            .iter()
+            .filter(|ob| {
+                (owner != 0 && ob.unique_id() == Some(owner))
+                    || ob.pos().is_some_and(|(ox, oy)| (ox - x as i64).abs() <= 1 && (oy - y as i64).abs() <= 1)
             })
+            .filter_map(editor_object)
             .collect();
         let t = t.unwrap_or_default();
         let stored = o.session.tile(x, y)?.is_some();
@@ -395,6 +421,8 @@ impl Core {
     pub fn editor_edit(&self, id: &str, req: EditRequest) -> Result<EditResult> {
         let o = self.editor(id)?;
         let mut o = lock(&o);
+        let st = self.settings();
+        o.session.options = bhw_editor::EditOptions { generate: st.editor_generate, objects: st.editor_objects };
         let none = Outcome::default();
         let outcome = match req {
             EditRequest::Paint { kind, points, brush, only_solid } => {
@@ -436,6 +464,14 @@ impl Core {
             }
             EditRequest::SetStack { player, id, slot, item, count } => {
                 o.session.set_stack(&player, id, slot, item, count)?;
+                none
+            }
+            EditRequest::RemoveBlockhead { player, id } => {
+                o.session.remove_blockhead(&player, id)?;
+                none
+            }
+            EditRequest::SetContainerStack { key, index, slot, item, count } => {
+                o.session.set_container_stack(&key, index, slot, item, count)?;
                 none
             }
             EditRequest::SetName { name } => {
@@ -496,5 +532,177 @@ impl Core {
             o.session.save()?;
         }
         Ok(w)
+    }
+}
+
+/// What [`Core::editor_search`] looks for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SearchKind {
+    /// Containers (objects with item slots).
+    Chests,
+    /// Signs (objects with a text).
+    Signs,
+    /// Every object.
+    Objects,
+}
+
+impl Core {
+    /// Objects matching `kind` whose type name or text contains `text` (case-insensitive), at most 500.
+    pub fn editor_search(&self, id: &str, kind: SearchKind, text: &str) -> Result<Vec<EditorObject>> {
+        let o = self.editor(id)?;
+        let mut o = lock(&o);
+        let q = text.trim().to_lowercase();
+        let (all, _) = o.session.world.objects.all();
+        Ok(all
+            .iter()
+            .filter_map(editor_object)
+            .filter(|e| match kind {
+                SearchKind::Chests => e.slots.is_some(),
+                SearchKind::Signs => e.text.is_some() && e.kind_name.as_deref() != Some("blockhead"),
+                SearchKind::Objects => true,
+            })
+            .filter(|e| {
+                q.is_empty()
+                    || e.kind_name.as_deref().unwrap_or_default().replace('_', " ").contains(&q)
+                    || e.text.as_deref().is_some_and(|t| t.to_lowercase().contains(&q))
+            })
+            .take(500)
+            .collect())
+    }
+}
+
+/// A schematic file in the Worlds folder's `schematics/`.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct SchematicInfo {
+    /// File name (`*.bhwschem`).
+    pub file: String,
+    pub name: String,
+    pub width: u32,
+    pub height: u32,
+    pub source_world: Option<String>,
+    /// Unix seconds.
+    pub created: u64,
+}
+
+/// File extension of schematics.
+pub const SCHEMATIC_EXT: &str = "bhwschem";
+
+fn schematic_info(file: &str, s: &Schematic) -> SchematicInfo {
+    SchematicInfo {
+        file: file.to_string(),
+        name: s.meta.name.clone(),
+        width: s.width,
+        height: s.height,
+        source_world: s.meta.source_world.clone(),
+        created: s.meta.created,
+    }
+}
+
+fn schematic_error(e: bhw_editor::Error) -> AppError {
+    AppError::with(ErrorCode::WorldDamaged, e)
+}
+
+/// A file name for a schematic called `name` that is not taken in `dir`.
+fn schematic_file(dir: &std::path::Path, name: &str) -> String {
+    let base: String = name
+        .chars()
+        .map(|c| if c.is_alphanumeric() || " -_()".contains(c) { c } else { '_' })
+        .collect::<String>()
+        .trim()
+        .chars()
+        .take(60)
+        .collect();
+    let base = if base.is_empty() { "Schematic".to_string() } else { base };
+    let mut n = 1;
+    loop {
+        let f = if n == 1 { format!("{base}.{SCHEMATIC_EXT}") } else { format!("{base} ({n}).{SCHEMATIC_EXT}") };
+        if !dir.join(&f).exists() {
+            return f;
+        }
+        n += 1;
+    }
+}
+
+impl Core {
+    fn schematics_dir(&self) -> std::path::PathBuf {
+        self.settings().worlds_dir().join("schematics")
+    }
+
+    fn schematic_path(&self, file: &str) -> Result<std::path::PathBuf> {
+        let p = crate::util::child(&self.schematics_dir(), file)?;
+        if p.extension().and_then(|e| e.to_str()) != Some(SCHEMATIC_EXT) {
+            return Err(AppError::not_found(file));
+        }
+        Ok(p)
+    }
+
+    /// The saved schematics, newest first (unreadable files are left out).
+    pub fn editor_schematics(&self) -> Result<Vec<SchematicInfo>> {
+        let dir = self.schematics_dir();
+        let Ok(rd) = std::fs::read_dir(&dir) else { return Ok(Vec::new()) };
+        let mut out: Vec<SchematicInfo> = rd
+            .filter_map(|e| {
+                let e = e.ok()?;
+                let file = e.file_name().to_string_lossy().into_owned();
+                if !file.ends_with(&format!(".{SCHEMATIC_EXT}")) {
+                    return None;
+                }
+                let s = Schematic::from_bytes(&std::fs::read(e.path()).ok()?).ok()?;
+                Some(schematic_info(&file, &s))
+            })
+            .collect();
+        out.sort_by(|a, b| b.created.cmp(&a.created).then(a.file.cmp(&b.file)));
+        Ok(out)
+    }
+
+    fn write_schematic(&self, mut s: Schematic, name: &str) -> Result<SchematicInfo> {
+        let dir = self.schematics_dir();
+        std::fs::create_dir_all(&dir)?;
+        s.meta.name = name.trim().to_string();
+        s.meta.created = now_ms() / 1000;
+        let file = schematic_file(&dir, name);
+        std::fs::write(dir.join(&file), s.to_bytes())?;
+        Ok(schematic_info(&file, &s))
+    }
+
+    /// Saves a rectangle of the world (or the clipboard, when `rect` is `None`) as a schematic file.
+    pub fn editor_save_schematic(&self, id: &str, rect: Option<Rect>, name: &str) -> Result<SchematicInfo> {
+        let o = self.editor(id)?;
+        let mut o = lock(&o);
+        let s = match rect {
+            Some(r) => o.session.copy(r)?,
+            None => o.clipboard.clone().ok_or_else(|| AppError::with(ErrorCode::NotAllowed, "nothing copied"))?,
+        };
+        drop(o);
+        self.write_schematic(s, name)
+    }
+
+    /// Puts a saved schematic on the session's clipboard (ready to paste).
+    pub fn editor_use_schematic(&self, id: &str, file: &str) -> Result<EditorState> {
+        let s = Schematic::from_bytes(&std::fs::read(self.schematic_path(file)?)?).map_err(schematic_error)?;
+        let o = self.editor(id)?;
+        let mut o = lock(&o);
+        o.clipboard = Some(s);
+        Ok(state(&o))
+    }
+
+    /// Copies a `.bhwschem` file from elsewhere into the schematics folder.
+    pub fn editor_import_schematic(&self, path: &str) -> Result<SchematicInfo> {
+        let s = Schematic::from_bytes(&std::fs::read(path)?).map_err(schematic_error)?;
+        let name = s.meta.name.clone();
+        self.write_schematic(s, &name)
+    }
+
+    /// Copies a saved schematic to `dest` (a path chosen by the user).
+    pub fn editor_export_schematic(&self, file: &str, dest: &str) -> Result<()> {
+        std::fs::copy(self.schematic_path(file)?, dest)?;
+        Ok(())
+    }
+
+    /// Deletes a saved schematic.
+    pub fn editor_delete_schematic(&self, file: &str) -> Result<()> {
+        std::fs::remove_file(self.schematic_path(file)?)?;
+        Ok(())
     }
 }
