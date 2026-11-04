@@ -135,7 +135,8 @@ impl Core {
                 self.backup_of(&b.path, info, size)
             })
             .collect();
-        out.sort_by(|a, b| b.time.cmp(&a.time).then_with(|| b.id.cmp(&a.id)));
+        // A single closure, so function coverage does not depend on two backups sharing a timestamp.
+        out.sort_by(|a, b| (&b.time, &b.id).cmp(&(&a.time, &a.id)));
         Ok(out)
     }
 

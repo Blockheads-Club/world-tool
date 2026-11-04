@@ -1,5 +1,7 @@
 use crate::fake::{Reply, ScriptedRunner};
-use crate::process::{run_collect, Runner, SystemRunner};
+#[cfg(unix)]
+use crate::process::SystemRunner;
+use crate::process::{run_collect, Runner};
 use std::io::{Read, Write};
 use std::path::Path;
 use std::time::Duration;

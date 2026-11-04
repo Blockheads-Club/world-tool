@@ -177,4 +177,5 @@ jobs:
         run: bun run build
         working-directory: app
       - run: cargo check --manifest-path app/src-tauri/Cargo.toml --all-targets --locked
-      - run: cargo test --workspace --locked
+      # --no-fail-fast: report every platform-specific failure in one run, not just the first crate's.
+      - run: cargo test --workspace --locked --no-fail-fast

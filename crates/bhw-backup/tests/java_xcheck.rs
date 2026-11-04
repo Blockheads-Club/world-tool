@@ -1,5 +1,5 @@
 //! Cross-checks the AES-256 backup encryption against an independent Java implementation (JDK crypto, see
-//! `tests/xcheck/AbXcheck.java`). Skips when `java` is not installed.
+//! `tests/xcheck/AbXcheck.java`). Skips when no `java` 11+ is installed.
 
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -7,8 +7,10 @@ use std::process::Command;
 
 use bhw_backup::{open_backup, BackupOptions, BackupWriter, EntryKind, Error, TarReader, TarWriter};
 
+/// A `java` that can run a single source file (JDK 11+). `--version` (JDK 9+) fails on the JDK 8 some CI images
+/// (e.g. Windows) put on `PATH`.
 fn java() -> bool {
-    Command::new("java").arg("-version").output().map(|o| o.status.success()).unwrap_or(false)
+    Command::new("java").arg("--version").output().map(|o| o.status.success()).unwrap_or(false)
 }
 
 fn run_java(args: &[&str]) {

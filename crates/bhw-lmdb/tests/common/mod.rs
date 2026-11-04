@@ -143,10 +143,16 @@ impl Txn {
         unsafe { ok(ffi::mdb_put(self.txn, dbi, &mut k, &mut v, 0), "put") };
     }
 
-    /// Deletes a key (all duplicates); returns false if missing.
+    /// Deletes a key (all duplicates); returns false if missing and panics on any other error.
     pub fn del(&self, dbi: ffi::MDB_dbi, k: &[u8]) -> bool {
         let mut k = val(k);
-        unsafe { ffi::mdb_del(self.txn, dbi, &mut k, ptr::null_mut()) == 0 }
+        match unsafe { ffi::mdb_del(self.txn, dbi, &mut k, ptr::null_mut()) } {
+            ffi::MDB_NOTFOUND => false,
+            rc => {
+                ok(rc, "del");
+                true
+            }
+        }
     }
 
     /// All pairs in order (every duplicate).
