@@ -60,6 +60,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "bhw-content"
+version = "0.1.0"
+dependencies = [
+ "bhw-lmdb",
+ "bhw-save",
+ "flate2",
+ "plist",
+ "tempfile",
+ "thiserror",
+]
+
+[[package]]
 name = "bhw-core"
 version = "0.1.0"
 dependencies = [
