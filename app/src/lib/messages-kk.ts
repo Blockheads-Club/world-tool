@@ -959,6 +959,8 @@ export const kk: Record<Key, string> = {
   'edv.contentsSlots': '{of} ұяның {n} толы',
   'edv.teleport': 'Телепорт…',
   'edv.teleportTitle': '{name} көшіру',
+  'edv.moveRefused': 'Блокхедті онда көшіру мүмкін емес: ойын ол аумақты әлі жасамаған немесе ол жерде лава. Зерттелген жерді таңдаңыз.',
+  'edv.editRefused': 'Бұл өзгерісті мұнда жасау мүмкін емес.',
   'edv.removePlayer': 'Блокхедты жою',
   'edv.removeTitle': '{name} жойылсын ба?',
   'edv.removeText': 'Блокхед пен оның мүкаммалы жұмыс көшірмесінен жойылады. Болдырмау қайтарады.',

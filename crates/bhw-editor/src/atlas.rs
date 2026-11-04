@@ -145,7 +145,8 @@ pub struct IdInfo {
     /// Atlas cell, if known.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cell: Option<[u8; 2]>,
-    /// For block items: the tile type whose picture stands for the item.
+    /// For block items: the tile type whose picture stands for the item. For placeable contents: the tile type
+    /// the material is placed in ([`crate::brush::host_tile`]).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tile: Option<u8>,
     /// For contents: may be painted with a brush.
@@ -174,7 +175,7 @@ impl Catalog {
                 name: names::contents_name(i as u8).unwrap_or("unknown").into(),
                 color: contents_color(i as u8),
                 cell: cell(&atlas.contents, i),
-                tile: None,
+                tile: crate::brush::host_tile(i as u8),
                 placeable: crate::brush::placeable_contents(i as u8),
             })
             .collect();

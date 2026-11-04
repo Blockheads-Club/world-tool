@@ -21,7 +21,7 @@
     const tiles = c.tiles.filter((x) => x.id > 0).map((x) => ({ brush: { layer: 'front' as Layer, tile: x.id, contents: 0 }, info: x, name: tileName(c, x.id), english: x.name }));
     const ores = c.contents
       .filter((x) => x.placeable)
-      .map((x) => ({ brush: oreBrush(x.id), info: x as IdInfo, name: contentsName(c, x.id), english: x.name }));
+      .map((x) => ({ brush: oreBrush(x), info: x as IdInfo, name: contentsName(c, x.id), english: x.name }));
     return [...tiles, ...ores].filter((e) => nameMatches(e.name, e.english, query));
   });
 

@@ -1,7 +1,7 @@
 //! Data for the map renderer: compact tile data per macro block and a whole-world overview image.
 
 use bhw_content::blocks::{MacroPos, WORLD_HEIGHT};
-use bhw_content::tile::TILE_BYTES;
+use bhw_content::tile::{TileData, TILE_BYTES};
 use bhw_save::blocks::{Tile, MACRO_SIZE, WORLD_HEIGHT_MACROS};
 use bhw_save::png::RgbaImage;
 use bhw_save::preview::tile_color;
@@ -9,7 +9,7 @@ use bhw_save::preview::tile_color;
 use crate::error::Result;
 use crate::session::Session;
 
-/// Bytes per tile in [`block_view`]: foreground, back wall, contents, light (the brighter of light and sun light).
+/// Bytes per tile in [`block_view`]: foreground, back wall, material ([`crate::brush::material`]), light (the brighter of light and sun light).
 pub const VIEW_BYTES: usize = 4;
 /// Most macro blocks one [`region`] request may ask for.
 pub const MAX_REGION_BLOCKS: u32 = 256;
@@ -19,7 +19,8 @@ pub fn block_view(s: &mut Session, pos: MacroPos) -> Result<Option<Vec<u8>>> {
     let Some(raw) = s.world.blocks.block_tiles(pos)? else { return Ok(None) };
     let mut out = Vec::with_capacity(1024 * VIEW_BYTES);
     for t in raw.chunks_exact(TILE_BYTES) {
-        out.extend_from_slice(&[t[0], t[1], t[3], t[6].max(t[7])]);
+        let m = crate::brush::material(&TileData::from_slice(t));
+        out.extend_from_slice(&[t[0], t[1], m, t[6].max(t[7])]);
     }
     Ok(Some(out))
 }

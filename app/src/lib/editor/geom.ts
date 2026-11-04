@@ -1,11 +1,11 @@
 /** Tile geometry for the tools (same rules as `bhw_editor::geom`). */
 
-import type { Brush, Rect } from '../types';
+import type { Brush, IdInfo, Rect } from '../types';
 
-/** The brush for painting an ore or gem: in its usual rock (flint and clay in dirt, oil in limestone). */
-export function oreBrush(contents: number): Brush {
-  const tile = contents === 1 || contents === 2 ? 6 : contents === 64 ? 12 : 1;
-  return { layer: 'front', tile, contents };
+/** The brush for painting a material in the tile the game keeps it in (`tile` of the catalog entry: flint and
+ *  clay in dirt, oil in limestone, ores in rock, gems in the air of caves). */
+export function oreBrush(info: IdInfo): Brush {
+  return { layer: 'front', tile: info.tile ?? 1, contents: info.id };
 }
 
 /** The rectangle spanned by two corner tiles (inclusive, any order). */

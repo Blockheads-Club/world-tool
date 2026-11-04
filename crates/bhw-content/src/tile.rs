@@ -151,6 +151,10 @@ impl TileData {
     pub fn set_contents(&mut self, v: u8) {
         self.0[3] = v;
     }
+    /// Sets the foreground contents byte.
+    pub fn set_fg_contents(&mut self, v: u8) {
+        self.0[0xb] = v;
+    }
     /// Sets the paint of one face.
     pub fn set_paint(&mut self, face: Face, v: u16) {
         self.set_u16_at(face.offset(), v);
@@ -186,6 +190,8 @@ mod tests {
         t.set_fg(9);
         t.set_bg(10);
         t.set_contents(11);
+        t.set_fg_contents(12);
+        assert_eq!(t.fg_contents(), 12);
         t.set_paint(Face::Top, 0xabcd);
         t.clear_owner();
         assert_eq!((t.fg(), t.bg(), t.contents(), t.paint(Face::Top), t.owner()), (9, 10, 11, 0xabcd, 0));

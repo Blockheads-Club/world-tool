@@ -959,6 +959,8 @@ export const ru: Record<Key, string> = {
   'edv.contentsSlots': 'занято {n} из {of} ячеек',
   'edv.teleport': 'Телепорт…',
   'edv.teleportTitle': 'Переместить {name}',
+  'edv.moveRefused': 'Сюда блокхеда переместить нельзя: игра ещё не создала эту область или там лава. Выберите место на исследованной земле.',
+  'edv.editRefused': 'Здесь это изменение невозможно.',
   'edv.removePlayer': 'Удалить блокхеда',
   'edv.removeTitle': 'Удалить {name}?',
   'edv.removeText': 'Блокхед и его инвентарь удаляются из рабочей копии. Отмена вернёт их.',

@@ -97,7 +97,7 @@ fn open_view_edit_save() {
         EditRequest::Paste { x: 40, y: Y, skip_air: false, rotate: 1, flip: true },
         EditRequest::Paste { x: 44, y: Y, skip_air: true, rotate: 0, flip: false },
         EditRequest::Cut { rect: Rect { x: 40, y: Y, w: 1, h: 1 } },
-        EditRequest::MoveBlockhead { player: String::new(), id: 9, x: 10, y: 600 },
+        EditRequest::MoveBlockhead { player: String::new(), id: 9, x: 41, y: 530 },
         EditRequest::SetStats { player: String::new(), id: 9, stats: [0.5, 0.5, 0.5, 0.5] },
         EditRequest::SetStack { player: String::new(), id: 9, slot: 1, item: 21, count: 3 },
         EditRequest::SetName { name: "Edited".into() },
@@ -111,7 +111,7 @@ fn open_view_edit_save() {
     assert_eq!((st.history.len(), st.cursor, st.unsaved), (12, 12, 12));
     assert_eq!(st.clipboard, Some([1, 1]));
     assert_eq!((st.name.as_deref(), st.time_of_day), (Some("EDITED"), Some(8.0)));
-    assert_eq!(core.editor_blockheads(&s).unwrap()[0].x, 10);
+    assert_eq!(core.editor_blockheads(&s).unwrap()[0].y, 515);
     assert!(core.editor_changes(&s).unwrap().contains(&[1, Y]));
     let (found, n) = core.editor_find(&s, Match { layer: Layer::Front, tile: 6, contents: None }, None, 2).unwrap();
     assert_eq!((found.len(), n), (2, 7));
