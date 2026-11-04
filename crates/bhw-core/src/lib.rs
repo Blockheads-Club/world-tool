@@ -139,6 +139,12 @@ impl Core {
         self.ops.cancel(op);
     }
 
+    /// Registers an operation run outside the core (the app's update download) so [`Core::cancel`] reaches it;
+    /// unregistered when the guard drops.
+    pub fn start_op(&self, op: &str) -> util::OpGuard<'_> {
+        self.ops.start(op)
+    }
+
     /// The activity log, newest first.
     pub fn list_activity(&self) -> Vec<Activity> {
         self.activity.list()

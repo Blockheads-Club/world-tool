@@ -11,16 +11,18 @@
     title: string;
     text: string;
     elapsed: number;
+    /** Which of the phone's three confirmations of a copy or restore this is (1–3); none for a single one. */
+    step?: number;
     before?: Snippet;
     actions?: Snippet;
   }
-  let { screen, title, text, elapsed, before, actions }: Props = $props();
+  let { screen, title, text, elapsed, step, before, actions }: Props = $props();
 </script>
 
 <div class="card wait" role="status" aria-live="polite">
   <Phone {screen} />
   <div class="wtx">
-    <span class="tag"><Badge tone="primary" icon="phone">{t('phone.action')}</Badge></span>
+    <span class="tag"><Badge tone="primary" icon="phone">{step ? t('phone.actionStep', { n: step, total: 3 }) : t('phone.action')}</Badge></span>
     {@render before?.()}
     <h2 class="big">{title}</h2>
     <p class="muted">{text}</p>

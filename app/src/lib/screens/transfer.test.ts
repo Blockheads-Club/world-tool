@@ -50,6 +50,8 @@ describe('Transfer', () => {
     // before writing
     expect(await screen.findByText('Writing replaces the game’s saved data on the phone')).toBeInTheDocument();
     expect(screen.getByText('Automatic backup first')).toBeInTheDocument();
+    expect(screen.getByText(/The phone asks three times: “Back up my data” \(a backup first\), “Restore my data”/)).toBeInTheDocument();
+    expect(screen.getByText(/Your phone asks three times then too/)).toBeInTheDocument();
     const go = screen.getByRole('button', { name: 'Back up and write' });
     expect(go).toBeDisabled();
     await fireEvent.click(screen.getByRole('button', { name: 'Back' }));
@@ -58,11 +60,14 @@ describe('Transfer', () => {
     mock.tick = 25;
     await fireEvent.click(screen.getByRole('button', { name: 'Back up and write' }));
     expect(await screen.findByText('Look at your phone and tap “Back up my data”')).toBeInTheDocument();
+    expect(screen.getByText('Action needed on the phone · 1 of 3')).toBeInTheDocument();
     expect(await screen.findByText('Look at your phone and tap “Restore my data”', {}, { timeout: 3000 })).toBeInTheDocument();
+    expect(screen.getByText('Action needed on the phone · 2 of 3')).toBeInTheDocument();
     expect(screen.getByText('Backup saved · Backups')).toBeInTheDocument();
     expect(await screen.findByRole('progressbar', { name: /Writing 7 worlds to Ada’s Pixel 8/ }, { timeout: 3000 })).toBeInTheDocument();
     expect(screen.getByText('Check the worlds are on the phone')).toBeInTheDocument();
     expect(await screen.findByText('Tap “Back up my data” once more', {}, { timeout: 3000 })).toBeInTheDocument();
+    expect(screen.getByText('Action needed on the phone · 3 of 3')).toBeInTheDocument();
     expect(screen.getByText('Worlds sent to the phone')).toBeInTheDocument();
     expect(await screen.findByRole('heading', { name: 'Ada’s Pixel 8 now has 7 worlds' }, { timeout: 3000 })).toBeInTheDocument();
     expect(screen.getByText(/Pirate Cove added/)).toBeInTheDocument();

@@ -84,6 +84,15 @@ impl GameDb {
         self.main()?.entries.iter().find(|(k, _)| k == key.as_bytes()).map(|(_, v)| v.as_slice())
     }
 
+    /// Whether the entry of `id` is a client's cache of a multiplayer world (`remoteGame`); false when `id` is not
+    /// registered or its record does not parse.
+    pub fn is_remote(&self, id: &str) -> bool {
+        self.entry(id)
+            .and_then(|r| parse_dict(r).ok())
+            .and_then(|d| d.get("remoteGame").and_then(Value::as_boolean))
+            .unwrap_or(false)
+    }
+
     /// Adds or replaces the entry of `id` with a world record (the world's `main/worldv2` bytes).
     pub fn register(&mut self, id: &str, worldv2: &[u8]) {
         crate::save::put(&mut self.contents, "main", format!("{id}{SUFFIX}").as_bytes(), worldv2.to_vec());

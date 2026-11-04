@@ -66,19 +66,45 @@ pub struct Library {
     root: PathBuf,
 }
 
-/// File-name-safe version of `s` (keeps letters/digits incl. non-ASCII, `-`, `_`, `.`, spaces → `-`).
+/// File-name-safe version of `s` (keeps letters/digits incl. non-ASCII, `-`, `_`, `.`, spaces → `-`; at most 60
+/// characters; never a name Windows reserves, see [`windows_safe`]).
 pub fn slug(s: &str) -> String {
     let mapped: String = s
         .chars()
         .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' || c == '.' { c } else { '-' })
         .take(60)
         .collect();
-    let t = mapped.trim_matches(|c| c == '-' || c == '.');
-    if t.is_empty() {
-        "world".to_string()
-    } else {
-        t.to_string()
+    windows_safe(mapped.trim_matches(|c| c == '-' || c == '.'), "world")
+}
+
+/// Device names Windows reserves in every folder, with or without an extension (`CON`, `con.txt`, `COM1.bhworld`).
+const RESERVED: [&str; 4] = ["CON", "PRN", "AUX", "NUL"];
+
+fn reserved(base: &str) -> bool {
+    let up = base.to_uppercase();
+    if RESERVED.contains(&up.as_str()) {
+        return true;
     }
+    let digit = |rest: &str| {
+        let mut c = rest.chars();
+        matches!((c.next(), c.next()), (Some('1'..='9' | '¹' | '²' | '³'), None))
+    };
+    ["COM", "LPT"].iter().any(|p| up.strip_prefix(p).is_some_and(digit))
+}
+
+/// `stem` usable as a file name stem on Windows too: no trailing dots or spaces (Windows drops them), no reserved
+/// device name before the first dot (`CON` → `CON_`), and `fallback` when nothing is left. Characters Windows
+/// forbids (`<>:"/\|?*`, control characters) must already be replaced by the caller.
+pub fn windows_safe(stem: &str, fallback: &str) -> String {
+    let t = stem.trim_start_matches(' ').trim_end_matches(['.', ' ']);
+    if t.is_empty() {
+        return fallback.to_string();
+    }
+    let base_len = t.find('.').unwrap_or(t.len());
+    if reserved(t[..base_len].trim_end_matches(' ')) {
+        return format!("{}_{}", &t[..base_len], &t[base_len..]);
+    }
+    t.to_string()
 }
 
 fn files_with_ext(dir: &Path, ext: &str) -> Result<Vec<PathBuf>> {
@@ -287,6 +313,18 @@ mod tests {
         assert_eq!(slug("Dünya 2"), "Dünya-2");
         assert_eq!(slug("../.."), "world");
         assert_eq!(slug(&"a".repeat(100)).len(), 60);
+        assert_eq!(slug("CON"), "CON_");
+        assert_eq!(slug("con.txt"), "con_.txt");
+        assert_eq!(slug("Com1"), "Com1_");
+        assert_eq!(slug("LPT9 world"), "LPT9-world");
+        assert_eq!(slug("lpt²"), "lpt²_");
+        assert_eq!(slug("COM10"), "COM10");
+        assert_eq!(slug("COM"), "COM");
+        assert_eq!(slug("a<b>c:d\"e/f\\g|h?i*j\u{1}k"), "a-b-c-d-e-f-g-h-i-j-k");
+        assert_eq!(slug("world. . ."), "world");
+        assert_eq!(windows_safe("  NUL . x", "w"), "NUL _. x");
+        assert_eq!(windows_safe(" . ", "w"), "w");
+        assert_eq!(windows_safe("ok name ", "w"), "ok name");
     }
 
     #[derive(Default)]

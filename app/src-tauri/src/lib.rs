@@ -417,18 +417,24 @@ async fn check_update(
 }
 
 #[tauri::command]
-async fn download_update(updates: State<'_, Updates>, op: String, on_progress: Channel<Progress>) -> Res<()> {
-    let _ = op;
+async fn download_update(
+    state: State<'_, AppState>,
+    updates: State<'_, Updates>,
+    op: String,
+    on_progress: Channel<Progress>,
+) -> Res<()> {
+    let guard = state.core.start_op(&op);
     let u = updates.offered().ok_or_else(|| AppError::new(ErrorCode::NotFound))?;
     let mut counter = update::Counter::default();
-    let bytes = u
-        .download(
-            |len, total| {
-                let _ = on_progress.send(counter.chunk(len, total));
-            },
-            || {},
-        )
+    let download = u.download(
+        |len, total| {
+            let _ = on_progress.send(counter.chunk(len, total));
+        },
+        || {},
+    );
+    let bytes = update::unless_cancelled(download, || guard.cancel.is_cancelled())
         .await
+        .ok_or_else(|| AppError::new(ErrorCode::Cancelled))?
         .map_err(update_error)?;
     updates.set_downloaded(u, bytes);
     Ok(())

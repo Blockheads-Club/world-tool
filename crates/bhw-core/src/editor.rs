@@ -632,7 +632,7 @@ fn schematic_file(dir: &std::path::Path, name: &str) -> String {
         .chars()
         .take(60)
         .collect();
-    let base = if base.is_empty() { "Schematic".to_string() } else { base };
+    let base = bhw_world::library::windows_safe(&base, "Schematic");
     let mut n = 1;
     loop {
         let f = if n == 1 { format!("{base}.{SCHEMATIC_EXT}") } else { format!("{base} ({n}).{SCHEMATIC_EXT}") };

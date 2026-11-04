@@ -18,14 +18,28 @@ describe('Updates', () => {
     await fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Update and restart' }));
     expect(await within(bar).findByRole('button', { name: /Downloading update, \d+ percent/ })).toBeInTheDocument();
     await fireEvent.click(within(bar).getByRole('button', { name: /Downloading update/ }));
-    expect(await screen.findByRole('dialog', { name: 'BH World Tool 0.3.0 is available' })).toBeInTheDocument();
-    store.update.later();
+    const dl = await screen.findByRole('dialog', { name: 'BH World Tool 0.3.0 is available' });
+    expect(within(dl).getByRole('progressbar', { name: 'Downloading the update' })).toBeInTheDocument();
+    await fireEvent.click(within(dl).getByRole('button', { name: 'Hide' }));
     expect(await screen.findByText('Update 0.3.0 is ready', {}, { timeout: 2000 })).toBeInTheDocument();
     const restart = vi.spyOn(mock, 'restartApp');
     await fireEvent.click(screen.getByRole('button', { name: 'Later' }));
     expect(screen.queryByText('Update 0.3.0 is ready')).toBeNull();
     await fireEvent.click(within(bar).getByRole('button', { name: 'Update ready. Restart to finish.' }));
     expect(restart).toHaveBeenCalledTimes(1);
+  });
+
+  it('an update download can be cancelled; the update stays offered', async () => {
+    const { mock } = await setup({ tick: 50, before: (m) => (m.update = offer) });
+    await fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Update and restart' }));
+    const bar = screen.getByRole('banner', { name: 'Window title bar' });
+    await fireEvent.click(await within(bar).findByRole('button', { name: /Downloading update/ }));
+    const cancel = vi.spyOn(mock, 'cancel');
+    await fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Cancel download' }));
+    expect(cancel).toHaveBeenCalledWith(expect.stringMatching(/^update/));
+    await waitFor(() => expect(store.update.stage).toBe('available'));
+    expect(store.update.popover).toBe(false);
+    expect(within(bar).getByRole('button', { name: 'Update available: version 0.3.0. Open details.' })).toBeInTheDocument();
   });
 
   it('skip this version; the next automatic check stays quiet', async () => {

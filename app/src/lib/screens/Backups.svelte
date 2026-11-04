@@ -79,6 +79,7 @@
   }
 
   const isAndroid = $derived(store.devices.find((d) => d.id === target)?.kind === 'android');
+  const viaRoot = $derived(!!store.devices.find((d) => d.id === target)?.root && store.settings?.root_mode !== 'never');
   const prog = $derived(running && running !== 'start' ? running : null);
   const waiting = $derived(prog?.stage === 'phone_backup' || prog?.stage === 'phone_restore' || prog?.stage === 'phone_check');
 </script>
@@ -127,7 +128,7 @@
   {@const b = restoring}
   <Dialog title={t('bk.restoreTitle')} icon="history" busy={running !== null} wide={waiting} onclose={() => (restoring = null)}>
     {#if prog && waiting}
-      <PhoneWait screen={prog.stage === 'phone_restore' ? 'restore' : 'backup'} elapsed={zero(prog.elapsed)}
+      <PhoneWait screen={prog.stage === 'phone_restore' ? 'restore' : 'backup'} step={prog.stage === 'phone_backup' ? 1 : prog.stage === 'phone_restore' ? 2 : 3} elapsed={zero(prog.elapsed)}
         title={prog.stage === 'phone_backup' ? t('tr.phoneBackupTitle') : prog.stage === 'phone_check' ? t('tr.phoneCheckTitle') : t('tr.phoneRestoreTitle')}
         text={prog.stage === 'phone_backup' ? t('bk.phoneBackupText') : prog.stage === 'phone_check' ? t('tr.phoneCheckText') : t('tr.phoneRestoreText')}>
         {#snippet actions()}<Button icon="x" onclick={() => void store.api.cancel(op)}>{t('common.cancel')}</Button>{/snippet}
@@ -144,6 +145,7 @@
         {#if targets.length === 0}<span class="hint">{t('bk.noTarget')}</span>{/if}
       </div>
       <Notice tone="bad" role="alert" title={t('bk.replaces')}>{t('bk.replacesText', { time: clock(b.time) })}</Notice>
+      {#if isAndroid && !viaRoot}<p class="hint">{t('tr.threeTaps')}</p>{/if}
       {#if isAndroid}<Check bind:checked={closed} label={t('bk.closed')} />{/if}
     {/if}
     {#snippet footer()}

@@ -17,7 +17,7 @@ use crate::types::{
     ActivityKind, Connection, Device, DeviceKind, DeviceWorld, Origin, Progress, ReadRequest, ReadResult, Stage, World,
 };
 use crate::util::{lock, unique_id, Cancel, TempPath, Throttle};
-use crate::worlds::{inspect, WorldInfo};
+use crate::worlds::{inspect_record, WorldInfo};
 use crate::Core;
 
 /// Where the game keeps its data inside an `adb backup`.
@@ -87,7 +87,7 @@ pub fn summarise(worlds: Vec<WorldFiles>, game_db: Option<&GameDb>) -> Vec<Sessi
     worlds
         .into_iter()
         .filter_map(|files| {
-            let info = inspect(&files, game_db).ok().filter(|i| !i.remote)?;
+            let (info, _) = inspect_record(&files, game_db).ok().filter(|(i, record)| *record && !i.remote)?;
             Some(SessionWorld { info, files })
         })
         .collect()

@@ -250,6 +250,9 @@ fn schematics_search_and_options() {
     assert_eq!(b.file, "House _ 1 (2).bhwschem");
     let c = core.editor_save_schematic(&s, Some(rect), "  ").unwrap();
     assert_eq!(c.file, "Schematic.bhwschem");
+    let d = core.editor_save_schematic(&s, Some(rect), "aux").unwrap();
+    assert_eq!((d.file.as_str(), d.name.as_str()), ("aux_.bhwschem", "aux"));
+    std::fs::remove_file(env.path("Worlds/schematics/aux_.bhwschem")).unwrap();
     let dir = env.path("Worlds/schematics");
     std::fs::write(dir.join("junk.bhwschem"), b"no").unwrap();
     std::fs::write(dir.join("notes.txt"), b"no").unwrap();

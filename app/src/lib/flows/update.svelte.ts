@@ -1,6 +1,7 @@
 import type { AppStore } from '../store.svelte';
 import type { UpdateInfo } from '../types';
 import { opId } from '../util';
+import { toAppError } from '../errors';
 import { pct } from '../format';
 
 export type UpdateStage = 'idle' | 'checking' | 'available' | 'downloading' | 'ready' | 'latest' | 'failed';
@@ -17,6 +18,7 @@ export class UpdateFlow {
   /** "Restart after the transfer?" */
   waitDialog = $state(false);
   restartWhenDone = $state(false);
+  private op = '';
 
   constructor(private app: AppStore) {}
 
@@ -65,15 +67,26 @@ export class UpdateFlow {
     this.popup = false;
     this.stage = 'downloading';
     this.percent = 0;
+    this.op = opId('update');
     try {
-      await this.app.api.downloadUpdate(opId('update'), (p) => {
+      await this.app.api.downloadUpdate(this.op, (p) => {
         this.percent = pct(p.done, p.total);
       });
       this.stage = 'ready';
-    } catch {
+    } catch (e) {
+      if (toAppError(e).code === 'cancelled') {
+        this.stage = 'available';
+        return;
+      }
       this.stage = 'failed';
       this.popover = true;
     }
+  }
+
+  /** Stops the download (the update stays offered). */
+  cancel() {
+    this.popup = false;
+    void this.app.api.cancel(this.op);
   }
 
   async restart() {

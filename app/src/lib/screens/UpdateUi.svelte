@@ -6,6 +6,7 @@
   import Dialog from '../ui/Dialog.svelte';
   import Icon from '../ui/Icon.svelte';
   import Notice from '../ui/Notice.svelte';
+  import Progress from '../ui/Progress.svelte';
 
   /** Update popup, "ready" notice, "restart after the transfer?" and the small result popover (WT-Update). */
   const u = store.update;
@@ -15,17 +16,26 @@
 
 {#if u.popup && u.info}
   <Dialog title={t('upd.title', { v: u.info.version })} icon="upd" onclose={() => u.later()}>
-    <dl class="kv">
-      <dt>{t('upd.new')}</dt><dd><b>{u.info.version}</b> · {day(u.info.date)} · {bytes(u.info.size)}</dd>
-      <dt>{t('upd.have')}</dt><dd>{store.info.version}</dd>
-    </dl>
-    <b>{t('upd.whatsNew')}</b>
-    <ul class="ol">{#each u.info.notes as n (n)}<li>{n}</li>{/each}</ul>
-    <p class="hint">{t('upd.stays')}</p>
+    {#if u.stage === 'downloading'}
+      <Progress title={t('upd.downloadingBar')} value={u.percent} detail={t('upd.downloadingText')} />
+    {:else}
+      <dl class="kv">
+        <dt>{t('upd.new')}</dt><dd><b>{u.info.version}</b> · {day(u.info.date)} · {bytes(u.info.size)}</dd>
+        <dt>{t('upd.have')}</dt><dd>{store.info.version}</dd>
+      </dl>
+      <b>{t('upd.whatsNew')}</b>
+      <ul class="ol">{#each u.info.notes as n (n)}<li>{n}</li>{/each}</ul>
+      <p class="hint">{t('upd.stays')}</p>
+    {/if}
     {#snippet footer()}
-      <button class="link skip" onclick={() => void u.skip()}>{t('upd.skip')}</button>
-      <Button onclick={() => u.later()}>{t('common.later')}</Button>
-      <Button variant="primary" icon="upd" onclick={() => void u.download()}>{t('upd.install')}</Button>
+      {#if u.stage === 'downloading'}
+        <Button icon="x" onclick={() => u.cancel()}>{t('upd.cancel')}</Button>
+        <Button variant="primary" onclick={() => u.later()}>{t('upd.hide')}</Button>
+      {:else}
+        <button class="link skip" onclick={() => void u.skip()}>{t('upd.skip')}</button>
+        <Button onclick={() => u.later()}>{t('common.later')}</Button>
+        <Button variant="primary" icon="upd" onclick={() => void u.download()}>{t('upd.install')}</Button>
+      {/if}
     {/snippet}
   </Dialog>
 {/if}
