@@ -39,3 +39,11 @@ review tr/ru/kk, (5) restore-check wording.
   the rest of the app uses, clumsy/calqued strings fixed (e.g. "Kalsın"→"Kalan" count label, "Tuzak kapı"→"Kapak",
   furnace/kiln/stove names, "Aygıtlar"→"Cihazlar", iTunes’da), see commit. ru/kk: reviewed by two subagents.
   Key/placeholder/plural sync across languages is already enforced (`unit.test.ts` + `Record<Key, string>` types).
+- Checks (2026-11-05): crates `cargo llvm-cov --workspace` 100 % lines + functions; clippy -D warnings + fmt clean
+  (workspace and src-tauri; src-tauri tests pass); app vitest 122/122 with 100 % statements/branches/functions/lines
+  (`--maxWorkers=1 --testTimeout=60000`: with the other agent's emulator at load ~15, the default 2-worker run had
+  random waitFor timeouts in different editor/read tests that each pass alone); svelte-check 0 errors.
+- Open: Blockheads PC shows no game version (`Device.game_version` is None for PC; reading the launcher's APK
+  version needs a cached `bhw_assets::apk::inspect`, which hashes the whole APK). Android system button texts in
+  ru/kk (“Back up my data” etc.) written from memory; check on a phone in those languages.
+- Resume point: all five tasks done on `feat/polish`; nothing pending.
