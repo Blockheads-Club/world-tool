@@ -30,3 +30,12 @@ review tr/ru/kk, (5) restore-check wording.
   download used to reopen the "available" popup (with "Update and restart" again). It now shows the download
   progress with "Cancel download" / "Hide" (same pattern as the adb download dialog). Cancelled → the update is
   offered again (chip "Update x.y.z"), no error popover.
+- (5) Restore check: the UI did show "Tap “Back up my data” once more" while it happened, but nothing said so
+  beforehand, and "Your phone asks twice" (undo hint) was wrong (a restore is checked too). Now: the "Before we write"
+  list says the phone asks three times and why; the phone panel's badge counts "1 of 3 / 2 of 3 / 3 of 3" (copy and
+  backup restore); the check text starts "Last one:"; the backup-restore dialog has the same three-taps hint (not
+  for root targets); undo hint says three times.
+- (4) Translations: tr reviewed by hand (messages + editor names): editor strings switched to the formal register
+  the rest of the app uses, clumsy/calqued strings fixed (e.g. "Kalsın"→"Kalan" count label, "Tuzak kapı"→"Kapak",
+  furnace/kiln/stove names, "Aygıtlar"→"Cihazlar", iTunes’da), see commit. ru/kk: reviewed by two subagents.
+  Key/placeholder/plural sync across languages is already enforced (`unit.test.ts` + `Record<Key, string>` types).

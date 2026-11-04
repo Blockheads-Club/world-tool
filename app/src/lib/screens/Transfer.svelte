@@ -71,6 +71,7 @@
     runSteps.filter((s) => (s.stage !== 'backing_up' && s.stage !== 'verifying') || f.seen.includes(s.stage) || (s.stage === 'verifying' && needsPhone))
   );
   const waitScreen = $derived(stage === 'phone_restore' ? 'restore' : 'backup');
+  const waitStep = $derived(stage === 'phone_backup' ? 1 : stage === 'phone_restore' ? 2 : 3);
   const waitTitle = $derived(stage === 'phone_backup' ? t('tr.phoneBackupTitle') : stage === 'phone_check' ? t('tr.phoneCheckTitle') : t('tr.phoneRestoreTitle'));
   const waitText = $derived(stage === 'phone_backup' ? t('tr.phoneBackupText') : stage === 'phone_check' ? t('tr.phoneCheckText') : t('tr.phoneRestoreText'));
 </script>
@@ -190,6 +191,7 @@
             <li>{t('tr.installed')} <b>{dash(target.game_version)} ✓</b></li>
             <li>{t('tr.closeGame')}</li>
             <li>{t('tr.keepCable')}</li>
+            {#if needsPhone}<li>{t('tr.threeTaps')}</li>{/if}
           {:else}
             <li>{t('tr.pcClosed')}</li>
           {/if}
@@ -216,7 +218,7 @@
     </div>
   {:else if f.stage === 'running'}
     {#if stage === 'phone_backup' || stage === 'phone_restore' || stage === 'phone_check'}
-      <PhoneWait screen={waitScreen} elapsed={zero(f.progress?.elapsed)} title={waitTitle} text={waitText}>
+      <PhoneWait screen={waitScreen} step={waitStep} elapsed={zero(f.progress?.elapsed)} title={waitTitle} text={waitText}>
         {#snippet before()}
           {#if stage === 'phone_restore' && f.seen.includes('backing_up')}<p class="muted ok"><Icon name="check" size={18} />{t('tr.backupSaved')}</p>{/if}
           {#if stage === 'phone_check'}<p class="muted ok"><Icon name="check" size={18} />{t('tr.restoreSent')}</p>{/if}

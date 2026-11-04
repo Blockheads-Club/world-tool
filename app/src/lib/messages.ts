@@ -219,6 +219,7 @@ export const en = {
 
   // Phone screens
   'phone.action': 'Action needed on the phone',
+  'phone.actionStep': 'Action needed on the phone · {n} of {total}',
   'phone.waiting': 'Waiting for the phone…',
   'phone.allowAria': 'Phone screen: Allow USB debugging?',
   'phone.allowTitle': 'Allow USB debugging?',
@@ -359,6 +360,7 @@ export const en = {
   'tr.installed': 'The Blockheads must be installed:',
   'tr.closeGame': 'Close the game on the phone.',
   'tr.keepCable': 'Keep the cable connected and the screen unlocked.',
+  'tr.threeTaps': 'The phone asks three times: “Back up my data” (a backup first), “Restore my data” (the copy), then “Back up my data” once more, so BH World Tool can check that the worlds arrived.',
   'tr.pcClosed': 'Blockheads PC must be closed. BH World Tool checks this for you.',
   'tr.backupWrite': 'Back up and write',
   'tr.writeNow': 'Write',
@@ -369,7 +371,7 @@ export const en = {
   'tr.about': 'about {size}',
   'tr.undo': 'To undo:',
   'tr.undoText': 'Backups → this backup → Restore to device.',
-  'tr.undoTextPhone': 'Backups → this backup → Restore to device. Your phone asks twice: once to back up, once to restore.',
+  'tr.undoTextPhone': 'Backups → this backup → Restore to device. Your phone asks three times then too.',
   'tr.noBackupTitle': 'Automatic backups are off',
   'tr.noBackupText': 'Nothing can be undone after writing. Turn backups on in Settings to be safe.',
   'tr.phoneBackupTitle': 'Look at your phone and tap “Back up my data”',
@@ -771,7 +773,7 @@ export const en = {
   'set.adbMissing': 'Not installed. Needed for Android phones.',
   'tr.run.verify': 'Check the worlds are on the phone',
   'tr.phoneCheckTitle': 'Tap “Back up my data” once more',
-  'tr.phoneCheckText': 'BH World Tool reads the phone again to make sure the worlds arrived. Nothing is changed.',
+  'tr.phoneCheckText': 'Last one: BH World Tool reads the phone again to make sure the worlds arrived. Nothing is changed.',
   'tr.restoreSent': 'Worlds sent to the phone',
   'err.download_failed': 'Downloading from Google didn’t work. Check the internet connection and try again.',
   'err.restore_declined': 'The phone didn’t take the worlds. “Restore my data” was probably not tapped.',

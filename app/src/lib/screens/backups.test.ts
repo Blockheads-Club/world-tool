@@ -22,6 +22,7 @@ describe('Backups', () => {
     await fireEvent.click(screen.getAllByRole('button', { name: 'Restore to device…' })[0]);
     let dlg = await screen.findByRole('dialog', { name: 'Restore a backup' });
     expect(within(dlg).getByRole('combobox', { name: 'Restore to' })).toHaveValue('Ada’s Pixel 8 · USB · Game 1.7.6');
+    expect(within(dlg).getByText(/The phone asks three times/)).toBeInTheDocument();
     const go = within(dlg).getByRole('button', { name: 'Restore' });
     expect(go).toBeDisabled();
     await fireEvent.click(within(dlg).getByRole('button', { name: 'Cancel' }));
@@ -69,6 +70,9 @@ describe('Backups', () => {
     expect(screen.getByText('Before restoring a backup')).toBeInTheDocument();
     expect(screen.getByText('Manual')).toBeInTheDocument();
     expect(within(dlg).queryByLabelText('The game is closed on the phone')).toBeNull();
+    await fireEvent.change(within(dlg).getByRole('combobox'), { target: { selectedIndex: 2 } });
+    expect(within(dlg).getByRole('combobox')).toHaveValue('Redmi Note 9 · USB · Game 1.7.4');
+    expect(within(dlg).queryByText(/The phone asks three times/)).toBeNull();
     await fireEvent.change(within(dlg).getByRole('combobox'), { target: { selectedIndex: 1 } });
     await fireEvent.click(within(dlg).getByLabelText('The game is closed on the phone'));
     await fireEvent.click(within(dlg).getByRole('button', { name: 'Restore' }));
