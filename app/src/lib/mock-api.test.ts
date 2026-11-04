@@ -129,7 +129,7 @@ describe('mock backend', () => {
     expect(plan.needs_phone).toBe(true);
     const ev: Progress[] = [];
     const res = await b.transfer('o', { plan_id: plan.plan_id, choices: {} }, (p) => ev.push(p));
-    expect(stages(ev)).toEqual(['phone_backup', 'backing_up', 'preparing', 'phone_restore', 'writing', 'checking']);
+    expect(stages(ev)).toEqual(['phone_backup', 'backing_up', 'preparing', 'phone_restore', 'writing', 'verifying', 'phone_check', 'checking']);
     expect(res).toMatchObject({ total: 7, added: ['Pirate Cove'], kept_both: ['Sunny Isle (2)'] });
     expect(res.backup_id).toBeTruthy();
 
@@ -246,7 +246,7 @@ describe('mock backend', () => {
     const b = m();
     const ev: Progress[] = [];
     await b.restoreBackup('o', 'b1', 'pixel8', (p) => ev.push(p));
-    expect(stages(ev)).toEqual(['phone_backup', 'phone_restore', 'writing']);
+    expect(stages(ev)).toEqual(['phone_backup', 'phone_restore', 'writing', 'verifying', 'phone_check']);
     await expect(b.restoreBackup('o', 'nope', 'pixel8', () => {})).rejects.toMatchObject({ code: 'not_found' });
     b.fail.restore = { code: 'declined' };
     await expect(b.restoreBackup('o', 'b1', 'pixel8', () => {})).rejects.toMatchObject({ code: 'declined' });
@@ -324,6 +324,7 @@ describe('mock backend', () => {
     expect(a.fail.read).toMatchObject({ code: 'declined' });
     expect(a.update?.version).toBe('0.3.0');
     expect(await a.listDevices()).toEqual([]);
+    expect(mockFromUrl('?adb=missing').adb.found).toBe(false);
     const b = mockFromUrl('?scenario=fresh');
     expect(b.tick).toBe(120);
     expect(mockFromUrl('').settings.first_run_done).toBe(true);

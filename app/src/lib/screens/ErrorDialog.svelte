@@ -17,7 +17,7 @@
   const dev = $derived(e.device ?? t('err.thePhone'));
   const ICON: Record<string, IconName> = {
     not_allowed: 'lock', game_not_installed: 'box', unsupported_version: 'alert', declined: 'x', wrong_password: 'lock',
-    backup_empty: 'alert', disconnected: 'unplug', disk_full: 'disk', world_damaged: 'file'
+    backup_empty: 'alert', disconnected: 'unplug', disk_full: 'disk', world_damaged: 'file', restore_declined: 'phone'
   };
   const title = $derived(t(`err.${e.code}.title` as Key, { device: dev, name: e.name ?? '' }));
   let way = $state<Guide | 'devices'>('wifi');
@@ -85,6 +85,15 @@
   {:else if e.code === 'disconnected'}
     <p>{t('err.disconnected.text', { device: dev, n: e.percent ?? 0 })}</p>
     {#if e.backup_id}<Notice icon="shield" title={t('err.disconnected.safe')}>{t('err.disconnected.safeText')}</Notice>{/if}
+  {:else if e.code === 'restore_declined'}
+    <div class="row">
+      <Phone screen="restore" />
+      <div class="col">
+        <p>{t('err.restore_declined.text', { device: dev })}</p>
+        <p class="hint">{t('err.restore_declined.hint')}</p>
+        {#if e.backup_id}<Notice icon="shield" title={t('err.disconnected.safe')}>{t('err.restore_declined.safe')}</Notice>{/if}
+      </div>
+    </div>
   {:else if e.code === 'disk_full'}
     <dl class="kv"><dt>{t('err.needed')}</dt><dd>{t('tr.about', { size: bytes(e.needed ?? 0) })}</dd><dt>{t('err.freeOn', { disk: e.disk ?? '' })}</dt><dd>{bytes(e.free ?? 0)}</dd></dl>
     <p>{t('err.disk_full.text')}</p>

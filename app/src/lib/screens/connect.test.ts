@@ -60,7 +60,7 @@ describe('Add a device (guides)', () => {
     const { mock } = await setup();
     store.openGuide('root');
     await screen.findByText('Root gives full access to the phone');
-    await fireEvent.click(screen.getByRole('radio', { name: 'Never' }));
+    await fireEvent.click(screen.getByRole('radio', { name: 'Backup method' }));
     await waitFor(() => expect(store.settings?.root_mode).toBe('never'));
     await guide(/Blockheads PC/);
     expect(screen.getByText('Found Blockheads PC on this computer')).toBeInTheDocument();

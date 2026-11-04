@@ -62,11 +62,17 @@
     { stage: 'backing_up', label: () => t('tr.run.backup') },
     { stage: 'preparing', label: () => t('tr.run.prepare') },
     { stage: 'writing', label: () => (target?.kind === 'pc' ? t('tr.run.writePc') : t('tr.run.write')) },
+    { stage: 'verifying', label: () => t('tr.run.verify') },
     { stage: 'checking', label: () => t('tr.run.check') }
   ];
-  const order: Stage[] = ['phone_backup', 'backing_up', 'preparing', 'phone_restore', 'writing', 'checking'];
+  const order: Stage[] = ['phone_backup', 'backing_up', 'preparing', 'phone_restore', 'writing', 'phone_check', 'verifying', 'checking'];
   const at = $derived(order.indexOf(stage ?? 'phone_backup'));
-  const shownRun = $derived(runSteps.filter((s) => s.stage !== 'backing_up' || f.seen.includes('backing_up')));
+  const shownRun = $derived(
+    runSteps.filter((s) => (s.stage !== 'backing_up' && s.stage !== 'verifying') || f.seen.includes(s.stage) || (s.stage === 'verifying' && needsPhone))
+  );
+  const waitScreen = $derived(stage === 'phone_restore' ? 'restore' : 'backup');
+  const waitTitle = $derived(stage === 'phone_backup' ? t('tr.phoneBackupTitle') : stage === 'phone_check' ? t('tr.phoneCheckTitle') : t('tr.phoneRestoreTitle'));
+  const waitText = $derived(stage === 'phone_backup' ? t('tr.phoneBackupText') : stage === 'phone_check' ? t('tr.phoneCheckText') : t('tr.phoneRestoreText'));
 </script>
 
 {#snippet radio(name: string, checked: boolean, onpick: () => void, ic: IconName, title: string, hint: string, disabled = false)}
@@ -209,11 +215,12 @@
       {/if}
     </div>
   {:else if f.stage === 'running'}
-    {#if stage === 'phone_backup' || stage === 'phone_restore'}
-      <PhoneWait screen={stage === 'phone_backup' ? 'backup' : 'restore'} elapsed={zero(f.progress?.elapsed)}
-        title={stage === 'phone_backup' ? t('tr.phoneBackupTitle') : t('tr.phoneRestoreTitle')}
-        text={stage === 'phone_backup' ? t('tr.phoneBackupText') : t('tr.phoneRestoreText')}>
-        {#snippet before()}{#if stage === 'phone_restore' && f.seen.includes('backing_up')}<p class="muted ok"><Icon name="check" size={18} />{t('tr.backupSaved')}</p>{/if}{/snippet}
+    {#if stage === 'phone_backup' || stage === 'phone_restore' || stage === 'phone_check'}
+      <PhoneWait screen={waitScreen} elapsed={zero(f.progress?.elapsed)} title={waitTitle} text={waitText}>
+        {#snippet before()}
+          {#if stage === 'phone_restore' && f.seen.includes('backing_up')}<p class="muted ok"><Icon name="check" size={18} />{t('tr.backupSaved')}</p>{/if}
+          {#if stage === 'phone_check'}<p class="muted ok"><Icon name="check" size={18} />{t('tr.restoreSent')}</p>{/if}
+        {/snippet}
         {#snippet actions()}<Button icon="x" onclick={() => void f.cancel()}>{t('common.cancel')}</Button>{/snippet}
       </PhoneWait>
     {:else}

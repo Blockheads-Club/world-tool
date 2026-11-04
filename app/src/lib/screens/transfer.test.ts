@@ -61,6 +61,9 @@ describe('Transfer', () => {
     expect(await screen.findByText('Look at your phone and tap “Restore my data”', {}, { timeout: 3000 })).toBeInTheDocument();
     expect(screen.getByText('Backup saved · Backups')).toBeInTheDocument();
     expect(await screen.findByRole('progressbar', { name: /Writing 7 worlds to Ada’s Pixel 8/ }, { timeout: 3000 })).toBeInTheDocument();
+    expect(screen.getByText('Check the worlds are on the phone')).toBeInTheDocument();
+    expect(await screen.findByText('Tap “Back up my data” once more', {}, { timeout: 3000 })).toBeInTheDocument();
+    expect(screen.getByText('Worlds sent to the phone')).toBeInTheDocument();
     expect(await screen.findByRole('heading', { name: 'Ada’s Pixel 8 now has 7 worlds' }, { timeout: 3000 })).toBeInTheDocument();
     expect(screen.getByText(/Pirate Cove added/)).toBeInTheDocument();
     expect(screen.getByText(/Sunny Isle \(2\) was added next to the original/)).toBeInTheDocument();
@@ -141,6 +144,26 @@ describe('Transfer', () => {
     expect(dlg).toHaveTextContent('Your backup is safe');
     await fireEvent.click(within(dlg).getByRole('button', { name: 'Restore backup…' }));
     expect(store.screen).toBe('backups');
+  });
+
+  it('reports a declined restore and tries again', async () => {
+    const { mock } = await setup({ tick: 0 });
+    store.transfer.start({ to: 'pixel8' });
+    await waitFor(() => expect(store.transfer.picked.length).toBe(2));
+    await store.transfer.review();
+    store.transfer.stage = 'before';
+    store.transfer.gameClosed = true;
+    mock.fail.verify = { code: 'restore_declined', detail: 'world x is missing' };
+    await fireEvent.click(await screen.findByRole('button', { name: 'Back up and write' }));
+    const dlg = await screen.findByRole('dialog', { name: 'The worlds are not on Ada’s Pixel 8' });
+    expect(dlg).toHaveTextContent('“Restore my data” was probably not tapped');
+    expect(dlg).toHaveTextContent('Nothing was lost');
+    await fireEvent.click(within(dlg).getByRole('button', { name: 'Try again' }));
+    expect(await screen.findByRole('heading', { name: /now has/ }, { timeout: 3000 })).toBeInTheDocument();
+    // Without a backup there is no "nothing was lost" note.
+    store.shown = { error: { code: 'restore_declined' } };
+    const plain = await screen.findByRole('dialog', { name: 'The worlds are not on the phone' });
+    expect(plain).not.toHaveTextContent('Nothing was lost');
   });
 
   it('cancels while running and shows the running steps', async () => {

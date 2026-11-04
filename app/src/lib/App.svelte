@@ -10,6 +10,7 @@
   import EditorPlaceholder from './screens/EditorPlaceholder.svelte';
   import ErrorDialog from './screens/ErrorDialog.svelte';
   import FirstRun from './screens/FirstRun.svelte';
+  import AdbDialog from './screens/AdbDialog.svelte';
   import GameFilesDialog from './screens/GameFilesDialog.svelte';
   import ImportDialog from './screens/ImportDialog.svelte';
   import ReadWorlds from './screens/ReadWorlds.svelte';
@@ -65,6 +66,7 @@
       </div>
       {#if store.importer.isOpen}<ImportDialog />{/if}
       {#if store.gameFiles.isOpen}<GameFilesDialog />{/if}
+      {#if store.adb.isOpen}<AdbDialog />{/if}
       {#if store.dragging !== null && !store.gameFiles.isOpen}<DropOverlay count={store.dragging} />{/if}
       <UpdateUi />
     {/if}

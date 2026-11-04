@@ -5,6 +5,7 @@
   import type { Device } from '../types';
   import Button from '../ui/Button.svelte';
   import Empty from '../ui/Empty.svelte';
+  import Notice from '../ui/Notice.svelte';
   import { toast } from '../ui/toast.svelte';
   import { copyText } from '../util';
   import DeviceRow from './DeviceRow.svelte';
@@ -36,6 +37,12 @@
   {/snippet}
 </Header>
 <div class="main">
+  {#if store.adb.missing}
+    <Notice tone="warn" icon="download" title={t('adb.missingTitle')}>
+      {t('adb.missingText')}
+      {#snippet actions()}<Button size="sm" variant="primary" icon="download" onclick={() => void store.adb.open()}>{t('adb.get')}</Button>{/snippet}
+    </Notice>
+  {/if}
   {#if store.devices.length === 0 && store.scanning}
     <div class="card empty-card" role="status">
       <span class="spin big-spin"></span>

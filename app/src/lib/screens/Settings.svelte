@@ -122,9 +122,14 @@
     <h2 id="s-c">{t('set.connection')}</h2>
     {#snippet root()}
       <Seg label={t('set.root')} value={s.root_mode} onchange={(v: RootMode) => void store.saveSettings({ root_mode: v })}
-        options={[{ value: 'auto', label: t('root.auto') }, { value: 'always', label: t('root.always') }, { value: 'never', label: t('root.never') }]} />
+        options={[{ value: 'auto', label: t('root.auto') }, { value: 'never', label: t('root.never') }]} />
     {/snippet}
     {@render row(t('set.root'), t('set.rootHint'), root)}
+    {#snippet adb()}
+      {#if store.adb.missing}<Button size="sm" variant="primary" icon="download" onclick={() => void store.adb.open()}>{t('adb.get')}</Button>
+      {:else}<Badge tone="ok" dot>{t('set.adbOk')}</Badge>{/if}
+    {/snippet}
+    {@render row(t('set.adb'), store.adb.status?.found ? t(store.adb.status.managed ? 'set.adbManaged' : 'set.adbFound', { path: String(store.adb.status.path) }) : t('set.adbMissing'), adb)}
     {#snippet pd()}<Button size="sm" onclick={() => (managing = true)}>{t('set.manage')}</Button>{/snippet}
     {@render row(t('set.paired'), paired ? t('set.pairedN', { n: paired.length }) : '', pd)}
   </section>

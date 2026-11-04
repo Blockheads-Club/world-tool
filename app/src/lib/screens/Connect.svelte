@@ -200,7 +200,7 @@
         <div class="card sub">
           <b id="ur">{t('set.root')}</b>
           <Seg label={t('set.root')} value={store.settings!.root_mode} onchange={(v: RootMode) => void store.saveSettings({ root_mode: v })}
-            options={[{ value: 'auto', label: t('root.auto') }, { value: 'always', label: t('root.always') }, { value: 'never', label: t('root.never') }]} />
+            options={[{ value: 'auto', label: t('root.auto') }, { value: 'never', label: t('root.never') }]} />
           <p class="hint">{t('root.autoHint')}</p>
         </div>
         <Notice tone="warn" title={t('root.warnTitle')}>{t('root.warnText')}</Notice>

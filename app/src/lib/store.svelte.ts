@@ -9,6 +9,7 @@ import { TransferFlow } from './flows/transfer.svelte';
 import { ImportFlow } from './flows/import.svelte';
 import { GameFilesFlow } from './flows/gamefiles.svelte';
 import { UpdateFlow } from './flows/update.svelte';
+import { AdbFlow } from './flows/adb.svelte';
 
 export type Screen = 'devices' | 'connect' | 'read' | 'transfer' | 'worlds' | 'backups' | 'activity' | 'settings' | 'editor';
 export type Guide = 'usb' | 'wifi' | 'root' | 'pc' | 'ios' | 'driver' | 'trouble';
@@ -23,7 +24,7 @@ export interface ShownError {
 /** Error codes that are shown as a dialog; the rest become a toast. */
 const DIALOG_CODES: ErrorCode[] = [
   'not_allowed', 'game_not_installed', 'unsupported_version', 'declined', 'wrong_password', 'backup_empty',
-  'disconnected', 'disk_full', 'world_damaged'
+  'disconnected', 'disk_full', 'world_damaged', 'restore_declined'
 ];
 
 export class AppStore {
@@ -52,6 +53,7 @@ export class AppStore {
   importer = new ImportFlow(this);
   gameFiles = new GameFilesFlow(this);
   update = new UpdateFlow(this);
+  adb = new AdbFlow(this);
 
   private unlisten: (() => void)[] = [];
 
@@ -78,6 +80,7 @@ export class AppStore {
       })
     );
     void this.refreshDevices();
+    void this.adb.load();
     void this.loadGameFiles();
     if (settings.auto_update) void this.update.check(true);
   }
@@ -132,6 +135,10 @@ export class AppStore {
   fail(e: unknown, retry?: () => void) {
     const error = toAppError(e);
     if (error.code === 'cancelled') return;
+    if (error.code === 'adb_missing') {
+      void this.adb.open();
+      return;
+    }
     if (DIALOG_CODES.includes(error.code)) this.shown = { error, retry };
     else toast(t(`err.${error.code}`), undefined, 8000);
   }

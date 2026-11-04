@@ -54,6 +54,8 @@ describe('tauri backend', () => {
       [() => b.pairedDevices(), 'paired_devices', undefined],
       [() => b.forgetPaired('x'), 'forget_paired', { id: 'x' }],
       [() => b.restartAdb(), 'restart_adb', undefined],
+      [() => b.adbStatus(), 'adb_status', undefined],
+      [() => b.adbDownloadInfo(), 'adb_download_info', undefined],
       [() => b.openDeviceManager(), 'open_device_manager', undefined],
       [() => b.iosBackups(null), 'ios_backups', { folder: null }],
       [() => b.iosOpen('i', 'pw'), 'ios_open', { id: 'i', password: 'pw' }],
@@ -99,7 +101,8 @@ describe('tauri backend', () => {
       [() => b.useApk('o', '/a.apk', cb), 'use_apk'],
       [() => b.apkFromDevice('o', 'd', cb), 'apk_from_device'],
       [() => b.reextract('o', cb), 'reextract'],
-      [() => b.downloadUpdate('o', cb), 'download_update']
+      [() => b.downloadUpdate('o', cb), 'download_update'],
+      [() => b.downloadAdb('o', cb), 'download_adb']
     ];
     for (const [call, name] of ops) {
       await call();
