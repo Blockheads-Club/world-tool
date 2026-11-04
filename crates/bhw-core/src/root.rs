@@ -29,6 +29,12 @@ pub struct RootTarget {
 /// The parts of the game's data folder that are copied.
 const PARTS: [&str; 2] = ["saves", "game_db"];
 
+/// Probes root once per phone; the background watcher and a direct request share this, so whichever comes first
+/// does the probe and the other waits for its answer.
+fn probe_once(probe: &OnceLock<Option<RootStyle>>, adb: &Adb, serial: &str) -> Option<RootStyle> {
+    *probe.get_or_init(|| adb.probe_root(serial).ok().flatten())
+}
+
 impl Core {
     fn root_probe(&self, serial: &str) -> Arc<OnceLock<Option<RootStyle>>> {
         lock(&self.root).entry(serial.to_string()).or_default().clone()
@@ -53,9 +59,7 @@ impl Core {
             let probe = self.root_probe(serial);
             if fresh {
                 let (adb, serial) = (adb.clone(), serial.clone());
-                std::thread::spawn(move || {
-                    probe.get_or_init(|| adb.probe_root(&serial).ok().flatten());
-                });
+                std::thread::spawn(move || probe_once(&probe, &adb, &serial));
             }
         }
     }
@@ -66,7 +70,7 @@ impl Core {
             return None;
         }
         let adb = self.adb().ok()?;
-        *self.root_probe(serial).get_or_init(|| adb.probe_root(serial).ok().flatten())
+        probe_once(&self.root_probe(serial), &adb, serial)
     }
 
     /// Remembers that root failed on a phone (it then uses the backup method until it reconnects).

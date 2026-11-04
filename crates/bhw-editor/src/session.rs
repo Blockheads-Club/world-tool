@@ -313,9 +313,8 @@ impl Session {
     /// Copies a rectangle and clears it (one step).
     pub fn cut(&mut self, r: Rect) -> Result<(Schematic, Outcome)> {
         let s = self.copy(r)?;
-        let o = self.edit_tiles(label(OpKind::Cut, None, None), r.tiles().collect(), &mut |_, t| {
-            Some(Brush::eraser().apply(t))
-        })?;
+        let erase: &mut TileFn<'_> = &mut |_, t| Some(Brush::eraser().apply(t));
+        let o = self.edit_tiles(label(OpKind::Cut, None, None), r.tiles().collect(), erase)?;
         Ok((s, o))
     }
 
