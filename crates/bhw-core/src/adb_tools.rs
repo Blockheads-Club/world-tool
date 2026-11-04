@@ -152,7 +152,7 @@ fn set_mode(_path: &Path, _mode: Option<u32>) -> Result<()> {
 impl Core {
     fn adb_url(&self) -> Result<String> {
         let os = std::env::consts::OS;
-        url_for(os).ok_or_else(|| AppError::with(ErrorCode::NotSupportedYet, "no Platform-Tools for this OS"))
+        url_for(os).ok_or(AppError::with(ErrorCode::NotSupportedYet, "no Platform-Tools for this OS"))
     }
 
     /// Whether adb was found and where it is.
