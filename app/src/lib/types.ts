@@ -64,6 +64,8 @@ export interface AppError {
   name?: string;
   /** How many times the password was wrong (wrong_password). */
   attempt?: number;
+  /** Why the editor refused a request (not_allowed): `edv.refused.<reason>`. */
+  reason?: string;
 }
 
 export function isAppError(e: unknown): e is AppError {

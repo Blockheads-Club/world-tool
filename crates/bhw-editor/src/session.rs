@@ -11,7 +11,7 @@ use plist::Value;
 use serde::Serialize;
 
 use crate::brush::{describe, is_open, is_protected, Brush, Match};
-use crate::error::{Error, Result};
+use crate::error::{refused, Refusal, Result};
 use crate::geom::{Rect, MAX_TILES};
 use crate::history::{Change, History, Label, OpKind, Step};
 use crate::schematic::{Cell, Schematic};
@@ -164,7 +164,10 @@ impl Session {
             }
             if changes.len() as u64 >= self.max_changes {
                 self.revert(&changes)?;
-                return Err(Error::Invalid(format!("more than {} tiles in one change", self.max_changes)));
+                return Err(refused(
+                    Refusal::TooManyChanges,
+                    format!("more than {} tiles in one change", self.max_changes),
+                ));
             }
             self.world.blocks.set_tile(x, y, n)?;
             changes.push(Change::Tile { x, y, before: t, after: n });
@@ -217,14 +220,20 @@ impl Session {
 
     fn check_area(r: &Rect) -> Result<()> {
         if r.area() > MAX_TILES || r.area() == 0 {
-            return Err(Error::Invalid(format!("an area must have 1 to {MAX_TILES} tiles")));
+            return Err(refused(Refusal::AreaSize, format!("an area must have 1 to {MAX_TILES} tiles")));
         }
         Ok(())
     }
 
     fn check_brush(b: &Brush) -> Result<()> {
+        if bhw_content::names::tile_name(b.tile).is_none() {
+            return Err(refused(Refusal::UnknownBlock, format!("unknown block {}", b.tile)));
+        }
         if !b.is_valid() {
-            return Err(Error::Invalid("unknown block".into()));
+            return Err(refused(
+                Refusal::MaterialNotInTile,
+                format!("material {} does not go in block {}", b.contents, b.tile),
+            ));
         }
         Ok(())
     }
@@ -343,8 +352,12 @@ impl Session {
     }
 
     fn edit_blockhead(&mut self, player: &str, id: u64, f: &mut dyn FnMut(&mut Session) -> Result<()>) -> Result<()> {
-        let before =
-            self.world.players.dict(player, id).cloned().ok_or_else(|| Error::Invalid(format!("no blockhead {id}")))?;
+        let before = self
+            .world
+            .players
+            .dict(player, id)
+            .cloned()
+            .ok_or_else(|| refused(Refusal::NoBlockhead, format!("no blockhead {id}")))?;
         let record = self.world.record.as_ref().map(|r| r.dict.clone());
         f(self)?;
         let after = self.world.players.dict(player, id).cloned().expect("still there");
@@ -369,7 +382,7 @@ impl Session {
     /// first air tile, then down to whatever is below; it must lie in stored blocks and not above lava.
     pub fn move_blockhead(&mut self, player: &str, id: u64, x: u32, y: u32) -> Result<(u32, u32)> {
         if x >= self.width() || y >= self.height() {
-            return Err(Error::Invalid("outside the world".into()));
+            return Err(refused(Refusal::OutsideWorld, "outside the world"));
         }
         let (x, y) = self.standing_spot(x, y)?;
         let mv: &mut dyn FnMut(&mut Session) -> Result<()> = &mut |s| {
@@ -389,20 +402,23 @@ impl Session {
     fn standing_spot(&mut self, x: u32, mut y: u32) -> Result<(u32, u32)> {
         let h = self.height();
         let at = |s: &mut Session, y: u32| -> Result<TileData> {
-            s.world.blocks.tile(x, y)?.ok_or_else(|| Error::Invalid("the game has not generated this area yet".into()))
+            s.world
+                .blocks
+                .tile(x, y)?
+                .ok_or_else(|| refused(Refusal::NotGenerated, "the game has not generated this area yet"))
         };
         let mut t = at(self, y)?;
         while t.fg() != AIR {
             y += 1;
             if y >= h {
-                return Err(Error::Invalid("no free tile above".into()));
+                return Err(refused(Refusal::NoFreeTile, "no free tile above"));
             }
             t = at(self, y)?;
         }
         while y > 0 {
             let below = at(self, y - 1)?;
             if below.fg() == crate::brush::LAVA {
-                return Err(Error::Invalid("above lava".into()));
+                return Err(refused(Refusal::Lava, "above lava"));
             }
             if below.fg() != AIR {
                 break;
@@ -427,8 +443,12 @@ impl Session {
     /// Sets an inventory slot to `count` items of `item` (0 empties it).
     pub fn set_stack(&mut self, player: &str, id: u64, slot: usize, item: u16, count: usize) -> Result<()> {
         check_stack(item, count)?;
-        let before =
-            self.world.players.inventory(player, id).cloned().ok_or_else(|| Error::Invalid("no inventory".into()))?;
+        let before = self
+            .world
+            .players
+            .inventory(player, id)
+            .cloned()
+            .ok_or_else(|| refused(Refusal::NoInventory, "no inventory"))?;
         let mut after = before.clone();
         after.set_stack(slot, item, count)?;
         self.apply_inventory(player, id, &after);
@@ -459,7 +479,7 @@ impl Session {
         all.into_iter()
             .find(|o| o.key == key && o.index == index)
             .map(|o| o.dict)
-            .ok_or_else(|| Error::Invalid(format!("no object {index} in {key}")))
+            .ok_or_else(|| refused(Refusal::NoObject, format!("no object {index} in {key}")))
     }
 
     /// Sets one slot of a container object to `count` items of `item`.
@@ -467,7 +487,7 @@ impl Session {
         check_stack(item, count)?;
         let before = self.object(key, index)?;
         let mut inv =
-            container_inventory(&before).ok_or_else(|| Error::Invalid("this object holds no items".into()))?;
+            container_inventory(&before).ok_or_else(|| refused(Refusal::NoItems, "this object holds no items"))?;
         inv.set_stack(slot, item, count)?;
         let mut after = before.clone();
         let target = match after.get_mut("chest").and_then(plist::Value::as_dictionary_mut) {
@@ -487,7 +507,7 @@ impl Session {
     }
 
     fn edit_record(&mut self, f: &mut dyn FnMut(&mut bhw_content::WorldRecord) -> Result<()>) -> Result<()> {
-        let rec = self.world.record.as_mut().ok_or_else(|| Error::Invalid("the world has no record".into()))?;
+        let rec = self.world.record.as_mut().ok_or_else(|| refused(Refusal::NoRecord, "the world has no record"))?;
         let before = rec.dict.clone();
         f(rec)?;
         let after = rec.dict.clone();
@@ -502,7 +522,7 @@ impl Session {
 
     /// Renames the world.
     pub fn set_name(&mut self, name: &str) -> Result<()> {
-        self.edit_record(&mut |r| Ok(r.set_name(name)?))
+        self.edit_record(&mut |r| r.set_name(name).map_err(|e| refused(Refusal::BadName, e.to_string())))
     }
 
     /// Sets the time of day (hour 0..24).
@@ -601,7 +621,7 @@ impl Session {
     /// Undoes or redoes until `cursor` steps are applied.
     pub fn go_to(&mut self, cursor: usize) -> Result<()> {
         if cursor > self.history.steps().len() {
-            return Err(Error::Invalid("no such step".into()));
+            return Err(refused(Refusal::NoStep, "no such step"));
         }
         while self.history.cursor() > cursor {
             self.undo()?;
@@ -635,10 +655,10 @@ impl Session {
 
 fn check_stack(item: u16, count: usize) -> Result<()> {
     if count > 999 {
-        return Err(Error::Invalid("a stack holds at most 999 items".into()));
+        return Err(refused(Refusal::StackTooLarge, "a stack holds at most 999 items"));
     }
     if count > 0 && bhw_content::names::item_name(item).is_none() {
-        return Err(Error::Invalid(format!("unknown item {item}")));
+        return Err(refused(Refusal::UnknownItem, format!("unknown item {item}")));
     }
     Ok(())
 }

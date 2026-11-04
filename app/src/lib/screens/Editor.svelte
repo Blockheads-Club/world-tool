@@ -9,7 +9,7 @@
   import Notice from '../ui/Notice.svelte';
   import Seg from '../ui/Seg.svelte';
   import { viewTiles, zoomPercent } from '../editor/camera';
-  import { TOOLS, type Panel, type Tool } from '../editor/flow.svelte';
+  import { refusal, TOOLS, type Panel, type Tool } from '../editor/flow.svelte';
   import GoToDialog from '../editor/GoToDialog.svelte';
   import HistoryPanel from '../editor/HistoryPanel.svelte';
   import ItemPicker from '../editor/ItemPicker.svelte';
@@ -120,7 +120,7 @@
     </div>
   {:else if ed.status === 'error'}
     <div class="center">
-      <Empty icon="alert" title={t('edv.openFailed')} text={[t(`err.${ed.error!.code}`), ed.error!.detail].filter(Boolean).join(' ')}>
+      <Empty icon="alert" title={t('edv.openFailed')} text={refusal(ed.error!) ?? [t(`err.${ed.error!.code}`), ed.error!.detail].filter(Boolean).join(' ')}>
         <Button variant="primary" icon="back" onclick={() => store.go('worlds')}>{t('edv.back')}</Button>
       </Empty>
     </div>

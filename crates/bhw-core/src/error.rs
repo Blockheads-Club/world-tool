@@ -72,6 +72,10 @@ pub struct Extra {
     pub name: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub attempt: Option<u32>,
+    /// Why the editor refused a request (`not_allowed`): a `bhw_editor::Refusal` code, `nothing_copied` or
+    /// `multiplayer_world`; the UI shows `edv.refused.<reason>`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
 }
 
 /// Result alias of this crate.
@@ -110,6 +114,13 @@ impl AppError {
     pub fn name(mut self, n: impl ToString) -> AppError {
         self.extra.name = Some(n.to_string());
         self
+    }
+
+    /// An editor refusal with its reason code.
+    pub fn refused(reason: &str, detail: impl ToString) -> AppError {
+        let mut e = AppError::with(ErrorCode::NotAllowed, detail);
+        e.extra.reason = Some(reason.to_string());
+        e
     }
 
     /// Sets the version found.

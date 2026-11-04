@@ -16,7 +16,7 @@ pub mod session;
 pub mod view;
 
 pub use brush::{Brush, Layer, Match};
-pub use error::{Error, Result};
+pub use error::{refused, Error, Refusal, Result};
 pub use geom::Rect;
 pub use history::{Label, OpKind};
 pub use schematic::Schematic;

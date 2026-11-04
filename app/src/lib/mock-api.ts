@@ -875,7 +875,7 @@ export class MockBackend implements Backend {
   async editorSaveSchematic(session: string, rect: Rect | null, name: string) {
     const s = this.ed(session);
     const size = rect ? [rect.w, rect.h] : s.state().clipboard;
-    if (!size) throw err('not_allowed', { detail: 'nothing copied' });
+    if (!size) throw err('not_allowed', { reason: 'nothing_copied', detail: 'nothing copied' });
     const info: SchematicInfo = { file: this.schematicFile(name.trim() || 'Schematic'), name: name.trim(), width: size[0], height: size[1], source_world: s.name, created: Math.floor(this.now / 1000) };
     this.schematics.unshift(info);
     return info;

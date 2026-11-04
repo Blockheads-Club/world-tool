@@ -18,12 +18,24 @@ import type {
 } from '../types';
 import { toAppError } from '../errors';
 import { t } from '../i18n.svelte';
+import { en, type Key } from '../messages';
 import type { AppStore } from '../store.svelte';
 import { toast } from '../ui/toast.svelte';
 import { clampCam, tileAt, visibleBlocks, wrapX, zoomAt, type Camera, type Size } from './camera';
 import { key, parseOverview, parseRegion, type BlockData, type Overview } from './data';
 import { brushPoints, linePoints, oreBrush, rectOf } from './geom';
 import { ALL_LAYERS, type Layers } from './paint';
+
+/**
+ * The message for a request the editor refused (`not_allowed`, which it shares with the phone's "allow this
+ * computer" error), or `null` for any other error. The reason code picks the message; `op` the fallback.
+ */
+export function refusal(e: AppError, op?: string): string | null {
+  if (e.code !== 'not_allowed') return null;
+  const key = `edv.refused.${e.reason}`;
+  if (key in en) return t(key as Key);
+  return t(op === 'move_blockhead' ? 'edv.moveRefused' : 'edv.editRefused');
+}
 
 /** Most macro blocks requested at once (the backend accepts 256). */
 export const REQUEST_BLOCKS = 128;
@@ -231,7 +243,7 @@ export class EditorFlow {
         for (const [k, b] of got) this.blocks.set(k, b);
         this.version++;
       } catch (e) {
-        if (this.world === w) this.app.fail(e);
+        if (this.world === w) this.fail(e);
         return;
       } finally {
         for (let mx = rx0; mx < rx1; mx++) this.pending.delete(key(mx, my));
@@ -300,7 +312,7 @@ export class EditorFlow {
     try {
       this.tile = await this.api.editorTile(this.w.session, wrapX(x, this.w.width), y);
     } catch (e) {
-      this.app.fail(e);
+      this.fail(e);
     }
   }
 
@@ -393,13 +405,18 @@ export class EditorFlow {
       await this.reload(r.blocks);
       return r.outcome;
     } catch (e) {
-      // a refused edit is not the phone's "allow this computer" error that shares its code
-      if (toAppError(e).code === 'not_allowed') toast(t(req.op === 'move_blockhead' ? 'edv.moveRefused' : 'edv.editRefused'), undefined, 8000);
-      else this.app.fail(e);
+      this.fail(e, req.op);
       return null;
     } finally {
       this.busy = false;
     }
+  }
+
+  /** Shows an error: a refused request as a toast of its own, anything else as the app's error dialog. */
+  private fail(e: unknown, op?: string) {
+    const msg = refusal(toAppError(e), op);
+    if (msg) toast(msg, undefined, 8000);
+    else this.app.fail(e);
   }
 
   private notice(o: Outcome) {
@@ -427,7 +444,7 @@ export class EditorFlow {
       if (this.compare) await this.showCompare(true);
       await this.reload(r.blocks);
     } catch (e) {
-      this.app.fail(e);
+      this.fail(e);
     }
   }
 
@@ -488,7 +505,7 @@ export class EditorFlow {
       this.preview = found;
       this.previewCount = n;
     } catch (e) {
-      this.app.fail(e);
+      this.fail(e);
     }
   }
 
@@ -514,7 +531,7 @@ export class EditorFlow {
     try {
       this.compare = await this.api.editorChanges(this.w.session);
     } catch (e) {
-      this.app.fail(e);
+      this.fail(e);
     }
   }
 
@@ -531,7 +548,7 @@ export class EditorFlow {
         this.resultsTotal = objs.length;
       }
     } catch (e) {
-      this.app.fail(e);
+      this.fail(e);
     }
   }
 
@@ -539,7 +556,7 @@ export class EditorFlow {
     try {
       this.schematics = await this.api.editorSchematics();
     } catch (e) {
-      this.app.fail(e);
+      this.fail(e);
     }
   }
 
@@ -549,7 +566,7 @@ export class EditorFlow {
       toast(t('edv.sch.saved', { name }));
       await this.loadSchematics();
     } catch (e) {
-      this.app.fail(e);
+      this.fail(e);
     }
   }
 
@@ -558,7 +575,7 @@ export class EditorFlow {
       this.ed = await this.api.editorUseSchematic(this.w.session, file);
       this.setTool('paste');
     } catch (e) {
-      this.app.fail(e);
+      this.fail(e);
     }
   }
 
@@ -569,7 +586,7 @@ export class EditorFlow {
       await this.api.editorImportSchematic(path);
       await this.loadSchematics();
     } catch (e) {
-      this.app.fail(e);
+      this.fail(e);
     }
   }
 
@@ -580,7 +597,7 @@ export class EditorFlow {
       await this.api.editorExportSchematic(s.file, dest);
       toast(t('edv.sch.exported', { name: s.name }));
     } catch (e) {
-      this.app.fail(e);
+      this.fail(e);
     }
   }
 
@@ -589,7 +606,7 @@ export class EditorFlow {
       await this.api.editorDeleteSchematic(s.file);
       await this.loadSchematics();
     } catch (e) {
-      this.app.fail(e);
+      this.fail(e);
     }
   }
 
@@ -611,7 +628,7 @@ export class EditorFlow {
       this.app.go(this.leaveTo, true);
       this.app.savedEdit = { world: saved.name, changes };
     } catch (e) {
-      this.app.fail(e);
+      this.fail(e);
     } finally {
       this.saving = false;
     }
