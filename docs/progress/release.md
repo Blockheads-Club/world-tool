@@ -33,7 +33,9 @@ release workflows, semantic-release, Tauri updater) and blockheads-server (works
   `last_update_check`; `download_update` downloads + verifies with `Progress{stage: downloading}`; `restart_app`
   installs the downloaded package, then restarts (Windows: passive installer restarts the app).
 - `.bhworld` association: `bundle.fileAssociations` + macOS `exportedType` (UTI `club.blockheads.worldtool.bhworld`)
-  + a shared-mime-info XML (`app/src-tauri/linux/bh-world-tool-mime.xml`) installed by deb/rpm.
+  + a shared-mime-info XML (`app/src-tauri/linux/bh-world-tool-mime.xml`) installed by deb/rpm + a desktop template
+  (`linux/bh-world-tool.desktop`) whose `Exec` has `%F` (Tauri's default has none, so a double-clicked file was not
+  passed to the app).
 
 ## Secrets (repo Blockheads-Club/world-tool → Settings → Secrets → Actions)
 - `TAURI_SIGNING_PRIVATE_KEY`: content of `release-secrets/updater.key` (outside the repo, next to the worktrees).
@@ -47,6 +49,12 @@ release workflows, semantic-release, Tauri updater) and blockheads-server (works
   Crates workspace coverage today: 100 % lines (23 667), 100 % functions. src-tauri: `update.rs` lines fully hit
   by its tests (generic `Slot` instantiations with the real `Update` count as missed functions); `lib.rs` command
   glue ~20 %, no gate for src-tauri yet (same as before).
+
+- 2026-11-04 (later): local release build on this Arch machine with the real key: deb + rpm built and signed
+  (`.deb.sig`, `.rpm.sig` written, so `linux-x86_64-deb/-rpm` manifest keys work); deb contains the mime XML, the
+  `%F` desktop file and no adb. AppImage: AppDir has `usr/bin/adb` next to the exe, but linuxdeploy fails on Arch
+  (known host issue; CI uses ubuntu-22.04 like the patcher). `updater-manifest.ts` run on CI-style names gives all
+  10 platform keys. vitest 90/90 with 100 % thresholds, svelte-check clean, src-tauri clippy -D warnings clean.
 
 ## Open
 - macOS bundles are not signed/notarised (Gatekeeper warns; "Open" via right-click). Needs Apple Developer ID

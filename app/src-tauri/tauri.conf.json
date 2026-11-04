@@ -51,8 +51,8 @@
     ],
     "macOS": { "minimumSystemVersion": "11.0" },
     "linux": {
-      "deb": { "files": { "/usr/share/mime/packages/bh-world-tool.xml": "linux/bh-world-tool-mime.xml" } },
-      "rpm": { "files": { "/usr/share/mime/packages/bh-world-tool.xml": "linux/bh-world-tool-mime.xml" } }
+      "deb": { "desktopTemplate": "linux/bh-world-tool.desktop", "files": { "/usr/share/mime/packages/bh-world-tool.xml": "linux/bh-world-tool-mime.xml" } },
+      "rpm": { "desktopTemplate": "linux/bh-world-tool.desktop", "files": { "/usr/share/mime/packages/bh-world-tool.xml": "linux/bh-world-tool-mime.xml" } }
     },
     "windows": { "nsis": { "installMode": "currentUser" } }
   },
