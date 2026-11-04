@@ -361,6 +361,10 @@ export interface Settings {
   pc_folder: string | null;
   skipped_version: string | null;
   last_update_check: number | null;
+  /** Editor: edits may create blocks where the game has not generated the world yet. */
+  editor_generate: boolean;
+  /** Editor: edits may change tiles of objects (trees, chests…), removing those objects. */
+  editor_objects: boolean;
 }
 
 export interface UpdateInfo {
@@ -429,12 +433,17 @@ export interface EditorWorld {
 }
 
 export interface EditorObject {
+  /** `dw` record key and index. */
+  key: string;
+  index: number;
   kind: number;
   kind_name: string | null;
   id: number | null;
   x: number;
   y: number;
   text: string | null;
+  /** Container contents per slot `[item, count]`. */
+  slots: [number, number][] | null;
 }
 
 export interface EditorTile {
@@ -458,6 +467,8 @@ export interface IdInfo {
   name: string;
   color?: [number, number, number];
   cell?: [number, number];
+  /** Block items: the tile type that stands for the item. */
+  tile?: number;
   placeable?: boolean;
 }
 
@@ -468,7 +479,8 @@ export interface Catalog {
 }
 
 export type OpKind =
-  | 'pencil' | 'brush' | 'remove' | 'fill' | 'clear' | 'replace' | 'paste' | 'cut' | 'blockhead' | 'inventory' | 'settings';
+  | 'pencil' | 'brush' | 'remove' | 'fill' | 'clear' | 'replace' | 'paste' | 'cut' | 'blockhead' | 'inventory'
+  | 'remove_blockhead' | 'container' | 'settings';
 
 export interface HistoryLabel {
   kind: OpKind;
@@ -478,8 +490,81 @@ export interface HistoryLabel {
 }
 
 export interface EditorState {
+  name: string | null;
+  time_of_day: number | null;
   history: HistoryLabel[];
   cursor: number;
   unsaved: number;
   clipboard: [number, number] | null;
+}
+
+export type Layer = 'front' | 'back';
+
+/** What a tool places. */
+export interface Brush {
+  layer: Layer;
+  tile: number;
+  contents?: number;
+}
+
+/** Which tiles a replace or search matches. */
+export interface TileMatch {
+  layer: Layer;
+  tile: number;
+  contents?: number | null;
+}
+
+/** A rectangle of tiles (`y` = bottom row). */
+export interface Rect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+export type EditRequest =
+  | { op: 'paint'; kind: OpKind; points: [number, number][]; brush: Brush; only_solid?: boolean }
+  | { op: 'fill'; rect: Rect; brush: Brush }
+  | { op: 'clear'; rect: Rect }
+  | { op: 'replace'; from: TileMatch; to: Brush; area: Rect | null }
+  | { op: 'copy'; rect: Rect }
+  | { op: 'cut'; rect: Rect }
+  | { op: 'paste'; x: number; y: number; skip_air?: boolean; rotate?: number; flip?: boolean }
+  | { op: 'move_blockhead'; player: string; id: number; x: number; y: number }
+  | { op: 'set_stats'; player: string; id: number; stats: [number, number, number, number] }
+  | { op: 'set_stack'; player: string; id: number; slot: number; item: number; count: number }
+  | { op: 'remove_blockhead'; player: string; id: number }
+  | { op: 'set_container_stack'; key: string; index: number; slot: number; item: number; count: number }
+  | { op: 'set_name'; name: string }
+  | { op: 'set_time_of_day'; hour: number };
+
+export interface Outcome {
+  changed: number;
+  protected: number;
+  missing: number;
+  created: number;
+  removed: number;
+}
+
+export interface EditResult {
+  outcome: Outcome;
+  state: EditorState;
+  /** Macro blocks to redraw. */
+  blocks: [number, number][];
+}
+
+export interface HistoryResult {
+  state: EditorState;
+  blocks: [number, number][];
+}
+
+export type SearchKind = 'chests' | 'signs' | 'objects';
+
+export interface SchematicInfo {
+  file: string;
+  name: string;
+  width: number;
+  height: number;
+  source_world: string | null;
+  created: number;
 }

@@ -30,6 +30,10 @@ pub enum OpKind {
     Blockhead,
     /// An inventory changed.
     Inventory,
+    /// A blockhead removed.
+    RemoveBlockhead,
+    /// A chest's (or other container's) contents changed.
+    Container,
     /// World settings changed.
     Settings,
 }
@@ -84,6 +88,35 @@ pub enum Change {
         before: Inventory,
         /// New inventory.
         after: Inventory,
+    },
+    /// A block created where the game had not generated one (undo removes it).
+    BlockCreated {
+        /// Macro block position.
+        pos: (u32, u32),
+        /// The tile the new block was filled with.
+        fill: TileData,
+    },
+    /// A dynamic object removed (or put back).
+    Object {
+        /// Its `dw` record key.
+        key: String,
+        /// Index in the record.
+        index: usize,
+        /// The object's dictionary (`Some` = present before).
+        before: Option<Dictionary>,
+        /// After the change.
+        after: Option<Dictionary>,
+    },
+    /// A blockhead removed (undo puts it back with its inventory).
+    BlockheadRemoved {
+        /// Player id.
+        player: String,
+        /// Index in the player's list.
+        index: usize,
+        /// Its dictionary.
+        dict: Dictionary,
+        /// Its inventory, if it had one.
+        inventory: Option<Inventory>,
     },
     /// The world record's dictionary.
     Record {

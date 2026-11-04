@@ -15,7 +15,23 @@ const Y: u32 = 512;
 /// Puts the synthetic editor world into the library; returns its library id.
 fn add_world(env: &Env, core: &Core) -> String {
     let mut files = bhw_save::FileMap::new();
-    files.insert("world_db/data.mdb".into(), bhw_lmdb::write_env(&world_env(), Layout::Bits32).unwrap());
+    let mut env_db = world_env();
+    let obj = |id: u64, x: i64, extra: (&str, plist::Value)| {
+        let mut d = bhw_content::fixtures::object(id, x, 520).into_dictionary().unwrap();
+        d.insert(extra.0.into(), extra.1);
+        plist::Value::Dictionary(d)
+    };
+    let slots = bhw_content::Inventory { slots: vec![vec![]; 4] }.to_value();
+    let dw = env_db.named.get_mut(&b"dw"[..]).unwrap();
+    dw.entries.push((
+        b"1_16/47".to_vec(),
+        bhw_content::fixtures::objects_record(vec![obj(31, 40, ("text", "Hi there".into()))]),
+    ));
+    dw.entries.push((
+        b"1_16/46".to_vec(),
+        bhw_content::fixtures::objects_record(vec![obj(32, 41, ("saveItemSlots", slots))]),
+    ));
+    files.insert("world_db/data.mdb".into(), bhw_lmdb::write_env(&env_db, Layout::Bits32).unwrap());
     files.insert("map/default/0_16.png".into(), b"png".to_vec());
     let w = bhw_save::world::from_file_map(ID, files).unwrap();
     let path = env.path("in/Test.bhworld");
@@ -79,6 +95,7 @@ fn open_view_edit_save() {
         },
         EditRequest::Copy { rect: Rect { x: 0, y: Y, w: 3, h: 2 } },
         EditRequest::Paste { x: 40, y: Y, skip_air: false, rotate: 1, flip: true },
+        EditRequest::Paste { x: 44, y: Y, skip_air: true, rotate: 0, flip: false },
         EditRequest::Cut { rect: Rect { x: 40, y: Y, w: 1, h: 1 } },
         EditRequest::MoveBlockhead { player: String::new(), id: 9, x: 10, y: 600 },
         EditRequest::SetStats { player: String::new(), id: 9, stats: [0.5, 0.5, 0.5, 0.5] },
@@ -91,17 +108,20 @@ fn open_view_edit_save() {
         last = Some(core.editor_edit(&s, e).unwrap());
     }
     let st = last.unwrap().state;
-    assert_eq!((st.history.len(), st.cursor, st.unsaved), (11, 11, 11));
+    assert_eq!((st.history.len(), st.cursor, st.unsaved), (12, 12, 12));
     assert_eq!(st.clipboard, Some([1, 1]));
+    assert_eq!((st.name.as_deref(), st.time_of_day), (Some("EDITED"), Some(8.0)));
     assert_eq!(core.editor_blockheads(&s).unwrap()[0].x, 10);
     assert!(core.editor_changes(&s).unwrap().contains(&[1, Y]));
     let (found, n) = core.editor_find(&s, Match { layer: Layer::Front, tile: 6, contents: None }, None, 2).unwrap();
-    assert_eq!((found.len(), n), (2, 5));
+    assert_eq!((found.len(), n), (2, 7));
     // undo everything, then redo all
-    assert_eq!(core.editor_history(&s, 0).unwrap().cursor, 0);
-    assert_eq!(core.editor_history(&s, 11).unwrap().cursor, 11);
+    let h = core.editor_history(&s, 0).unwrap();
+    assert_eq!(h.state.cursor, 0);
+    assert!(h.blocks.contains(&[0, 16]));
+    assert_eq!(core.editor_history(&s, 12).unwrap().state.cursor, 12);
     assert!(core.editor_history(&s, 99).is_err());
-    assert_eq!(core.editor_state(&s).unwrap().unsaved, 11);
+    assert_eq!(core.editor_state(&s).unwrap().unsaved, 12);
 
     // save back into the library
     let saved = core.editor_save(&s, false).unwrap();
@@ -211,4 +231,81 @@ fn server_and_remote_worlds_and_atlas() {
     core.use_apk("op", &apk_path.display().to_string(), &mut |_| {}).unwrap();
     assert!(core.editor_atlas("tiles").unwrap().is_some());
     assert!(core.editor_atlas("items").unwrap().is_some());
+}
+
+#[test]
+fn schematics_search_and_options() {
+    let env = Env::new(&PhoneData::new(&[]));
+    let core = env.core();
+    let lib_id = add_world(&env, &core);
+    let s = core.editor_open(&lib_id).unwrap().session;
+    assert!(core.editor_schematics().unwrap().is_empty());
+    // save a rectangle, then the clipboard (none yet: refused)
+    let rect = Rect { x: 0, y: Y, w: 3, h: 2 };
+    let a = core.editor_save_schematic(&s, Some(rect), "House / 1").unwrap();
+    assert_eq!((a.file.as_str(), a.width, a.height), ("House _ 1.bhwschem", 3, 2));
+    assert_eq!(core.editor_save_schematic(&s, None, "x").unwrap_err().code, ErrorCode::NotAllowed);
+    core.editor_edit(&s, EditRequest::Copy { rect }).unwrap();
+    let b = core.editor_save_schematic(&s, None, "House / 1").unwrap();
+    assert_eq!(b.file, "House _ 1 (2).bhwschem");
+    let c = core.editor_save_schematic(&s, Some(rect), "  ").unwrap();
+    assert_eq!(c.file, "Schematic.bhwschem");
+    let dir = env.path("Worlds/schematics");
+    std::fs::write(dir.join("junk.bhwschem"), b"no").unwrap();
+    std::fs::write(dir.join("notes.txt"), b"no").unwrap();
+    assert_eq!(core.editor_schematics().unwrap().len(), 3);
+    // use, export, import, delete
+    assert_eq!(core.editor_use_schematic(&s, &a.file).unwrap().clipboard, Some([3, 2]));
+    assert_eq!(core.editor_use_schematic(&s, "junk.bhwschem").unwrap_err().code, ErrorCode::WorldDamaged);
+    assert_eq!(core.editor_use_schematic(&s, "notes.txt").unwrap_err().code, ErrorCode::NotFound);
+    assert_eq!(core.editor_use_schematic(&s, "../x.bhwschem").unwrap_err().code, ErrorCode::NotFound);
+    let out = env.path("out.bhwschem");
+    core.editor_export_schematic(&a.file, &out.display().to_string()).unwrap();
+    let i = core.editor_import_schematic(&out.display().to_string()).unwrap();
+    assert_eq!(i.name, "House / 1");
+    assert_eq!(
+        core.editor_import_schematic(&dir.join("junk.bhwschem").display().to_string()).unwrap_err().code,
+        ErrorCode::WorldDamaged
+    );
+    core.editor_delete_schematic(&i.file).unwrap();
+    assert_eq!(core.editor_schematics().unwrap().len(), 3);
+    std::fs::remove_dir_all(&dir).unwrap();
+    assert!(core.editor_schematics().unwrap().is_empty());
+
+    // search: the fixture's chest object (no slots, no text) is found as an object only
+    use bhw_core::editor::SearchKind;
+    assert_eq!(core.editor_search(&s, SearchKind::Objects, "").unwrap().len(), 3);
+    assert_eq!(core.editor_search(&s, SearchKind::Objects, "CHE").unwrap().len(), 2);
+    assert!(core.editor_search(&s, SearchKind::Objects, "zzz").unwrap().is_empty());
+    let chests = core.editor_search(&s, SearchKind::Chests, "").unwrap();
+    assert_eq!(chests[0].slots.as_ref().unwrap().len(), 4);
+    assert_eq!(core.editor_search(&s, SearchKind::Signs, "THERE").unwrap()[0].text.as_deref(), Some("Hi there"));
+    let r = core.editor_edit(
+        &s,
+        EditRequest::SetContainerStack { key: chests[0].key.clone(), index: 0, slot: 1, item: 21, count: 2 },
+    );
+    assert_eq!(r.unwrap().state.history[0].b.as_deref(), Some("i:21"));
+    assert_eq!(core.editor_tile(&s, 41, 520).unwrap().objects[0].slots.as_ref().unwrap()[1], [21, 2]);
+
+    // options from the settings: ungenerated areas only when allowed
+    let paint = |x| EditRequest::Paint {
+        kind: OpKind::Pencil,
+        points: vec![[x, Y]],
+        brush: Brush::front(6),
+        only_solid: false,
+    };
+    assert_eq!(core.editor_edit(&s, paint(70)).unwrap().outcome.missing, 1);
+    let mut patch = serde_json::Map::new();
+    patch.insert("editor_generate".into(), serde_json::Value::Bool(true));
+    core.set_settings(&patch).unwrap();
+    assert_eq!(core.editor_edit(&s, paint(70)).unwrap().outcome.created, 1);
+    // blockheads: remove; containers: refused without slots
+    core.editor_edit(&s, EditRequest::RemoveBlockhead { player: String::new(), id: 9 }).unwrap();
+    assert!(core.editor_blockheads(&s).unwrap().is_empty());
+    let objs = core.editor_search(&s, SearchKind::Signs, "").unwrap();
+    let r = core.editor_edit(
+        &s,
+        EditRequest::SetContainerStack { key: objs[0].key.clone(), index: 0, slot: 0, item: 21, count: 1 },
+    );
+    assert_eq!(r.unwrap_err().code, ErrorCode::NotAllowed);
 }

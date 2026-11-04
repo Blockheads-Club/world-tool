@@ -32,7 +32,15 @@ import type {
   EditorBlockhead,
   EditorState,
   EditorTile,
-  EditorWorld
+  EditorWorld,
+  EditorObject,
+  EditRequest,
+  EditResult,
+  HistoryResult,
+  Rect,
+  SchematicInfo,
+  SearchKind,
+  TileMatch
 } from './types';
 
 export type OnProgress = (p: Progress) => void;
@@ -135,6 +143,25 @@ export interface Backend {
   editorAtlas(which: 'tiles' | 'items'): Promise<ArrayBuffer>;
   editorState(session: string): Promise<EditorState>;
   editorBlockheads(session: string): Promise<EditorBlockhead[]>;
+  editorEdit(session: string, req: EditRequest): Promise<EditResult>;
+  /** Tiles matching `target` in `area` (whole world if null): up to `limit` positions and the total count. */
+  editorFind(session: string, target: TileMatch, area: Rect | null, limit: number): Promise<[[number, number][], number]>;
+  /** Undo / redo until `to` steps are applied. */
+  editorHistory(session: string, to: number): Promise<HistoryResult>;
+  /** Tiles changed by the applied steps (compare view). */
+  editorChanges(session: string): Promise<[number, number][]>;
+  /** Saves into Worlds (back into the same world, or `asNew`). */
+  editorSave(session: string, asNew: boolean): Promise<World>;
+  editorSearch(session: string, kind: SearchKind, text: string): Promise<EditorObject[]>;
+  editorSchematics(): Promise<SchematicInfo[]>;
+  /** Saves a rectangle (or the clipboard when `rect` is null) as a schematic file. */
+  editorSaveSchematic(session: string, rect: Rect | null, name: string): Promise<SchematicInfo>;
+  editorUseSchematic(session: string, file: string): Promise<EditorState>;
+  editorImportSchematic(path: string): Promise<SchematicInfo>;
+  editorExportSchematic(file: string, dest: string): Promise<void>;
+  editorDeleteSchematic(file: string): Promise<void>;
+  /** File dialog for schematics: open (import) or save (export, suggested `name`). */
+  pickSchematic(save: boolean, name: string | null): Promise<string | null>;
 
   /** Files given to the app by the OS (double-clicked `.bhworld`), at start-up and while running. */
   onOpenFiles(cb: (paths: string[]) => void): Promise<Unlisten>;
@@ -220,6 +247,19 @@ export const tauriBackend: Backend = {
   editorAtlas: (which) => invoke('editor_atlas', { which }),
   editorState: (session) => invoke('editor_state', { session }),
   editorBlockheads: (session) => invoke('editor_blockheads', { session }),
+  editorEdit: (session, req) => invoke('editor_edit', { session, req }),
+  editorFind: (session, target, area, limit) => invoke('editor_find', { session, target, area, limit }),
+  editorHistory: (session, to) => invoke('editor_history', { session, to }),
+  editorChanges: (session) => invoke('editor_changes', { session }),
+  editorSave: (session, asNew) => invoke('editor_save', { session, asNew }),
+  editorSearch: (session, kind, text) => invoke('editor_search', { session, kind, text }),
+  editorSchematics: () => invoke('editor_schematics'),
+  editorSaveSchematic: (session, rect, name) => invoke('editor_save_schematic', { session, rect, name }),
+  editorUseSchematic: (session, file) => invoke('editor_use_schematic', { session, file }),
+  editorImportSchematic: (path) => invoke('editor_import_schematic', { path }),
+  editorExportSchematic: (file, dest) => invoke('editor_export_schematic', { file, dest }),
+  editorDeleteSchematic: (file) => invoke('editor_delete_schematic', { file }),
+  pickSchematic: (save, name) => invoke('pick_schematic', { save, name }),
 
   onOpenFiles: async (cb) => {
     const off = await listen<string[]>('open-files', (e) => cb(e.payload));
@@ -251,7 +291,9 @@ export const COMMANDS = [
   'pick_folder', 'pick_import', 'pick_apk',
   'check_update', 'download_update', 'restart_app', 'take_open_files',
   'editor_open', 'editor_close', 'editor_region', 'editor_overview', 'editor_tile', 'editor_catalog', 'editor_atlas',
-  'editor_state', 'editor_blockheads'
+  'editor_state', 'editor_blockheads', 'editor_edit', 'editor_find', 'editor_history', 'editor_changes', 'editor_save',
+  'editor_search', 'editor_schematics', 'editor_save_schematic', 'editor_use_schematic', 'editor_import_schematic',
+  'editor_export_schematic', 'editor_delete_schematic', 'pick_schematic'
 ] as const;
 
 /** True inside the Tauri webview. */

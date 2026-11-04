@@ -127,6 +127,54 @@ impl BlockStore {
         Ok(self.block(pos)?.map(|b| &b.raw()[..BLOCK_RAW_LEN - 5]))
     }
 
+    /// Stores a new block at `pos` (where the game has not generated one yet) with every tile set to `fill`,
+    /// block version 0 and update counter 0, like a block the game has just generated. Fails if one is stored.
+    pub fn create(&mut self, pos: MacroPos, fill: &TileData) -> Result<()> {
+        if self.stored.contains_key(&pos) {
+            return Err(Error::Invalid(format!("block {}_{} exists", pos.0, pos.1)));
+        }
+        let mut raw = Vec::with_capacity(BLOCK_RAW_LEN);
+        for _ in 0..MACRO_SIZE * MACRO_SIZE {
+            raw.extend_from_slice(&fill.0);
+        }
+        raw.extend_from_slice(&[0; 5]);
+        let key = block_key(pos.0, pos.1);
+        let b = MacroBlock::decode(&key, &crate::stored::gzip(&raw)).expect("own encoding");
+        self.stored.insert(pos, b.encode());
+        self.cache.insert(pos, b);
+        self.dirty.insert(pos);
+        Ok(())
+    }
+
+    /// Removes a stored block (to undo [`BlockStore::create`]); true if it was there.
+    pub fn remove(&mut self, pos: MacroPos) -> bool {
+        self.cache.remove(&pos);
+        self.dirty.remove(&pos);
+        self.bad.remove(&pos);
+        self.stored.remove(&pos).is_some()
+    }
+
+    /// A tile to fill new blocks with: the open sky (air in front of air) of the highest stored block row, with
+    /// its zone and climate bytes, no contents and no owner; plain air when the world has no sky tile.
+    pub fn sky_tile(&mut self) -> TileData {
+        let mut tops: Vec<MacroPos> = self.stored.keys().copied().collect();
+        tops.sort_by_key(|p| std::cmp::Reverse(p.1));
+        for pos in tops.into_iter().take(64) {
+            let Ok(Some(b)) = self.block(pos) else { continue };
+            let t = TileData::from_slice(b.tile(0, MACRO_SIZE - 1).0);
+            if t.fg() == crate::tile::AIR && t.bg() == crate::tile::AIR {
+                let mut t = t;
+                t.set_contents(0);
+                t.clear_owner();
+                return t;
+            }
+        }
+        let mut t = TileData::default();
+        t.set_fg(crate::tile::AIR);
+        t.set_bg(crate::tile::AIR);
+        t
+    }
+
     /// True if any block changed.
     pub fn is_dirty(&self) -> bool {
         !self.dirty.is_empty()
@@ -201,6 +249,26 @@ pub(crate) mod tests {
         assert_eq!(all.len(), 3);
         assert_eq!(all[0].1, out[0].1);
         assert_eq!(all[1], entries[1]);
+    }
+
+    #[test]
+    fn create_remove_sky() {
+        let mut s = BlockStore::new(&[record(0, 0, 1, 1), record(3, 30, 2, 2), record(4, 31, 2, 1)]);
+        let sky = s.sky_tile();
+        assert_eq!((sky.fg(), sky.bg()), (2, 2));
+        assert!(s.create((3, 30), &sky).is_err());
+        s.create((7, 30), &sky).unwrap();
+        assert!(s.has((7, 30)) && s.is_dirty());
+        assert_eq!(s.tile(7 * 32 + 3, 30 * 32 + 3).unwrap().unwrap(), sky);
+        let rec = s.entries();
+        let b = MacroBlock::decode(&block_key(7, 30), &rec.iter().find(|r| r.0 == b"7_30").unwrap().1).unwrap();
+        assert_eq!((b.version(), b.update_index()), (0, 1));
+        assert!(s.remove((7, 30)));
+        assert!(!s.remove((7, 30)));
+        assert_eq!(s.entries().len(), 3);
+        let mut none = BlockStore::new(&[record(0, 0, 1, 1), (b"1_0".to_vec(), b"bad".to_vec())]);
+        let t = none.sky_tile();
+        assert_eq!((t.fg(), t.bg(), t.zone()), (2, 2, 0));
     }
 
     #[test]

@@ -91,7 +91,20 @@ describe('tauri backend', () => {
       [() => b.editorCatalog(), 'editor_catalog', undefined],
       [() => b.editorAtlas('tiles'), 'editor_atlas', { which: 'tiles' }],
       [() => b.editorState('s'), 'editor_state', { session: 's' }],
-      [() => b.editorBlockheads('s'), 'editor_blockheads', { session: 's' }]
+      [() => b.editorBlockheads('s'), 'editor_blockheads', { session: 's' }],
+      [() => b.editorEdit('s', { op: 'set_name', name: 'n' }), 'editor_edit', { session: 's', req: { op: 'set_name', name: 'n' } }],
+      [() => b.editorFind('s', { layer: 'front', tile: 1 }, null, 5), 'editor_find', { session: 's', target: { layer: 'front', tile: 1 }, area: null, limit: 5 }],
+      [() => b.editorHistory('s', 2), 'editor_history', { session: 's', to: 2 }],
+      [() => b.editorChanges('s'), 'editor_changes', { session: 's' }],
+      [() => b.editorSave('s', true), 'editor_save', { session: 's', asNew: true }],
+      [() => b.editorSearch('s', 'chests', 'x'), 'editor_search', { session: 's', kind: 'chests', text: 'x' }],
+      [() => b.editorSchematics(), 'editor_schematics', undefined],
+      [() => b.editorSaveSchematic('s', null, 'n'), 'editor_save_schematic', { session: 's', rect: null, name: 'n' }],
+      [() => b.editorUseSchematic('s', 'f'), 'editor_use_schematic', { session: 's', file: 'f' }],
+      [() => b.editorImportSchematic('/p'), 'editor_import_schematic', { path: '/p' }],
+      [() => b.editorExportSchematic('f', '/d'), 'editor_export_schematic', { file: 'f', dest: '/d' }],
+      [() => b.editorDeleteSchematic('f'), 'editor_delete_schematic', { file: 'f' }],
+      [() => b.pickSchematic(true, 'n'), 'pick_schematic', { save: true, name: 'n' }]
     ];
     for (const [call, name, args] of calls) {
       await call();

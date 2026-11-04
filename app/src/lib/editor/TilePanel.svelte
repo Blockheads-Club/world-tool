@@ -5,12 +5,17 @@
   import { toast } from '../ui/toast.svelte';
   import { pretty } from './data';
   import { contentsName, tileName } from './names';
+  import Slots from './Slots.svelte';
   import Swatch from './Swatch.svelte';
 
   /** Inspector: what is at the selected tile. */
   const ed = $derived(store.editor);
   const tile = $derived(ed.tile);
   const cat = $derived(ed.catalog);
+
+  function objectName(kind: number, name: string | null): string {
+    return name ? pretty(name) : t('edv.unknown', { id: kind });
+  }
 
   async function copy() {
     await navigator.clipboard.writeText(`${tile!.x} ${tile!.y}`);
@@ -41,7 +46,13 @@
         <h3>{t('edv.objects')}</h3>
         <ul class="objs">
           {#each tile.objects as o, i (i)}
-            <li><b>{o.kind_name ? pretty(o.kind_name) : t('edv.unknown', { id: o.kind })}</b> <span class="mono hint">{`X ${o.x} · Y ${o.y}`}</span>{#if o.text}<span class="hint">{`“${o.text}”`}</span>{/if}</li>
+            <li>
+              <b>{objectName(o.kind, o.kind_name)}</b> <span class="mono hint">{`X ${o.x} · Y ${o.y}`}</span>{#if o.text}<span class="hint">{`“${o.text}”`}</span>{/if}
+              {#if o.slots}
+                <span class="hint">{t('edv.contentsSlots', { n: o.slots.filter((s) => s[1] > 0).length, of: o.slots.length })}</span>
+                <Slots slots={o.slots} title={objectName(o.kind, o.kind_name)} onset={(slot, item, count) => ed.edit({ op: 'set_container_stack', key: o.key, index: o.index, slot, item, count })} />
+              {/if}
+            </li>
           {/each}
         </ul>
       {/if}
@@ -61,6 +72,7 @@
   .kv dd { margin: 0; }
   .objs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
   .objs li { display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline; }
+  .objs li :global(.inv) { width: 100%; }
   .hint { font-size: 13.5px; color: var(--text-3); }
   .kpi { display: flex; gap: 10px; flex-wrap: wrap; }
 </style>

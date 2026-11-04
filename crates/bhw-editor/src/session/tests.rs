@@ -1,5 +1,6 @@
 use super::*;
 use crate::brush::Layer;
+use crate::session::EditOptions;
 use bhw_content::fixtures::world_env;
 
 fn session() -> Session {
@@ -17,7 +18,7 @@ fn paint_undo_redo() {
     let o = s
         .paint(OpKind::Pencil, &[(1, Y), (1, Y), (2, Y), (40, Y), (100, Y), (500, Y)], Brush::front(6), false)
         .unwrap();
-    assert_eq!(o, Outcome { changed: 3, protected: 0, missing: 2 });
+    assert_eq!(o, Outcome { changed: 3, protected: 0, missing: 2, ..Default::default() });
     assert_eq!(s.tile(1, Y).unwrap().unwrap().fg(), 6);
     assert_eq!(s.unsaved(), 1);
     // only solid: air at 40 is skipped
@@ -28,9 +29,11 @@ fn paint_undo_redo() {
     assert_eq!(o.changed, 0);
     let (labels, cur) = s.history();
     assert_eq!((labels.len(), cur), (2, 2));
-    assert_eq!(labels[0].a.as_deref(), Some("dirt"));
+    assert_eq!(labels[0].a.as_deref(), Some("t:6"));
     assert_eq!(labels[0].tiles, 3);
     assert_eq!(s.changed_tiles(), vec![(1, Y), (2, Y), (3, Y), (40, Y)]);
+    assert_eq!(s.take_touched(), vec![(0, 16), (1, 16)]);
+    assert!(s.take_touched().is_empty());
     assert_eq!(s.undo().unwrap().unwrap().kind, OpKind::Brush);
     assert_eq!(s.tile(3, Y).unwrap().unwrap().fg(), 1);
     assert_eq!(s.redo().unwrap().unwrap().kind, OpKind::Brush);
@@ -61,7 +64,7 @@ fn areas() {
     assert_eq!(s.fill(r, Brush::front(6)).unwrap().changed, 8);
     let back = Brush { layer: Layer::Back, tile: 6, contents: 0 };
     assert_eq!(s.fill(r, back).unwrap().changed, 8);
-    assert_eq!(s.history().0[1].a.as_deref(), Some("back wall dirt"));
+    assert_eq!(s.history().0[1].a.as_deref(), Some("b:6"));
     assert_eq!(s.clear(r).unwrap().changed, 8);
     assert!(s.fill(Rect { x: 0, y: 0, w: 0, h: 1 }, Brush::front(6)).is_err());
     assert!(s.fill(Rect { x: 0, y: 0, w: 4096, h: 1024 }, Brush::front(6)).is_err());
@@ -89,9 +92,9 @@ fn replace_and_find() {
         .unwrap();
     assert_eq!(o.changed, 2);
     let l = &s.history().0[0];
-    assert_eq!((l.a.as_deref(), l.b.as_deref()), (Some("rock"), Some("rock + copper")));
+    assert_eq!((l.a.as_deref(), l.b.as_deref()), (Some("t:1"), Some("t:1:61")));
     let o = s.replace(rock, Brush::front(6), None).unwrap();
-    assert_eq!(o.changed, 1024);
+    assert_eq!((o.changed, o.protected), (1023, 1), "the chest's tile is protected");
     assert!(s.replace(rock, Brush::front(0), None).is_err());
 }
 
@@ -153,7 +156,7 @@ fn players_and_settings() {
     assert_eq!((st.health, st.happiness, st.fullness, st.energy), (1.0, 0.0, 0.0, 0.5));
     s.set_stack("", 9, 1, 21, 5).unwrap();
     assert_eq!(s.world.players.inventory("", 9).unwrap().slots[1].len(), 5);
-    assert_eq!(s.history().0[2].b.as_deref(), Some("APPLE"));
+    assert_eq!(s.history().0[2].b.as_deref(), Some("i:21"));
     s.set_stack("", 9, 1, 0, 0).unwrap();
     assert!(s.set_stack("", 9, 1, 21, 1000).is_err());
     assert!(s.set_stack("", 9, 1, 0, 1).is_err());
@@ -178,4 +181,117 @@ fn players_and_settings() {
     assert!(bare.set_name("x").is_err());
     assert!(bare.set_time_of_day(1.0).is_err());
     assert!(s.set_stats("", 77, Stats { health: 1.0, happiness: 1.0, fullness: 1.0, energy: 1.0 }).is_err());
+}
+
+#[test]
+fn generate_and_objects() {
+    let mut s = session();
+    // ungenerated: refused by default, created when allowed (filled with the world's sky)
+    let o = s.paint(OpKind::Pencil, &[(70, Y)], Brush::front(6), false).unwrap();
+    assert_eq!(o.missing, 1);
+    s.options = EditOptions { generate: true, objects: false };
+    // painting air into an ungenerated area creates nothing
+    assert_eq!(s.paint(OpKind::Pencil, &[(70, Y)], Brush::front(2), false).unwrap(), Outcome::default());
+    let o = s.paint(OpKind::Pencil, &[(70, Y), (71, Y), (5000, Y)], Brush::front(6), false).unwrap();
+    assert_eq!((o.changed, o.created, o.missing), (2, 1, 1));
+    assert_eq!(s.tile(70, Y).unwrap().unwrap().fg(), 6);
+    assert_eq!(s.tile(75, Y).unwrap().unwrap().fg(), 2);
+    s.take_touched();
+    s.undo().unwrap();
+    assert_eq!(s.take_touched(), vec![(2, 16)]);
+    assert_eq!(s.tile(70, Y).unwrap(), None);
+    s.redo().unwrap();
+    assert_eq!(s.tile(71, Y).unwrap().unwrap().fg(), 6);
+    let env = s.save().unwrap();
+    assert!(env.named[&b"blocks"[..]].entries.iter().any(|(k, _)| k == b"2_16"));
+
+    // objects: a tree owning two tiles, and the chest standing on tile (3, 520)
+    let mut s = session();
+    for (x, y, c) in [(10, Y, 4u8), (11, Y + 1, 3)] {
+        let mut t = s.tile(x, y).unwrap().unwrap();
+        t.set_contents(c);
+        t.0[0x28] = 5;
+        s.world.blocks.set_tile(x, y, t).unwrap();
+    }
+    let o = s.paint(OpKind::Pencil, &[(10, Y), (3, 520)], Brush::front(6), false).unwrap();
+    assert_eq!((o.changed, o.protected), (0, 2));
+    s.options.objects = true;
+    // a second object standing on the same tile goes too
+    let plant = bhw_content::fixtures::object(6, 10, Y as i64).into_dictionary().unwrap();
+    s.world.objects.insert("0_16/10", 0, plant).unwrap();
+    let o = s.paint(OpKind::Pencil, &[(10, Y)], Brush::front(6), false).unwrap();
+    assert_eq!((o.changed, o.removed), (2, 2));
+    let t = s.tile(11, Y + 1).unwrap().unwrap();
+    assert_eq!((t.contents(), t.owner()), (0, 0));
+    let t = s.tile(10, Y).unwrap().unwrap();
+    assert_eq!((t.fg(), t.contents(), t.owner()), (6, 0, 0));
+    assert!(s.world.objects.all().0.is_empty());
+    s.undo().unwrap();
+    assert_eq!(s.world.objects.all().0.len(), 2);
+    assert_eq!(s.tile(11, Y + 1).unwrap().unwrap().owner(), 5);
+    s.redo().unwrap();
+    assert!(s.world.objects.all().0.is_empty());
+    s.undo().unwrap();
+    // painting air over the chest's tile leaves it; a solid tile removes it
+    assert_eq!(s.paint(OpKind::Remove, &[(3, 520)], Brush::eraser(), false).unwrap().removed, 0);
+    let o = s.paint(OpKind::Pencil, &[(3, 520), (4, 520)], Brush::front(6), false).unwrap();
+    assert_eq!((o.changed, o.removed), (4, 1), "the chest's owned tiles are cleared too");
+    let saved = s.save().unwrap();
+    assert_eq!(saved.named[&b"dw"[..]].entries.len(), 1, "the plant's record stays");
+
+    // erasing a tree tile (an open tile: the object list is not needed) clears an owned plain tile too
+    let mut s = session();
+    s.options.objects = true;
+    for (x, c) in [(20u32, 4u8), (21, 0)] {
+        let mut t = s.tile(x, Y).unwrap().unwrap();
+        t.set_contents(c);
+        t.0[0x28] = 5;
+        s.world.blocks.set_tile(x, Y, t).unwrap();
+    }
+    let o = s.paint(OpKind::Remove, &[(20, Y)], Brush::eraser(), false).unwrap();
+    assert_eq!((o.changed, o.removed), (2, 1));
+    assert_eq!(s.tile(21, Y).unwrap().unwrap().owner(), 0);
+}
+
+#[test]
+fn blockheads_and_containers() {
+    let mut s = session();
+    s.remove_blockhead("", 9).unwrap();
+    assert!(s.remove_blockhead("", 9).is_err());
+    assert!(s.world.players.list().is_empty());
+    s.undo().unwrap();
+    assert_eq!(s.world.players.list()[0].name, "ADA");
+    assert!(s.world.players.inventory("", 9).is_some());
+    s.redo().unwrap();
+    assert!(s.world.players.inventory("", 9).is_none());
+    assert_eq!(s.history().0[0].kind, OpKind::RemoveBlockhead);
+
+    // a chest with its slots under "chest", and one with them at the top level
+    let (all, _) = s.world.objects.all();
+    let key = all[0].key.clone();
+    let mut d = all[0].dict.clone();
+    let slots = bhw_content::Inventory { slots: vec![vec![]; 4] }.to_value();
+    let mut chest = plist::Dictionary::new();
+    chest.insert("saveItemSlots".into(), slots.clone());
+    d.insert("chest".into(), plist::Value::Dictionary(chest));
+    s.world.objects.set(&key, 0, d).unwrap();
+    assert_eq!(s.container(&key, 0).unwrap().unwrap().slots.len(), 4);
+    s.set_container_stack(&key, 0, 1, 21, 3).unwrap();
+    assert_eq!(s.container(&key, 0).unwrap().unwrap().slots[1].len(), 3);
+    s.undo().unwrap();
+    assert!(s.container(&key, 0).unwrap().unwrap().slots[1].is_empty());
+    s.redo().unwrap();
+    assert_eq!(s.history().0.last().unwrap().b.as_deref(), Some("i:21"));
+    let mut top = plist::Dictionary::new();
+    top.insert("saveItemSlots".into(), slots);
+    s.world.objects.insert(&key, 1, top).unwrap();
+    s.set_container_stack(&key, 1, 0, 21, 1).unwrap();
+    assert_eq!(s.container(&key, 1).unwrap().unwrap().slots[0].len(), 1);
+    // errors: no such object, no slots, bad stacks
+    assert!(s.container(&key, 9).is_err());
+    s.world.objects.insert(&key, 2, plist::Dictionary::new()).unwrap();
+    assert_eq!(s.container(&key, 2).unwrap(), None);
+    assert!(s.set_container_stack(&key, 2, 0, 21, 1).is_err());
+    assert!(s.set_container_stack(&key, 1, 0, 21, 1000).is_err());
+    assert!(s.set_container_stack(&key, 1, 0, 0, 1).is_err());
 }

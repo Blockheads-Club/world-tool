@@ -33,24 +33,28 @@ export function tileAt(c: Camera, s: Size, sx: number, sy: number): { x: number;
   return { x: Math.floor(w.x), y: Math.floor(w.y) };
 }
 
-/** Visible macro blocks `[mx0, my0, mx1, my1)` (one block of margin), clamped to the world. */
+/**
+ * Visible macro blocks `[mx0, my0, mx1, my1)` (one block of margin). Rows are clamped to the world; columns are
+ * not (the world wraps around: use [`wrapX`] on them), but span at most the world's width.
+ */
 export function visibleBlocks(c: Camera, s: Size, worldW: number, worldH: number, margin = 1): [number, number, number, number] {
   const a = toWorld(c, s, 0, s.h);
   const b = toWorld(c, s, s.w, 0);
   const mw = Math.ceil(worldW / 32);
   const mh = Math.ceil(worldH / 32);
   const clamp = (v: number, hi: number) => Math.max(0, Math.min(hi, v));
-  return [
-    clamp(Math.floor(a.x / 32) - margin, mw),
-    clamp(Math.floor(a.y / 32) - margin, mh),
-    clamp(Math.floor(b.x / 32) + 1 + margin, mw),
-    clamp(Math.floor(b.y / 32) + 1 + margin, mh)
-  ];
+  const x0 = Math.floor(a.x / 32) - margin;
+  return [x0, clamp(Math.floor(a.y / 32) - margin, mh), Math.min(Math.floor(b.x / 32) + 1 + margin, x0 + mw), clamp(Math.floor(b.y / 32) + 1 + margin, mh)];
 }
 
-/** Keeps the centre inside the world. */
+/** A column (tile or macro block) wrapped into `0..width`. */
+export function wrapX(x: number, width: number): number {
+  return ((x % width) + width) % width;
+}
+
+/** Keeps the centre inside the world: rows are clamped, columns wrap around. */
 export function clampCam(c: Camera, worldW: number, worldH: number): Camera {
-  return { zoom: c.zoom, x: Math.max(0, Math.min(worldW, c.x)), y: Math.max(0, Math.min(worldH, c.y)) };
+  return { zoom: c.zoom, x: wrapX(c.x, worldW), y: Math.max(0, Math.min(worldH, c.y)) };
 }
 
 /** One zoom step in (`dir > 0`) or out, keeping the world point under `(sx, sy)` where it is. */

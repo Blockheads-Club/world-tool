@@ -99,8 +99,16 @@ export class AppStore {
     if (patch.lang) setLang(patch.lang);
   }
 
-  go(screen: Screen) {
-    if (this.screen === 'editor' && screen !== 'editor') this.editor.close();
+  /** Shows a screen. Leaving the editor with unsaved changes asks first (unless `force`). */
+  go(screen: Screen, force = false) {
+    if (this.screen === 'editor' && screen !== 'editor') {
+      if (!force && this.editor.ed.unsaved > 0) {
+        this.editor.leaveTo = screen;
+        this.editor.saveAsk = true;
+        return;
+      }
+      this.editor.close();
+    }
     this.screen = screen;
     if (screen === 'worlds') void this.loadWorlds();
     if (screen === 'devices') void this.refreshDevices();

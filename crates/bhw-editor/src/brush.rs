@@ -1,6 +1,5 @@
 //! What a tool puts into a tile ([`Brush`]), which tiles it may change, and tile matching for replace/search.
 
-use bhw_content::names::contents_name;
 use bhw_content::tile::{TileData, AIR};
 use serde::{Deserialize, Serialize};
 
@@ -49,7 +48,8 @@ impl Brush {
             Layer::Front => {
                 n.set_fg(self.tile);
                 n.set_contents(self.contents);
-                n.0[4] = 0; // partial content left
+                // what is left to dig out: full for every solid tile, 0 for air (as the game stores it)
+                n.0[4] = if self.tile == AIR { 0 } else { 255 };
                 n.0[5] = 0; // gather progress
                 n.0[0x16] = 0; // on fire
             }
@@ -108,14 +108,19 @@ impl Match {
     }
 }
 
-/// Short English description of a brush for history labels (`rock`, `rock + copper`, `back wall rock`).
+/// A token naming a block in history labels, translated by the UI: `t:<tile>` (front), `t:<tile>:<contents>`
+/// (front with contents), `b:<tile>` (back wall).
 pub fn describe(tile: u8, contents: u8, layer: Layer) -> String {
-    let name = bhw_content::names::tile_name(tile).unwrap_or("unknown").to_string();
     match (layer, contents) {
-        (Layer::Back, _) => format!("back wall {name}"),
-        (Layer::Front, 0) => name,
-        (Layer::Front, c) => format!("{name} + {}", contents_name(c).unwrap_or("unknown")),
+        (Layer::Back, _) => format!("b:{tile}"),
+        (Layer::Front, 0) => format!("t:{tile}"),
+        (Layer::Front, c) => format!("t:{tile}:{c}"),
     }
+}
+
+/// The token of an item in history labels (`i:<id>`).
+pub fn describe_item(item: u16) -> String {
+    format!("i:{item}")
 }
 
 #[cfg(test)]
@@ -135,7 +140,8 @@ mod tests {
     fn brushes() {
         let t = tile(1, 1, 61);
         let n = Brush::front(6).apply(&t);
-        assert_eq!((n.fg(), n.bg(), n.contents(), n.0[4]), (6, 1, 0, 0));
+        assert_eq!((n.fg(), n.bg(), n.contents(), n.0[4]), (6, 1, 0, 255));
+        assert_eq!(Brush::eraser().apply(&t).0[4], 0);
         let n = Brush { layer: Layer::Back, tile: 9, contents: 5 }.apply(&t);
         assert_eq!((n.fg(), n.bg(), n.contents(), n.0[4]), (1, 9, 61, 7));
         assert_eq!(Brush::eraser().apply(&t).fg(), AIR);
@@ -166,9 +172,9 @@ mod tests {
         assert!(!Match { layer: Layer::Front, tile: 1, contents: Some(0) }.matches(&t));
         assert!(!Match { layer: Layer::Front, tile: 6, contents: None }.matches(&t));
         assert!(Match { layer: Layer::Back, tile: 2, contents: None }.matches(&t));
-        assert_eq!(describe(1, 0, Layer::Front), "rock");
-        assert_eq!(describe(1, 61, Layer::Front), "rock + copper");
-        assert_eq!(describe(1, 200, Layer::Front), "rock + unknown");
-        assert_eq!(describe(250, 0, Layer::Back), "back wall unknown");
+        assert_eq!(describe(1, 0, Layer::Front), "t:1");
+        assert_eq!(describe(1, 61, Layer::Front), "t:1:61");
+        assert_eq!(describe(250, 0, Layer::Back), "b:250");
+        assert_eq!(describe_item(21), "i:21");
     }
 }

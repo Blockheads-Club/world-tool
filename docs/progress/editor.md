@@ -111,3 +111,32 @@ undo/redo, schematics); (3) renderer data (tile → atlas table + colour fallbac
 - Tile/item names: the UI shows the game's English ids prettified ("Dirt grass"); translate tile names too?
 - Should edits be allowed in areas the game never generated (we refuse now), and on tiles that belong to objects
   (trees, doors, chests: protected now)?
+
+## 2026-11-05 — steps 4b–5: editing tools, emulator checks, atlas calibration
+
+### Done
+- User answers applied: time of day enabled (a day is 3600 s of `worldTime`, 0 = midnight; checked in the game);
+  tile/contents/item names translated (tr/ru/kk), search matches the translated name and the English id;
+  editing ungenerated areas (setting, off by default) and object tiles (setting, on by default; the object is
+  removed with its tiles); inventory byte 7 written as 0 (the game writes 0 back for such items).
+- Edit tools from WT-Editor: tool bar, palette with search, brush size/shape, pencil, eraser, selection with
+  copy/cut/fill/clear, paste with rotate/flip/skip-air, replace with preview (selection or whole world), history
+  panel (go to step), unsaved count, save dialog (Save to Worlds / Save as new / Don't save), blockhead
+  move/needs/inventory/removal with an item picker, container slots, world name/time, compare view, search
+  (chests/signs/objects), schematics (`<worlds folder>/schematics/*.bhwschem`, import/export), full screen, keyboard
+  shortcuts, world wrap in the map view, mini sidebar on the editor screen.
+- Brushes set tile byte 4 to 255 (0 for air) as the game does.
+- Step 5: `crates/bhw-core/tests/editor_device.rs` (runs only with `BHW_EDITOR_DEVICE`) reads a world by root,
+  edits it (blocks, 5 apples in a slot, a tree removed by its base tile, stone in an ungenerated column), saves to
+  the library and copies it back with the app's own transfer. The game loaded it: items shown, tree gone, the new
+  block drawn, no crash; the game later raised created blocks to version 8 and generated their neighbours.
+- Atlas: 63/66 tiles and 5/15 contents confirmed in the game, item icons by id grid (< 512), 33 block items.
+- Coverage: app 100 % (vitest, run with `--maxWorkers=2`); Rust 100 % lines/functions for bhw-content,
+  bhw-editor, bhw-core. clippy -D warnings, fmt, svelte-check 0.
+- The emulator was left with its original two worlds.
+
+### Open questions
+- Gems, flint, clay, charcoal and oil as contents in rock did not show in the game test; platinum/titanium cells
+  not identified.
+- Tiles still by eye or unmapped: 2, 22, 23, 56–58, 66, 68, 70, 76, 77; trade portal assumed same as placed.
+- tr/ru/kk names of some items are guesses (no official translation) — native check welcome.

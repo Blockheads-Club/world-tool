@@ -65,6 +65,14 @@ const COMMANDS: &[&str] = &[
     "editor_history",
     "editor_changes",
     "editor_save",
+    "editor_search",
+    "editor_schematics",
+    "editor_save_schematic",
+    "editor_use_schematic",
+    "editor_import_schematic",
+    "editor_export_schematic",
+    "editor_delete_schematic",
+    "pick_schematic",
 ];
 
 fn main() {

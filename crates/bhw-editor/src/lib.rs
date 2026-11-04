@@ -20,4 +20,4 @@ pub use error::{Error, Result};
 pub use geom::Rect;
 pub use history::{Label, OpKind};
 pub use schematic::Schematic;
-pub use session::{Outcome, Session};
+pub use session::{EditOptions, Outcome, Session};

@@ -26,18 +26,37 @@ pub const MAX_CHANGES: u64 = 1_000_000;
 pub struct Outcome {
     /// Tiles changed.
     pub changed: u64,
-    /// Tiles left alone because they belong to an object (tree, door, chest…).
+    /// Tiles left alone because they belong to an object (tree, door, chest…) and object editing is off.
     pub protected: u64,
-    /// Tiles left alone because the game has not generated that area.
+    /// Tiles left alone because the game has not generated that area and generating is off.
     pub missing: u64,
+    /// Blocks created in areas the game had not generated.
+    pub created: u64,
+    /// Dynamic objects removed because one of their tiles changed.
+    pub removed: u64,
 }
+
+/// What edits may touch beyond plain generated terrain.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, serde::Deserialize)]
+pub struct EditOptions {
+    /// Create blocks where the game has not generated the world yet (filled with open sky first).
+    pub generate: bool,
+    /// Change tiles that belong to objects (trees, plants, workbenches, doors, chests…); the objects are removed.
+    pub objects: bool,
+}
+
+/// How far (in tiles) from an object its owned tiles are looked for.
+const OWNED_REACH: u32 = 48;
 
 /// An editing session.
 #[derive(Debug, Clone)]
 pub struct Session {
     /// The world being edited.
     pub world: WorldContent,
+    /// What edits may touch.
+    pub options: EditOptions,
     history: History,
+    touched: std::collections::BTreeSet<(u32, u32)>,
     max_changes: u64,
 }
 
@@ -48,7 +67,13 @@ fn label(kind: OpKind, a: Option<String>, b: Option<String>) -> Label {
 impl Session {
     /// Starts a session on a loaded world.
     pub fn new(world: WorldContent) -> Session {
-        Session { world, history: History::default(), max_changes: MAX_CHANGES }
+        Session {
+            world,
+            options: EditOptions::default(),
+            history: History::default(),
+            touched: Default::default(),
+            max_changes: MAX_CHANGES,
+        }
     }
 
     /// World width in tiles.
@@ -80,25 +105,65 @@ impl Session {
     }
 
     /// Applies `f` to the tiles at `points` as one step. `f` gets the position and tile and returns the new tile,
-    /// or `None` to leave it alone. Tiles of objects and of ungenerated areas are skipped and counted.
+    /// or `None` to leave it alone. Tiles of objects and of ungenerated areas are skipped and counted unless the
+    /// [`EditOptions`] allow them (then objects are removed and blocks created).
     fn edit_tiles(&mut self, mut label: Label, points: Vec<(u32, u32)>, f: &mut TileFn<'_>) -> Result<Outcome> {
         let (w, h) = (self.width(), self.height());
         let mut out = Outcome::default();
         let mut changes = Vec::new();
         let mut seen = HashSet::new();
+        let mut sky: Option<TileData> = None;
+        let mut occupied: Option<HashSet<(u32, u32)>> = None;
         for (x, y) in points {
             if !seen.insert((x, y)) {
                 continue;
             }
             let t = if x < w && y < h { self.world.blocks.tile(x, y)? } else { None };
-            let Some(t) = t else {
-                out.missing += 1;
-                continue;
+            let t = match t {
+                Some(t) => t,
+                None if x < w && y < h && self.options.generate => {
+                    let fill = *sky.get_or_insert_with(|| self.world.blocks.sky_tile());
+                    if f((x, y), &fill).filter(|n| *n != fill).is_none() {
+                        continue;
+                    }
+                    let pos = bhw_content::blocks::split(x, y).0;
+                    self.world.blocks.create(pos, &fill)?;
+                    changes.push(Change::BlockCreated { pos, fill });
+                    out.created += 1;
+                    fill
+                }
+                None => {
+                    out.missing += 1;
+                    continue;
+                }
             };
-            let Some(n) = f((x, y), &t).filter(|n| *n != t) else { continue };
-            if is_protected(&t) {
-                out.protected += 1;
-                continue;
+            let Some(mut n) = f((x, y), &t).filter(|n| *n != t) else { continue };
+            let objects_here = !is_open(&n) && {
+                let occ = occupied.get_or_insert_with(|| {
+                    let (all, _) = self.world.objects.all();
+                    all.iter()
+                        .filter_map(|o| o.pos())
+                        .filter(|p| p.0 >= 0 && p.1 >= 0)
+                        .map(|p| (p.0 as u32, p.1 as u32))
+                        .collect()
+                });
+                occ.contains(&(x, y))
+            };
+            if is_protected(&t) || objects_here {
+                if !self.options.objects {
+                    out.protected += 1;
+                    continue;
+                }
+                out.removed += self.detach(x, y, &t, &mut changes)?;
+                if let Some(occ) = occupied.as_mut() {
+                    occ.remove(&(x, y));
+                }
+                let mut base = t;
+                base.clear_owner();
+                if !crate::brush::plain_contents(base.contents()) {
+                    base.set_contents(0);
+                }
+                n = f((x, y), &base).unwrap_or(base);
             }
             if changes.len() as u64 >= self.max_changes {
                 self.revert(&changes)?;
@@ -107,12 +172,54 @@ impl Session {
             self.world.blocks.set_tile(x, y, n)?;
             changes.push(Change::Tile { x, y, before: t, after: n });
         }
-        out.changed = changes.len() as u64;
+        out.changed = changes.iter().filter(|c| matches!(c, Change::Tile { .. })).count() as u64;
         if !changes.is_empty() {
             label.tiles = out.changed;
+            self.touch(&changes);
             self.history.push(Step { label, changes });
         }
         Ok(out)
+    }
+
+    /// Removes the objects tile `(x, y)` belongs to (its owner, and objects standing on it) and clears the other
+    /// tiles they own (contents and owner). Returns how many objects were removed.
+    fn detach(&mut self, x: u32, y: u32, t: &TileData, changes: &mut Vec<Change>) -> Result<u64> {
+        let owner = t.owner();
+        let (all, _) = self.world.objects.all();
+        let mut gone: Vec<_> = all
+            .into_iter()
+            .filter(|o| (owner != 0 && o.unique_id() == Some(owner)) || o.pos() == Some((x as i64, y as i64)))
+            .collect();
+        // remove from the end of each record so the indexes of the others stay valid
+        gone.sort_by(|a, b| (&b.key, b.index).cmp(&(&a.key, a.index)));
+        let mut n = 0;
+        for o in gone {
+            let dict = self.world.objects.remove(&o.key, o.index)?;
+            changes.push(Change::Object { key: o.key.clone(), index: o.index, before: Some(dict), after: None });
+            n += 1;
+            let Some(id) = o.unique_id() else { continue };
+            let (cx, cy) = o.pos().map_or((x, y), |(px, py)| (px.max(0) as u32, py.max(0) as u32));
+            let (w, h) = (self.width(), self.height());
+            for ty in cy.saturating_sub(OWNED_REACH)..(cy + OWNED_REACH).min(h) {
+                for tx in cx.saturating_sub(OWNED_REACH)..(cx + OWNED_REACH).min(w) {
+                    if (tx, ty) == (x, y) {
+                        continue;
+                    }
+                    let Some(ot) = self.world.blocks.tile(tx, ty)? else { continue };
+                    if ot.owner() != id {
+                        continue;
+                    }
+                    let mut nt = ot;
+                    nt.clear_owner();
+                    if !crate::brush::plain_contents(nt.contents()) {
+                        nt.set_contents(0);
+                    }
+                    self.world.blocks.set_tile(tx, ty, nt)?;
+                    changes.push(Change::Tile { x: tx, y: ty, before: ot, after: nt });
+                }
+            }
+        }
+        Ok(n)
     }
 
     fn check_area(r: &Rect) -> Result<()> {
@@ -275,21 +382,59 @@ impl Session {
 
     /// Sets an inventory slot to `count` items of `item` (0 empties it).
     pub fn set_stack(&mut self, player: &str, id: u64, slot: usize, item: u16, count: usize) -> Result<()> {
-        if count > 999 {
-            return Err(Error::Invalid("a stack holds at most 999 items".into()));
-        }
-        if count > 0 && bhw_content::names::item_name(item).is_none() {
-            return Err(Error::Invalid(format!("unknown item {item}")));
-        }
+        check_stack(item, count)?;
         let before =
             self.world.players.inventory(player, id).cloned().ok_or_else(|| Error::Invalid("no inventory".into()))?;
         let mut after = before.clone();
         after.set_stack(slot, item, count)?;
         self.apply_inventory(player, id, &after);
         let name = self.blockhead_name(player, id);
-        let item_name = bhw_content::names::item_name(item).map(str::to_string);
+        let item_name = Some(crate::brush::describe_item(item));
         let change = Change::Inventory { player: player.into(), id, before, after };
         self.history.push(Step { label: label(OpKind::Inventory, name, item_name), changes: vec![change] });
+        Ok(())
+    }
+
+    /// Removes a blockhead and its inventory.
+    pub fn remove_blockhead(&mut self, player: &str, id: u64) -> Result<()> {
+        let name = self.blockhead_name(player, id);
+        let (index, dict, inventory) = self.world.players.remove(player, id)?;
+        let change = Change::BlockheadRemoved { player: player.into(), index, dict, inventory };
+        self.history.push(Step { label: label(OpKind::RemoveBlockhead, name, None), changes: vec![change] });
+        Ok(())
+    }
+
+    /// The item slots of a container object (chest, safe…): `saveItemSlots` of the object or of its `chest`.
+    pub fn container(&mut self, key: &str, index: usize) -> Result<Option<Inventory>> {
+        let o = self.object(key, index)?;
+        Ok(container_inventory(&o))
+    }
+
+    fn object(&mut self, key: &str, index: usize) -> Result<plist::Dictionary> {
+        let (all, _) = self.world.objects.all();
+        all.into_iter()
+            .find(|o| o.key == key && o.index == index)
+            .map(|o| o.dict)
+            .ok_or_else(|| Error::Invalid(format!("no object {index} in {key}")))
+    }
+
+    /// Sets one slot of a container object to `count` items of `item`.
+    pub fn set_container_stack(&mut self, key: &str, index: usize, slot: usize, item: u16, count: usize) -> Result<()> {
+        check_stack(item, count)?;
+        let before = self.object(key, index)?;
+        let mut inv =
+            container_inventory(&before).ok_or_else(|| Error::Invalid("this object holds no items".into()))?;
+        inv.set_stack(slot, item, count)?;
+        let mut after = before.clone();
+        let target = match after.get_mut("chest").and_then(plist::Value::as_dictionary_mut) {
+            Some(chest) if chest.contains_key("saveItemSlots") => chest,
+            _ => &mut after,
+        };
+        target.insert("saveItemSlots".into(), inv.to_value());
+        self.world.objects.set(key, index, after.clone())?;
+        let item_name = Some(crate::brush::describe_item(item));
+        let change = Change::Object { key: key.into(), index, before: Some(before), after: Some(after) };
+        self.history.push(Step { label: label(OpKind::Container, None, item_name), changes: vec![change] });
         Ok(())
     }
 
@@ -321,7 +466,28 @@ impl Session {
         self.edit_record(&mut |r| Ok(r.set_time_of_day(hour)?))
     }
 
+    /// Notes the macro blocks `changes` touch.
+    fn touch(&mut self, changes: &[Change]) {
+        for c in changes {
+            match c {
+                Change::Tile { x, y, .. } => {
+                    self.touched.insert(bhw_content::blocks::split(*x, *y).0);
+                }
+                Change::BlockCreated { pos, .. } => {
+                    self.touched.insert(*pos);
+                }
+                _ => {}
+            }
+        }
+    }
+
+    /// The macro blocks changed by edits, undo and redo since the last call (the map redraws them).
+    pub fn take_touched(&mut self) -> Vec<(u32, u32)> {
+        std::mem::take(&mut self.touched).into_iter().collect()
+    }
+
     fn apply_change(&mut self, c: &Change, forward: bool) -> Result<()> {
+        self.touch(std::slice::from_ref(c));
         match c {
             Change::Tile { x, y, before, after } => {
                 self.world.blocks.set_tile(*x, *y, if forward { *after } else { *before })?;
@@ -331,6 +497,31 @@ impl Session {
             }
             Change::Inventory { player, id, before, after } => {
                 self.apply_inventory(player, *id, if forward { after } else { before });
+            }
+            Change::BlockCreated { pos, fill } => {
+                if forward {
+                    self.world.blocks.create(*pos, fill)?;
+                } else {
+                    self.world.blocks.remove(*pos);
+                }
+            }
+            Change::Object { key, index, before, after } => {
+                let (to, from) = if forward { (after, before) } else { (before, after) };
+                match (to, from) {
+                    (Some(d), Some(_)) => self.world.objects.set(key, *index, d.clone())?,
+                    (Some(d), None) => self.world.objects.insert(key, *index, d.clone())?,
+                    (None, _) => {
+                        self.world.objects.remove(key, *index)?;
+                    }
+                }
+            }
+            Change::BlockheadRemoved { player, index, dict, inventory } => {
+                if forward {
+                    let id = dict.get("uniqueID").and_then(plist::Value::as_unsigned_integer).unwrap_or(0);
+                    self.world.players.remove(player, id)?;
+                } else {
+                    self.world.players.restore(player, *index, dict.clone(), inventory.clone())?;
+                }
             }
             Change::Record { before, after } => {
                 self.world.record.as_mut().expect("record changes need a record").dict =
@@ -396,6 +587,26 @@ impl Session {
         self.history.mark_saved();
         Ok(env)
     }
+}
+
+fn check_stack(item: u16, count: usize) -> Result<()> {
+    if count > 999 {
+        return Err(Error::Invalid("a stack holds at most 999 items".into()));
+    }
+    if count > 0 && bhw_content::names::item_name(item).is_none() {
+        return Err(Error::Invalid(format!("unknown item {item}")));
+    }
+    Ok(())
+}
+
+/// The item slots of a container object's dictionary (chest, safe…), if it has any.
+pub fn container_inventory(d: &plist::Dictionary) -> Option<Inventory> {
+    slots_of(d).and_then(|v| Inventory::from_value(v).ok())
+}
+
+/// `saveItemSlots` of a container object, directly or under `chest`.
+fn slots_of(d: &plist::Dictionary) -> Option<&plist::Value> {
+    d.get("saveItemSlots").or_else(|| d.get("chest")?.as_dictionary()?.get("saveItemSlots"))
 }
 
 #[cfg(test)]

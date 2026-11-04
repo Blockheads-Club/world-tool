@@ -208,6 +208,8 @@ pub struct Players {
     inventories: BTreeMap<(String, u64), Rec<Inventory>>,
     /// Keys that looked like player records but could not be parsed.
     pub damaged: Vec<String>,
+    /// Inventory records to delete when writing (their blockhead was removed).
+    removed: Vec<String>,
 }
 
 impl Players {
@@ -330,7 +332,43 @@ impl Players {
 
     /// True if a record changed.
     pub fn is_dirty(&self) -> bool {
-        self.lists.values().any(|r| r.dirty) || self.inventories.values().any(|r| r.dirty)
+        self.lists.values().any(|r| r.dirty) || self.inventories.values().any(|r| r.dirty) || !self.removed.is_empty()
+    }
+
+    /// Removes a blockhead and its inventory; returns its index in the list, its dictionary and inventory.
+    pub fn remove(&mut self, player: &str, id: u64) -> Result<(usize, Dictionary, Option<Inventory>)> {
+        let rec = self.lists.get_mut(player).ok_or_else(|| Error::Invalid(format!("no player {player:?}")))?;
+        let index = rec
+            .value
+            .iter()
+            .position(|d| d.get("uniqueID").and_then(Value::as_unsigned_integer) == Some(id))
+            .ok_or_else(|| Error::Invalid(format!("no blockhead {id}")))?;
+        let dict = rec.value.remove(index);
+        rec.dirty = true;
+        let inv = self.inventories.remove(&(player.to_string(), id)).map(|r| r.value);
+        if inv.is_some() {
+            self.removed.push(inventory_key(player, id));
+        }
+        Ok((index, dict, inv))
+    }
+
+    /// Puts a removed blockhead back (undo of [`Players::remove`]).
+    pub fn restore(&mut self, player: &str, index: usize, dict: Dictionary, inv: Option<Inventory>) -> Result<()> {
+        let rec = self.lists.get_mut(player).ok_or_else(|| Error::Invalid(format!("no player {player:?}")))?;
+        let id = dict.get("uniqueID").and_then(Value::as_unsigned_integer).unwrap_or(0);
+        rec.value.insert(index.min(rec.value.len()), dict);
+        rec.dirty = true;
+        if let Some(inv) = inv {
+            let key = inventory_key(player, id);
+            self.removed.retain(|k| *k != key);
+            self.set_inventory(player, id, inv);
+        }
+        Ok(())
+    }
+
+    /// Keys of records to delete; they count as deleted afterwards.
+    pub fn take_removed(&mut self) -> Vec<String> {
+        std::mem::take(&mut self.removed)
     }
 
     /// The changed records, encoded; they count as saved afterwards.
@@ -476,5 +514,22 @@ pub(crate) mod tests {
         assert_eq!(p2.dict("", 183).unwrap().get("floatPos").unwrap().as_array().unwrap()[0], Value::Real(100.5));
         assert_eq!(l[2].stats, Some(s));
         assert_eq!(p2.inventory("", 183).unwrap().slots[1].len(), 5);
+
+        // remove and restore
+        let mut p3 = p2.clone();
+        let (i, d, inv) = p3.remove("", 183).unwrap();
+        assert_eq!(i, 0);
+        assert!(inv.is_some() && p3.is_dirty());
+        assert!(p3.remove("", 183).is_err());
+        assert!(p3.remove("zz", 1).is_err());
+        p3.restore("", i, d.clone(), inv.clone()).unwrap();
+        assert!(p3.take_removed().is_empty());
+        assert_eq!(p3.list()[0].unique_id, 183);
+        let (i, d, _) = p3.remove("p1", 7).unwrap();
+        assert!(p3.take_removed().is_empty(), "blockhead 7 has no inventory here");
+        p3.restore("p1", i, d, None).unwrap();
+        assert!(p3.restore("zz", 0, Dictionary::new(), None).is_err());
+        let mut p4 = p2.clone();
+        p4.remove("p1", 8).unwrap_err();
     }
 }

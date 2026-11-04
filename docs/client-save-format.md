@@ -55,8 +55,13 @@ Identical to Blockheads Server [obs]:
 - Observed trailers: `00 00000000` (freshly generated) and `08 nn000000` (blocks the 1.7 game updated; counter
   up to 0x25).
 - The gzip header of client blocks has OS byte 7; the server writes OS byte 3. Both read either.
-- Tile record: byte 0 foreground tile type, byte 1 back wall type, byte 3 contents; the other fields (light,
-  paint, owner object id, …) are copied verbatim. Tile type ids are listed in `crates/bhw-save/src/tiles.rs`.
+- Tile record: byte 0 foreground tile type, byte 1 back wall type, byte 3 contents, byte 4 "partial content left"
+  (255 for every non-air tile in real saves, 0 for air), bytes 0x28–0x2f the id of the dynamic object that owns
+  the tile (trees own their trunk and leaf tiles); all fields are named in `crates/bhw-content/src/tile.rs`.
+  Tile type ids are listed in `crates/bhw-save/src/tiles.rs`.
+- A block the editor creates where the game has not generated the world (filled with the world's sky tile, version
+  0, counter 0) loads in 1.7.6; the game keeps its contents, raises the version to 8 and generates the blocks
+  around it as usual (emulator, 2026-11-05).
 
 ## 4. `dw`: dynamic objects
 
@@ -73,12 +78,21 @@ All values are XML plists in Apple's dialect (`-//Apple//DTD PLIST 1.0//EN`, tab
 | `worldv2` | the world record (below) |
 | `dynamicWorldv2` | `{activeBlockheadIndex, dynamicObjectIDCount, saveVersion: 8, savedGlowIndices (keyed archive), workbenchHasBeenCrafted}` |
 | `blockheads` | `{dynamicObjects: [ {name, uniqueID, pos_x, pos_y, floatPos, skinOptions, state, actions, …} ]}`: the player's blockheads, **uncompressed** |
-| `blockhead_<uniqueID>_inventory` | array of `<data>` item slots, **uncompressed**; one per blockhead |
+| `blockhead_<uniqueID>_inventory` | array of slots, each an array of item `<data>` (one per item in the stack), **uncompressed**; one per blockhead |
 
 A client's **cache of a multiplayer world** (record has `remoteGame = true`; folder named after the server's
 world id) has an empty `blocks` database and keys `<playerID>_blockheads`, `<playerID>_blockhead_<n>_inventory`
 (GNUstep-dialect XML as received from the server) and `local_blockheads` (gzip). [obs] It is not a playable
 single-player world and cannot be converted.
+
+Item records are 8 bytes `{u16 type, u16 dataA, u16 dataB, u8 selected sub-slot, u8 ?}` (little-endian), plus a
+gzip plist for containers. The last byte is 0x11 or 0xbc on the first item of each stack in saves the game made, 0 on
+the others; the game accepts 0 everywhere and writes 0 back for items it loaded that way (emulator), so it looks like
+uninitialised padding. Writers use 0. A blockhead's `state` data holds its needs as `f32` at 0x20 (health), 0x24
+(happiness), 0x28 (fullness), 0x2c (energy); the game lets fullness and energy go a little above 1.
+
+The day: `worldTime` counts seconds; a day is **3600** of them and `worldTime` 0 is midnight (checked in the game:
+3600 shows night, 4500 dawn, 5400 noon).
 
 ### The world record (`main/worldv2`)
 
