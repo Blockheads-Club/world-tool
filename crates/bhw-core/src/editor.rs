@@ -27,7 +27,13 @@ impl From<bhw_editor::Error> for AppError {
         match e {
             bhw_editor::Error::Content(bhw_content::Error::Format(m)) => AppError::with(ErrorCode::WorldDamaged, m),
             bhw_editor::Error::Content(bhw_content::Error::Plist(m)) => AppError::with(ErrorCode::WorldDamaged, m),
-            e => AppError::with(ErrorCode::NotAllowed, e),
+            e => {
+                let reason = serde_json::to_value(e.refusal().unwrap_or(bhw_editor::Refusal::Other))
+                    .ok()
+                    .and_then(|v| v.as_str().map(str::to_string))
+                    .unwrap_or_default();
+                AppError::refused(&reason, e)
+            }
         }
     }
 }
@@ -307,8 +313,8 @@ impl Core {
         };
         let content = WorldContent::load(env)?;
         if content.record.as_ref().is_some_and(|r| r.remote()) {
-            return Err(AppError::with(
-                ErrorCode::NotAllowed,
+            return Err(AppError::refused(
+                "multiplayer_world",
                 "a multiplayer world cached by the game cannot be edited",
             ));
         }
@@ -462,8 +468,7 @@ impl Core {
                 out
             }
             EditRequest::Paste { x, y, skip_air, rotate, flip } => {
-                let mut c =
-                    o.clipboard.clone().ok_or_else(|| AppError::with(ErrorCode::NotAllowed, "nothing copied"))?;
+                let mut c = o.clipboard.clone().ok_or_else(|| AppError::refused("nothing_copied", "nothing copied"))?;
                 for _ in 0..rotate % 4 {
                     c = c.rotated();
                 }
@@ -691,7 +696,7 @@ impl Core {
         let mut o = lock(&o);
         let s = match rect {
             Some(r) => o.session.copy(r)?,
-            None => o.clipboard.clone().ok_or_else(|| AppError::with(ErrorCode::NotAllowed, "nothing copied"))?,
+            None => o.clipboard.clone().ok_or_else(|| AppError::refused("nothing_copied", "nothing copied"))?,
         };
         drop(o);
         self.write_schematic(s, name)

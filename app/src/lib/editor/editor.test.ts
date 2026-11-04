@@ -184,6 +184,13 @@ describe('World editor (viewer)', () => {
     expect(await screen.findByText('This world could not be opened')).toBeInTheDocument();
     expect(screen.getByText(/The world file is damaged\. blocks 3_16/)).toBeInTheDocument();
     await fireEvent.click(screen.getAllByRole('button', { name: 'Back to Worlds' })[1]);
+    // a multiplayer world cached by the game is refused with its own message, not the phone's "allow" text
+    mock.fail.editor = { code: 'not_allowed', reason: 'multiplayer_world' };
+    await fireEvent.click(screen.getAllByRole('button', { name: 'Worlds' })[0]);
+    await fireEvent.click(within(await screen.findByRole('listitem', { name: 'Sunny Isle' })).getByRole('button', { name: 'Edit' }));
+    expect(await screen.findByText(/multiplayer world the game keeps a copy of/)).toBeInTheDocument();
+    mock.fail.editor = undefined;
+    await fireEvent.click(screen.getAllByRole('button', { name: 'Back to Worlds' })[1]);
     // a 1.6 world with damaged blocks, no spawn and no blockheads
     const open = mock.editorOpen.bind(mock);
     mock.editorOpen = async (id: string) => ({ ...(await open(id)), game_version: '1.6.3', damaged_blocks: 2, spawn: null, blockheads: [], time_of_day: null, created: null, server: true, expert: true });

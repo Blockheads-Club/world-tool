@@ -341,3 +341,28 @@ fn blockheads_and_containers() {
     assert!(s.set_container_stack(&key, 1, 0, 21, 1000).is_err());
     assert!(s.set_container_stack(&key, 1, 0, 0, 1).is_err());
 }
+
+#[test]
+fn refusal_reasons() {
+    let why = |e: crate::Error| e.refusal().unwrap();
+    let mut s = session();
+    let r = Rect { x: 0, y: Y, w: 2, h: 1 };
+    assert_eq!(why(s.fill(Rect { x: 0, y: 0, w: 0, h: 1 }, Brush::front(6)).unwrap_err()), Refusal::AreaSize);
+    assert_eq!(why(s.fill(r, Brush::front(250)).unwrap_err()), Refusal::UnknownBlock);
+    let oil_in_rock = Brush { layer: Layer::Front, tile: 1, contents: 64 };
+    assert_eq!(why(s.fill(r, oil_in_rock).unwrap_err()), Refusal::MaterialNotInTile);
+    assert!(s.fill(r, Brush { contents: 0, ..oil_in_rock }).is_ok());
+    assert_eq!(why(s.move_blockhead("", 9, 1000, 600).unwrap_err()), Refusal::OutsideWorld);
+    assert_eq!(why(s.move_blockhead("", 77, 1, Y + 40).unwrap_err()), Refusal::NotGenerated);
+    open_column(&mut s, 10, 530);
+    assert_eq!(why(s.move_blockhead("", 77, 10, 530).unwrap_err()), Refusal::NoBlockhead);
+    assert_eq!(why(s.set_stack("", 9, 1, 21, 1000).unwrap_err()), Refusal::StackTooLarge);
+    assert_eq!(why(s.set_stack("", 9, 1, 0, 1).unwrap_err()), Refusal::UnknownItem);
+    assert_eq!(why(s.set_stack("", 1, 0, 21, 1).unwrap_err()), Refusal::NoInventory);
+    assert_eq!(why(s.set_stack("", 9, 99, 21, 1).unwrap_err()), Refusal::Other);
+    assert_eq!(why(s.set_name(" ").unwrap_err()), Refusal::BadName);
+    assert_eq!(why(s.go_to(99).unwrap_err()), Refusal::NoStep);
+    assert_eq!(why(s.set_container_stack("nope", 0, 0, 21, 1).unwrap_err()), Refusal::NoObject);
+    let damaged = crate::Error::Content(bhw_content::Error::Format("x".into()));
+    assert_eq!(damaged.refusal(), None);
+}

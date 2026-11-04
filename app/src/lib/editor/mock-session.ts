@@ -215,7 +215,7 @@ export class MockSession {
     const lbl = (kind: HistoryLabel['kind'], a?: string, b?: string): HistoryLabel => ({ kind, tiles: 0, ...(a ? { a } : {}), ...(b ? { b } : {}) });
     const bh = (player: string, id: number) => {
       const b = this.blockheads.find((x) => x.player === player && x.id === id);
-      if (!b) throw { code: 'not_allowed', detail: `no blockhead ${id}` };
+      if (!b) throw { code: 'not_allowed', reason: 'no_blockhead', detail: `no blockhead ${id}` };
       return b;
     };
     switch (req.op) {
@@ -244,7 +244,7 @@ export class MockSession {
       }
       case 'paste': {
         const c = this.clipboard;
-        if (!c) throw { code: 'not_allowed', detail: 'nothing copied' };
+        if (!c) throw { code: 'not_allowed', reason: 'nothing_copied', detail: 'nothing copied' };
         let cells = c.cells;
         let w = c.w;
         let h = c.h;
@@ -280,7 +280,7 @@ export class MockSession {
         break;
       case 'set_stack': {
         const b = bh(req.player, req.id);
-        if (!b.inventory) throw { code: 'not_allowed', detail: 'no inventory' };
+        if (!b.inventory) throw { code: 'not_allowed', reason: 'no_inventory', detail: 'no inventory' };
         b.inventory[req.slot] = [req.count ? req.item : 0, req.count];
         this.push(lbl('inventory', b.name, `i:${req.item}`), before);
         break;
@@ -293,13 +293,13 @@ export class MockSession {
       }
       case 'set_container_stack': {
         const o = this.objects.find((x) => x.key === req.key && x.index === req.index);
-        if (!o?.slots) throw { code: 'not_allowed', detail: 'this object holds no items' };
+        if (!o?.slots) throw { code: 'not_allowed', reason: 'no_items', detail: 'this object holds no items' };
         o.slots[req.slot] = [req.count ? req.item : 0, req.count];
         this.push(lbl('container', undefined, `i:${req.item}`), before);
         break;
       }
       case 'set_name':
-        if (!req.name.trim()) throw { code: 'not_allowed', detail: 'a world name needs 1 to 64 characters' };
+        if (!req.name.trim()) throw { code: 'not_allowed', reason: 'bad_name', detail: 'a world name needs 1 to 64 characters' };
         this.name = req.name.trim().toUpperCase();
         this.push(lbl('settings'), before);
         break;
@@ -312,7 +312,7 @@ export class MockSession {
   }
 
   goTo(to: number): HistoryResult {
-    if (to > this.steps.length) throw { code: 'not_allowed', detail: 'no such step' };
+    if (to > this.steps.length) throw { code: 'not_allowed', reason: 'no_step', detail: 'no such step' };
     while (this.cursor > to) {
       const s = this.steps[--this.cursor];
       for (const [k, b] of [...s.tiles].reverse()) {

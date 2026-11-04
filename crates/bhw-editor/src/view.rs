@@ -32,7 +32,10 @@ pub fn region(s: &mut Session, mx0: u32, my0: u32, mx1: u32, my1: u32) -> Result
     let wm = s.width() / MACRO_SIZE;
     let (mx1, my1) = (mx1.min(wm), my1.min(WORLD_HEIGHT_MACROS));
     if mx1.saturating_sub(mx0) * my1.saturating_sub(my0) > MAX_REGION_BLOCKS {
-        return Err(crate::Error::Invalid(format!("at most {MAX_REGION_BLOCKS} blocks per request")));
+        return Err(crate::error::refused(
+            crate::error::Refusal::RegionTooLarge,
+            format!("at most {MAX_REGION_BLOCKS} blocks per request"),
+        ));
     }
     let mut out = Vec::new();
     for my in my0..my1 {

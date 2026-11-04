@@ -116,9 +116,17 @@ describe('World editor (editing)', () => {
     // refused edits (code not_allowed) are toasts of their own, not the phone's "allow this computer" dialog
     mock.fail.edit = undefined;
     await ed().edit({ op: 'move_blockhead', player: '', id: 77, x: 1, y: 1 });
-    expect(toasts.items.some((x) => x.message.includes('can’t be moved there'))).toBe(true);
+    expect(toasts.items.some((x) => x.message === 'This blockhead no longer exists in the world.')).toBe(true);
     await ed().edit({ op: 'set_name', name: ' ' });
+    expect(toasts.items.some((x) => x.message === 'A world name needs 1 to 64 characters.')).toBe(true);
+    // without a reason of its own (or an unknown one) the message is the general one
+    mock.fail.edit = { code: 'not_allowed', reason: 'other' };
+    await ed().edit({ op: 'move_blockhead', player: '', id: 9, x: 1, y: 1 });
+    expect(toasts.items.some((x) => x.message.includes('can’t be moved there'))).toBe(true);
+    mock.fail.edit = { code: 'not_allowed' };
+    await ed().edit({ op: 'set_name', name: 'x' });
     expect(toasts.items.some((x) => x.message === 'This change isn’t possible here.')).toBe(true);
+    mock.fail.edit = undefined;
     expect(store.shown).toBeNull();
     // history errors too
     mock.editors.clear();

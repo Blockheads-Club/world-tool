@@ -164,7 +164,11 @@ fn errors() {
     let paste = EditRequest::Paste { x: 0, y: 0, skip_air: false, rotate: 0, flip: false };
     assert_eq!(core.editor_edit(&s, paste).unwrap_err().code, ErrorCode::NotAllowed);
     let bad = EditRequest::Fill { rect: Rect { x: 0, y: 0, w: 0, h: 0 }, brush: Brush::front(6) };
-    assert_eq!(core.editor_edit(&s, bad).unwrap_err().code, ErrorCode::NotAllowed);
+    let e = core.editor_edit(&s, bad).unwrap_err();
+    assert_eq!((e.code, e.extra.reason.as_deref()), (ErrorCode::NotAllowed, Some("area_size")));
+    // a world name needs 1 to 64 characters
+    let e = core.editor_edit(&s, EditRequest::SetName { name: String::new() }).unwrap_err();
+    assert_eq!(e.extra.reason.as_deref(), Some("bad_name"));
     assert!(core.editor_region(&s, 0, 0, 100, 100).is_ok(), "clamped to the world");
     assert!(core.editor_region(&s, 0, 0, 4, 32).is_ok());
     // a damaged block
@@ -209,7 +213,8 @@ fn server_and_remote_worlds_and_atlas() {
     let rpath = env.path("Worlds/worlds/Remote.bhworld");
     std::fs::create_dir_all(rpath.parent().unwrap()).unwrap();
     bhw_world::bhworld::save_with_manifest(&rpath, &rw, bhw_world::Manifest::new(C, &info), None).unwrap();
-    assert_eq!(core.editor_open("Remote.bhworld").unwrap_err().code, ErrorCode::NotAllowed);
+    let e = core.editor_open("Remote.bhworld").unwrap_err();
+    assert_eq!((e.code, e.extra.reason.as_deref()), (ErrorCode::NotAllowed, Some("multiplayer_world")));
     // a server world placed in the library folder by hand stays a server world (64-bit) when saved
     let sw = bhw_save::world::from_file_map(D, server_files(D, "Raw")).unwrap();
     let spath = env.path("Worlds/worlds/Raw.bhworld");
@@ -244,7 +249,8 @@ fn schematics_search_and_options() {
     let rect = Rect { x: 0, y: Y, w: 3, h: 2 };
     let a = core.editor_save_schematic(&s, Some(rect), "House / 1").unwrap();
     assert_eq!((a.file.as_str(), a.width, a.height), ("House _ 1.bhwschem", 3, 2));
-    assert_eq!(core.editor_save_schematic(&s, None, "x").unwrap_err().code, ErrorCode::NotAllowed);
+    let e = core.editor_save_schematic(&s, None, "x").unwrap_err();
+    assert_eq!((e.code, e.extra.reason.as_deref()), (ErrorCode::NotAllowed, Some("nothing_copied")));
     core.editor_edit(&s, EditRequest::Copy { rect }).unwrap();
     let b = core.editor_save_schematic(&s, None, "House / 1").unwrap();
     assert_eq!(b.file, "House _ 1 (2).bhwschem");
@@ -310,5 +316,6 @@ fn schematics_search_and_options() {
         &s,
         EditRequest::SetContainerStack { key: objs[0].key.clone(), index: 0, slot: 0, item: 21, count: 1 },
     );
-    assert_eq!(r.unwrap_err().code, ErrorCode::NotAllowed);
+    let e = r.unwrap_err();
+    assert_eq!((e.code, e.extra.reason.as_deref()), (ErrorCode::NotAllowed, Some("no_items")));
 }

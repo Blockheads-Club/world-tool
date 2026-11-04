@@ -7,7 +7,7 @@ use bhw_content::tile::{Face, TileData};
 use serde::{Deserialize, Serialize};
 
 use crate::brush::{material, plain_contents, set_material};
-use crate::error::{Error, Result};
+use crate::error::{refused, Refusal, Result};
 
 /// File magic.
 pub const MAGIC: &[u8; 8] = b"BHWSCHEM";
@@ -172,7 +172,7 @@ impl Schematic {
 
     /// Decodes a `.bhwschem` file.
     pub fn from_bytes(bytes: &[u8]) -> Result<Schematic> {
-        let bad = |m: &str| Error::Schematic(m.to_string());
+        let bad = |m: &str| refused(Refusal::BadSchematic, format!("schematic: {m}"));
         if bytes.len() < 12 || &bytes[..8] != MAGIC {
             return Err(bad("not a schematic file"));
         }
@@ -185,7 +185,10 @@ impl Schematic {
             return Err(bad("not a schematic file"));
         }
         if h.version > VERSION {
-            return Err(Error::Schematic(format!("made by a newer version (format {})", h.version)));
+            return Err(refused(
+                Refusal::NewerSchematic,
+                format!("schematic: made by a newer version (format {})", h.version),
+            ));
         }
         if h.width == 0 || h.height == 0 || h.width > MAX_SIDE || h.height > MAX_SIDE {
             return Err(bad("bad size"));
@@ -287,6 +290,9 @@ mod tests {
         };
         assert!(err(&with(&h("other", 1, 1, 1), &[])).contains("not a schematic"));
         assert!(err(&with(&h("bhw-schematic", 2, 1, 1), &[])).contains("newer version"));
+        let why = |b: &[u8]| Schematic::from_bytes(b).unwrap_err().refusal();
+        assert_eq!(why(&with(&h("bhw-schematic", 2, 1, 1), &[])), Some(Refusal::NewerSchematic));
+        assert_eq!(why(b"short"), Some(Refusal::BadSchematic));
         assert!(err(&with(&h("bhw-schematic", 1, 0, 1), &[])).contains("bad size"));
         assert!(err(&with(&h("bhw-schematic", 1, 1, MAX_SIDE + 1), &[])).contains("bad size"));
         assert!(err(&with(&h("bhw-schematic", 1, 1, 1), b"junk")).starts_with("schematic"));
