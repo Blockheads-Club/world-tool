@@ -53,7 +53,8 @@ fn open_view_edit_save() {
 
     let r = core.editor_region(&s, 0, 16, 2, 17).unwrap();
     assert_eq!(r.len(), 2 * (4 + 4096));
-    assert!(core.editor_overview(&s, 4).unwrap().starts_with(b"\x89PNG"));
+    let ov = core.editor_overview(&s, 4).unwrap();
+    assert_eq!((&ov[..4], &ov[4..8], ov.len()), (&32u32.to_le_bytes()[..], &256u32.to_le_bytes()[..], 8 + 32 * 256 * 4));
     let t = core.editor_tile(&s, 3, 520).unwrap();
     assert!(t.stored && t.fg == 1 && !t.protected);
     assert_eq!(t.objects.len(), 1);

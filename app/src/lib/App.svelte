@@ -7,7 +7,7 @@
   import Connect from './screens/Connect.svelte';
   import Devices from './screens/Devices.svelte';
   import DropOverlay from './screens/DropOverlay.svelte';
-  import EditorPlaceholder from './screens/EditorPlaceholder.svelte';
+  import Editor from './screens/Editor.svelte';
   import ErrorDialog from './screens/ErrorDialog.svelte';
   import FirstRun from './screens/FirstRun.svelte';
   import GameFilesDialog from './screens/GameFilesDialog.svelte';
@@ -60,7 +60,7 @@
           {:else if store.screen === 'backups'}<Backups />
           {:else if store.screen === 'activity'}<Activity />
           {:else if store.screen === 'settings'}<Settings />
-          {:else}<EditorPlaceholder />{/if}
+          {:else}<Editor />{/if}
         </main>
       </div>
       {#if store.importer.isOpen}<ImportDialog />{/if}

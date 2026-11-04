@@ -60,3 +60,29 @@ undo/redo, schematics); (3) renderer data (tile → atlas table + colour fallbac
 ### Next
 - Step 4: `bhw-core` editor service + Tauri commands + editor UI (read-only viewer first).
 - Emulator calibration of the table (the emulator was in use by `feat/phase1` on 2026-11-04).
+
+## 2026-11-04 — step 4a: core service, Tauri commands, read-only viewer UI
+
+### Done
+- `bhw-core::editor`: sessions on Worlds-library worlds (`editor_open/close/region/overview/tile/catalog/atlas/
+  state/blockheads/edit/find/history/changes/save`). Save writes back into the same `.bhworld` (manifest kept, preview
+  redrawn, `edited` set) or as a new world (duplicate id/name + `set_identity`); server worlds stay 64-bit. Cached
+  multiplayer worlds are refused. `Lib::save_edit`. Tests in `crates/bhw-core/tests/editor.rs` (every request kind,
+  undo/redo, save, save as new, server and remote worlds, atlas from the game files cache); `editor.rs` and
+  `library.rs` at 100 % lines.
+- Tauri: 14 `editor_*` commands (binary bodies via `ipc::Response` for regions/overview/atlas), ACL + build list.
+- UI (`app/src/lib/editor/`, `screens/Editor.svelte`, replaces the placeholder): `EditorFlow` (open → working copy,
+  camera, row-wise block loading ≤128 blocks per request, atlas decode), `MapView` (cached per-block canvases,
+  plain colours or atlas cells at ≥4 px/tile, back walls darkened, light layer, spawn/blockhead/selection marks;
+  drag pan, wheel zoom at cursor, arrows/±/Enter keys), `Minimap` (overview RGBA window, click to move), layers,
+  zoom buttons, Go to (G) dialog, spawn (Home), Tile inspector (name, back wall, contents, light, objects,
+  protection, copy coordinates), Players (needs, inventory with item atlas icons), World (name, mode, size, time,
+  version, created, id), status bar (game graphics vs plain colours), version/damaged notices, opening and error
+  states. i18n en/tr/ru/kk (`edv.*`). Mock backend serves a synthetic world (`editor/mock-world.ts`).
+- vitest: 108 tests, 100 % statements/branches/functions/lines (`bunx vitest run --coverage --maxWorkers=2`).
+  Note: with full parallelism on this busy machine (load 10–25 from other agents) a few older screen tests time
+  out at random (gamefiles/settings/read/update); they pass alone and with 2 workers. svelte-check 0/0.
+
+### Next
+- Edit tools in the UI (pencil/brush/eraser/select/fill/replace/paste, palette, history panel, save dialog).
+- Emulator check of an edited world; atlas table calibration in the game.

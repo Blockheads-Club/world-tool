@@ -366,3 +366,95 @@ export interface UpdateInfo {
 }
 
 export type Unlisten = () => void;
+
+// ---- World editor (Phase 2) ----
+
+/** One blockhead in the editor (`player` is `""` in single-player worlds). */
+export interface EditorBlockhead {
+  player: string;
+  id: number;
+  name: string;
+  x: number;
+  y: number;
+  /** health, happiness, fullness, energy (0..1). */
+  stats: [number, number, number, number] | null;
+  /** Per slot `[item type, count]`. */
+  inventory: [number, number][] | null;
+}
+
+/** A world opened in the editor (a working copy in memory). */
+export interface EditorWorld {
+  session: string;
+  lib_id: string;
+  world_id: string;
+  name: string;
+  game_version: string | null;
+  width: number;
+  height: number;
+  spawn: [number, number] | null;
+  /** Stored macro blocks (32 × 32 tiles). */
+  blocks: [number, number][];
+  damaged_blocks: number;
+  expert: boolean;
+  /** Unix seconds. */
+  created: number | null;
+  time_of_day: number | null;
+  server: boolean;
+  blockheads: EditorBlockhead[];
+}
+
+export interface EditorObject {
+  kind: number;
+  kind_name: string | null;
+  id: number | null;
+  x: number;
+  y: number;
+  text: string | null;
+}
+
+export interface EditorTile {
+  x: number;
+  y: number;
+  stored: boolean;
+  fg: number;
+  bg: number;
+  contents: number;
+  light: number;
+  sun_light: number;
+  paint: number[];
+  owner: number;
+  protected: boolean;
+  objects: EditorObject[];
+}
+
+/** Name, plain colour and atlas cell of one id. */
+export interface IdInfo {
+  id: number;
+  name: string;
+  color?: [number, number, number];
+  cell?: [number, number];
+  placeable?: boolean;
+}
+
+export interface Catalog {
+  tiles: IdInfo[];
+  contents: IdInfo[];
+  items: IdInfo[];
+}
+
+export type OpKind =
+  | 'pencil' | 'brush' | 'remove' | 'fill' | 'clear' | 'replace' | 'paste' | 'cut' | 'blockhead' | 'inventory' | 'settings';
+
+export interface HistoryLabel {
+  kind: OpKind;
+  tiles: number;
+  a?: string;
+  b?: string;
+}
+
+export interface EditorState {
+  history: HistoryLabel[];
+  cursor: number;
+  unsaved: number;
+  clipboard: [number, number] | null;
+}

@@ -300,11 +300,17 @@ impl Core {
         Ok(bhw_editor::view::region(&mut o.session, mx0, my0, mx1, my1)?)
     }
 
-    /// The whole world in plain colours as a PNG, one pixel per `scale` tiles.
+    /// The whole world in plain colours, one pixel per `scale` tiles: `u32 width, u32 height` (little-endian),
+    /// then RGBA pixels, top row first.
     pub fn editor_overview(&self, id: &str, scale: u32) -> Result<Vec<u8>> {
         let o = self.editor(id)?;
         let mut o = lock(&o);
-        Ok(bhw_editor::view::overview(&mut o.session, scale.clamp(1, 64)).to_png())
+        let img = bhw_editor::view::overview(&mut o.session, scale.clamp(1, 64));
+        let mut out = Vec::with_capacity(8 + img.pixels.len());
+        out.extend_from_slice(&img.width.to_le_bytes());
+        out.extend_from_slice(&img.height.to_le_bytes());
+        out.extend_from_slice(&img.pixels);
+        Ok(out)
     }
 
     /// One tile and the objects on it.

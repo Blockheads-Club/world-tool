@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-editor-find"
+description = "Enables the editor_find command without any pre-configured scope."
+commands.allow = ["editor_find"]
+
+[[permission]]
+identifier = "deny-editor-find"
+description = "Denies the editor_find command without any pre-configured scope."
+commands.deny = ["editor_find"]

@@ -9,6 +9,7 @@ import { TransferFlow } from './flows/transfer.svelte';
 import { ImportFlow } from './flows/import.svelte';
 import { GameFilesFlow } from './flows/gamefiles.svelte';
 import { UpdateFlow } from './flows/update.svelte';
+import { EditorFlow } from './editor/flow.svelte';
 
 export type Screen = 'devices' | 'connect' | 'read' | 'transfer' | 'worlds' | 'backups' | 'activity' | 'settings' | 'editor';
 export type Guide = 'usb' | 'wifi' | 'root' | 'pc' | 'ios' | 'driver' | 'trouble';
@@ -52,6 +53,7 @@ export class AppStore {
   importer = new ImportFlow(this);
   gameFiles = new GameFilesFlow(this);
   update = new UpdateFlow(this);
+  editor = new EditorFlow(this);
 
   private unlisten: (() => void)[] = [];
 
@@ -95,6 +97,7 @@ export class AppStore {
   }
 
   go(screen: Screen) {
+    if (this.screen === 'editor' && screen !== 'editor') this.editor.close();
     this.screen = screen;
     if (screen === 'worlds') void this.loadWorlds();
     if (screen === 'devices') void this.refreshDevices();
@@ -157,6 +160,7 @@ export class AppStore {
   openEditor(world: World) {
     this.editing = world;
     this.screen = 'editor';
+    void this.editor.open(world);
   }
 
   /** Android phones and tablets that can be read or written now. */

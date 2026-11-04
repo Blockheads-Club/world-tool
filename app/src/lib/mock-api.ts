@@ -18,6 +18,7 @@ import type {
   Unlisten,
   World
 } from './types';
+import { mockBlockheads, mockCatalog, mockOverview, mockRegion, mockTileInfo, mockWorld } from './editor/mock-world';
 
 /**
  * In-memory backend for development (`bun run dev` outside Tauri), the unit tests and the e2e tests. It behaves like
@@ -65,7 +66,8 @@ type FailKey =
   | 'check'
   | 'import'
   | 'source'
-  | 'ios';
+  | 'ios'
+  | 'editor';
 
 export class MockBackend implements Backend {
   tick: number;
@@ -692,6 +694,68 @@ export class MockBackend implements Backend {
   }
 
   async restartApp() {}
+
+  // ------------------------------------------------------------ world editor
+
+  /** Open editor sessions → library world id. */
+  editors = new Map<string, string>();
+  /** Dev / tests: macro blocks (`"x,y"`) the mock reports as damaged. */
+  damagedBlocks: string[] = [];
+  /** Dev / tests: an atlas image for `editor_atlas` (empty = no game files). */
+  atlas: ArrayBuffer = new ArrayBuffer(0);
+
+  private editorSession(session: string): string {
+    const w = this.editors.get(session);
+    if (!w) throw err('not_found', { detail: session });
+    return w;
+  }
+
+  async editorOpen(id: string) {
+    await this.sleep();
+    this.failing('editor');
+    const w = this.world(id);
+    const session = this.id('ed');
+    this.editors.set(session, id);
+    return mockWorld(session, id, w.name);
+  }
+
+  async editorClose(session: string) {
+    this.editors.delete(session);
+  }
+
+  async editorRegion(session: string, rect: [number, number, number, number]) {
+    this.editorSession(session);
+    await this.sleep();
+    return mockRegion(rect, this.damagedBlocks);
+  }
+
+  async editorOverview(session: string, scale: number) {
+    this.editorSession(session);
+    return mockOverview(scale);
+  }
+
+  async editorTile(session: string, x: number, y: number) {
+    this.editorSession(session);
+    return mockTileInfo(x, y);
+  }
+
+  async editorCatalog() {
+    return mockCatalog();
+  }
+
+  async editorAtlas(_which: 'tiles' | 'items') {
+    return this.atlas;
+  }
+
+  async editorState(session: string) {
+    this.editorSession(session);
+    return { history: [], cursor: 0, unsaved: 0, clipboard: null };
+  }
+
+  async editorBlockheads(session: string) {
+    this.editorSession(session);
+    return mockBlockheads();
+  }
 
   // ------------------------------------------------------------ OS integration
 

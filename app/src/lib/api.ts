@@ -25,7 +25,12 @@ import type {
   Unlisten,
   UpdateInfo,
   WifiCandidate,
-  World
+  World,
+  Catalog,
+  EditorBlockhead,
+  EditorState,
+  EditorTile,
+  EditorWorld
 } from './types';
 
 export type OnProgress = (p: Progress) => void;
@@ -105,6 +110,24 @@ export interface Backend {
   downloadUpdate(op: string, onProgress: OnProgress): Promise<void>;
   restartApp(): Promise<void>;
 
+  // World editor (Phase 2)
+  /** Opens a Worlds world as a working copy. */
+  editorOpen(id: string): Promise<EditorWorld>;
+  editorClose(session: string): Promise<void>;
+  /**
+   * Tile data of macro blocks `[x0, y0, x1, y1)`: per block `u16 x, u8 y, u8 state` (0 none, 1 stored, 2 damaged),
+   * then 1024 × 4 bytes (fg, back wall, contents, light) when stored.
+   */
+  editorRegion(session: string, rect: [number, number, number, number]): Promise<ArrayBuffer>;
+  /** The whole world in plain colours: `u32 width, u32 height`, then RGBA, top row first. */
+  editorOverview(session: string, scale: number): Promise<ArrayBuffer>;
+  editorTile(session: string, x: number, y: number): Promise<EditorTile>;
+  editorCatalog(): Promise<Catalog>;
+  /** The user's own atlas PNG (`tiles` or `items`); empty when the game files are not set up. */
+  editorAtlas(which: 'tiles' | 'items'): Promise<ArrayBuffer>;
+  editorState(session: string): Promise<EditorState>;
+  editorBlockheads(session: string): Promise<EditorBlockhead[]>;
+
   /** Files given to the app by the OS (double-clicked `.bhworld`), at start-up and while running. */
   onOpenFiles(cb: (paths: string[]) => void): Promise<Unlisten>;
   /** Files dragged over the window: `over` with the item count, `drop` with the paths, `leave`. */
@@ -177,6 +200,16 @@ export const tauriBackend: Backend = {
   downloadUpdate: (op, onProgress) => invoke('download_update', { op, onProgress: channel(onProgress) }),
   restartApp: () => invoke('restart_app'),
 
+  editorOpen: (id) => invoke('editor_open', { id }),
+  editorClose: (session) => invoke('editor_close', { session }),
+  editorRegion: (session, rect) => invoke('editor_region', { session, rect }),
+  editorOverview: (session, scale) => invoke('editor_overview', { session, scale }),
+  editorTile: (session, x, y) => invoke('editor_tile', { session, x, y }),
+  editorCatalog: () => invoke('editor_catalog'),
+  editorAtlas: (which) => invoke('editor_atlas', { which }),
+  editorState: (session) => invoke('editor_state', { session }),
+  editorBlockheads: (session) => invoke('editor_blockheads', { session }),
+
   onOpenFiles: async (cb) => {
     const off = await listen<string[]>('open-files', (e) => cb(e.payload));
     const first = await invoke<string[]>('take_open_files');
@@ -204,7 +237,9 @@ export const COMMANDS = [
   'list_activity', 'clear_activity',
   'game_files', 'use_apk', 'apk_from_device', 'reextract', 'clear_game_files',
   'pick_folder', 'pick_import', 'pick_apk',
-  'check_update', 'download_update', 'restart_app', 'take_open_files'
+  'check_update', 'download_update', 'restart_app', 'take_open_files',
+  'editor_open', 'editor_close', 'editor_region', 'editor_overview', 'editor_tile', 'editor_catalog', 'editor_atlas',
+  'editor_state', 'editor_blockheads'
 ] as const;
 
 /** True inside the Tauri webview. */

@@ -6,6 +6,7 @@ import { ImportFlow } from './flows/import.svelte';
 import { ReadFlow } from './flows/read.svelte';
 import { TransferFlow } from './flows/transfer.svelte';
 import { UpdateFlow } from './flows/update.svelte';
+import { EditorFlow } from './editor/flow.svelte';
 import { setLang } from './i18n.svelte';
 import { MockBackend, type MockOptions } from './mock-api';
 import { store } from './store.svelte';
@@ -36,6 +37,7 @@ export function resetStore() {
   store.importer = new ImportFlow(store);
   store.gameFiles = new GameFilesFlow(store);
   store.update = new UpdateFlow(store);
+  store.editor = new EditorFlow(store);
   toasts.items = [];
   setLang('en');
   setTheme('system');
