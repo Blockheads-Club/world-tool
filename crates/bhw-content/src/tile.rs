@@ -10,10 +10,10 @@
 //! | 0x03 | 1 | contents (ore, plant, ladder, object marker, …) |
 //! | 0x04 | 1 | partial content left |
 //! | 0x05 | 1 | gather progress |
-//! | 0x06 | 1 | light |
+//! | 0x06 | 1 | light: how far the player has explored the tile (0 is drawn black; equals 0x09 in saves) |
 //! | 0x07 | 1 | sun light |
 //! | 0x08 | 1 | season offset |
-//! | 0x09 | 1 | explored fraction |
+//! | 0x09 | 1 | explored fraction (same value as 0x06) |
 //! | 0x0a | 1 | terrain slow factor |
 //! | 0x0b | 1 | foreground contents |
 //! | 0x0c | 1 | background contents |

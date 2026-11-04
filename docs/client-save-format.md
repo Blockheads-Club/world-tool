@@ -106,6 +106,19 @@ an unlit cave is invisible in the dark (game behaviour). Areas the player never 
 emulator, including a move across the world's wrap (x 16383 → 1). `pos_x`, `pos_y` and `floatPos` (x + 0.5, y)
 are the only position fields; nothing in `dw` or `state` refers to a blockhead's position.
 
+Explored land (emulator, 1.7.6, 2026-11-05): the game keeps how far the player has explored each tile in tile byte
+0x06 (0x09 always holds the same value in all 15 PC saves): 255 inside a disc of about 12 tiles around each place a
+blockhead has been, fading to 0 over about 6 more tiles. Tiles with 0 in byte 0x06 are drawn black (a camera
+pointed at unexplored land showed black; setting 0x06 to 255 there made the sky and trees show at once, 0x09 alone
+changed nothing). When a blockhead arrives the game uncovers the disc itself and, for ground tiles it uncovers, it
+also works out their sun light (byte 0x07, about 32 less per tile below the open surface). Tiles that are already
+explored are skipped: a moved blockhead whose surroundings the editor had marked explored (radius 24) stood on
+**black ground** that stayed black while the game ran, because 0x07 of those tiles was still 0; without the marking
+the ground lit normally. So the editor does not mark land as explored: at the default zoom the game's own disc
+covers the whole screen, and setting 0x07 as well would mean redoing the game's light model (leaves, water, glass,
+caves). The `map/` tiles are written by the game too (it created `map/default/72_16.png` and `72_17.png` for a
+blockhead moved into those blocks).
+
 The day: `worldTime` counts seconds; a day is **3600** of them and `worldTime` 0 is midnight (checked in the game:
 3600 shows night, 4500 dawn, 5400 noon).
 
