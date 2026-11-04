@@ -26,6 +26,8 @@ extracted from the user's own APK. GPL-3.0-or-later. Not affiliated with Majic J
   its graphics into a local cache (`docs/game-files.md`).
 - `app/` — SvelteKit UI + `app/src-tauri` Tauri shell.
 - `docs/progress/*.md` — per-stream progress logs (resume points). Keep them current.
+- `.github/workflows/` (ci, auto-release, release), `.releaserc.json`, `scripts/` (release helpers, root
+  `bun test`) — releases are cut by semantic-release from `dev`; see `docs/progress/release.md`.
 
 ## Known facts
 - Game saves (Android, Blockheads PC): `.../saves/<32-hex id>/world_db/data.mdb` + `map/` dir; LMDB meta magic

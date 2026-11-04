@@ -14,6 +14,7 @@ After an interruption (machine asleep), read the stream's file and `git log` on 
 | iOS backups (read-only) | `feat/ios` | `../world-tool-wt/ios` | `ios.md` |
 | Core service + Tauri wiring | `feat/core` | `../world-tool-wt/core` | `core.md` |
 | App logic + Tauri wiring | `feat/core` | `../world-tool-wt/core` | `core.md` |
+| CI, releases, updater | `feat/release` | `../world-tool-wt/release` | `release.md` |
 
 lmdb: done, merged into dev (8a70b84).
 backup: done, merged into dev (1171c7e).

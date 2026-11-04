@@ -1,0 +1,245 @@
+name: release
+
+# Releases are cut by auto-release.yml: it tags the version and dispatches this workflow with `publish`, which builds
+# every desktop bundle, attaches it with the updater manifest latest.json and publishes the release. A pushed tag
+# `vX.Y.Z` (or `vX.Y.Z-rc.N`) builds into a DRAFT release that is published by hand. Manual runs
+# (workflow_dispatch) take the tag as input; with an empty tag they build the dispatched commit as a dry run
+# (workflow artifacts + SHA256SUMS.txt only, no release is touched).
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing tag to build and attach (e.g. v0.1.0); empty = dry run of the dispatched commit'
+        required: false
+        default: ''
+      publish:
+        description: 'Publish the release once every bundle is attached'
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}-${{ inputs.tag }}
+  # Dry runs of a branch supersede each other; tag runs never cancel a half-uploaded release.
+  cancel-in-progress: ${{ github.event_name == 'workflow_dispatch' && inputs.tag == '' }}
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  version:
+    name: version from tag
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.v.outputs.tag }}
+      ref: ${{ steps.v.outputs.ref }}
+      version: ${{ steps.v.outputs.version }}
+      bundle_version: ${{ steps.v.outputs.bundle_version }}
+    steps:
+      - uses: actions/checkout@v4
+        if: github.event_name == 'workflow_dispatch' && inputs.tag == ''
+      - id: v
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.tag == '' }}
+        run: |
+          if [ "$DRY_RUN" = true ]; then
+            # Dry run: no tag, version from tauri.conf.json, build the dispatched commit.
+            tag=""
+            ref="$GITHUB_SHA"
+            version=$(jq -r .version app/src-tauri/tauri.conf.json)
+          else
+            tag="${INPUT_TAG:-$GITHUB_REF_NAME}"
+            case "$tag" in v[0-9]*) ;; *) echo "::error::not a version tag: $tag"; exit 1 ;; esac
+            ref="$tag"
+            version="${tag#v}"
+          fi
+          # MSI only accepts numeric prerelease identifiers: 1.0.0-rc.3 -> 1.0.0-3 for bundle metadata.
+          bundle=$(echo "$version" | sed -E 's/-[A-Za-z]+\./-/')
+          {
+            echo "tag=$tag"
+            echo "ref=$ref"
+            echo "version=$version"
+            echo "bundle_version=$bundle"
+          } >> "$GITHUB_OUTPUT"
+
+  desktop:
+    name: desktop (${{ matrix.name }})
+    needs: version
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: windows-x64
+            os: windows-latest
+            triple: x86_64-pc-windows-msvc
+            bundles: nsis,msi
+          # 22.04 (glibc 2.35) so the bundles run on older distros too. adb goes into the AppImage only: as a deb/rpm
+          # sidecar it would land in /usr/bin/adb and clash with the distro's adb package (deb/rpm users install
+          # adb from their distro; the app finds it on PATH).
+          - name: linux-x64
+            os: ubuntu-22.04
+            triple: x86_64-unknown-linux-gnu
+            bundles: appimage
+            plain_bundles: deb,rpm
+          - name: macos-arm64
+            os: macos-latest
+            triple: aarch64-apple-darwin
+            args: --target aarch64-apple-darwin
+            bundles: app,dmg
+            mac_arch: aarch64
+          - name: macos-x64
+            os: macos-latest
+            triple: x86_64-apple-darwin
+            args: --target x86_64-apple-darwin
+            bundles: app,dmg
+            mac_arch: x64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.version.outputs.ref }}
+      - uses: oven-sh/setup-bun@v2
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.triple }}
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: app/src-tauri
+          key: ${{ matrix.name }}
+      - name: Linux system libraries
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev patchelf xdg-utils file libfuse2 rpm
+      - run: bun install --frozen-lockfile
+        working-directory: app
+      - name: Fetch adb (Platform-Tools, pinned checksum)
+        shell: bash
+        run: scripts/fetch-adb.sh "${{ matrix.triple }}" "$RUNNER_TEMP/adb.json"
+      # In-place updates: with the updater key (secrets TAURI_SIGNING_PRIVATE_KEY[_PASSWORD]) the build also signs the
+      # updater artifacts (NSIS/MSI installers, AppImage, deb, rpm, macOS .app.tar.gz) and writes a .sig next to each.
+      # Without the key (forks) it builds unsigned and the publish job skips latest.json.
+      - name: Build bundles
+        working-directory: app
+        shell: bash
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          VERSION: ${{ needs.version.outputs.bundle_version }}
+          ARGS: ${{ matrix.args }}
+          BUNDLES: ${{ matrix.bundles }}
+          PLAIN_BUNDLES: ${{ matrix.plain_bundles }}
+        run: |
+          updater=false
+          [ -n "$TAURI_SIGNING_PRIVATE_KEY" ] && updater=true
+          base=$(jq -nc --arg v "$VERSION" --argjson u "$updater" '{version: $v, bundle: {createUpdaterArtifacts: $u}}')
+          jq -s '.[0] * .[1]' <(echo "$base") "$RUNNER_TEMP/adb.json" > "$RUNNER_TEMP/with-adb.json"
+          echo "$base" > "$RUNNER_TEMP/plain.json"
+          # shellcheck disable=SC2086 # ARGS holds several words
+          bun tauri build $ARGS --bundles "$BUNDLES" --config "$RUNNER_TEMP/with-adb.json"
+          if [ -n "$PLAIN_BUNDLES" ]; then
+            # shellcheck disable=SC2086
+            bun tauri build $ARGS --bundles "$PLAIN_BUNDLES" --config "$RUNNER_TEMP/plain.json"
+          fi
+      - name: Collect
+        shell: bash
+        env:
+          MAC_ARCH: ${{ matrix.mac_arch }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          mkdir -p dist-release
+          find app/src-tauri/target -path '*/release/bundle/*' -type f \
+            \( -name '*.exe' -o -name '*.msi' -o -name '*.AppImage' -o -name '*.deb' -o -name '*.rpm' -o -name '*.dmg' \
+               -o -name '*.exe.sig' -o -name '*.msi.sig' -o -name '*.AppImage.sig' -o -name '*.deb.sig' -o -name '*.rpm.sig' \) \
+            -exec cp {} dist-release/ \;
+          # macOS updater tarballs are all named "<product>.app.tar.gz": give each the version and arch.
+          if [ -n "$MAC_ARCH" ]; then
+            find app/src-tauri/target -path '*/release/bundle/macos/*' -type f \( -name '*.app.tar.gz' -o -name '*.app.tar.gz.sig' \) | while read -r f; do
+              ext=".app.tar.gz"; case "$f" in *.sig) ext=".app.tar.gz.sig" ;; esac
+              cp "$f" "dist-release/BH.World.Tool_${VERSION}_${MAC_ARCH}${ext}"
+            done
+          fi
+          ls -la dist-release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rel-${{ matrix.name }}
+          path: dist-release/*
+          if-no-files-found: error
+
+  publish:
+    name: GitHub release
+    needs: [version, desktop]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.version.outputs.ref }}
+      - uses: oven-sh/setup-bun@v2
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: rel-*
+          path: dist-release
+          merge-multiple: true
+      - name: Normalise asset names
+        working-directory: dist-release
+        run: |
+          # GitHub turns spaces in asset names into dots; rename first so the sums and latest.json match the stored names.
+          for f in *' '*; do [ -e "$f" ] && mv -v -- "$f" "${f// /.}"; done
+          ls -la
+      # Tauri updater manifest (the app's endpoint is releases/latest/download/latest.json, see tauri.conf.json).
+      # Only for tag builds whose updater artifacts were signed. The notes are the release body semantic-release wrote.
+      - name: Write latest.json
+        if: needs.version.outputs.tag != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.version.outputs.tag }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          if ls dist-release/*.sig >/dev/null 2>&1; then
+            gh release view "$TAG" -R "$GITHUB_REPOSITORY" --json body -q .body > "$RUNNER_TEMP/notes.md" 2>/dev/null || : > "$RUNNER_TEMP/notes.md"
+            bun scripts/updater-manifest.ts dist-release "$VERSION" "$TAG" "$RUNNER_TEMP/notes.md"
+            cat dist-release/latest.json
+          else
+            echo "::notice::no updater signatures (TAURI_SIGNING_PRIVATE_KEY unset): latest.json skipped"
+          fi
+      - name: Write SHA256SUMS.txt
+        working-directory: dist-release
+        run: |
+          rm -f SHA256SUMS.txt
+          sha256sum -- * > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+          sha256sum -c SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-all
+          path: dist-release/*
+          if-no-files-found: error
+      - name: Create or update the draft release (prerelease only for tags with a dash, e.g. v0.2.0-rc.1)
+        if: needs.version.outputs.tag != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.version.outputs.tag }}
+        run: |
+          pre=""
+          case "$TAG" in *-*) pre="--prerelease" ;; esac
+          if gh release view "$TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist-release/* --clobber -R "$GITHUB_REPOSITORY"
+            [ -n "$pre" ] && gh release edit "$TAG" --prerelease -R "$GITHUB_REPOSITORY"
+            true
+          else
+            gh release create "$TAG" dist-release/* --draft $pre --verify-tag --title "$TAG" --generate-notes -R "$GITHUB_REPOSITORY"
+          fi
+      - name: Publish the release
+        if: needs.version.outputs.tag != '' && inputs.publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.version.outputs.tag }}
+        run: gh release edit "$TAG" --draft=false -R "$GITHUB_REPOSITORY"

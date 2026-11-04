@@ -45,7 +45,7 @@
    backups, activity log, APK check/extract) and add `tauri-plugin-dialog` for the pickers, an updater
    (`tauri-plugin-updater`), `show_in_folder` (opener). Emit `devices-changed` events.
 2. Rust coverage for `src-tauri` (cargo llvm-cov) once logic lands there (currently 4 tests, no gate).
-3. CI workflow for the app (bun install, check, test, e2e, clippy) — not added yet.
+3. CI workflow for the app (bun install, check, test, e2e, clippy): added by `feat/release` (`release.md`).
 
 ### Open questions
 - Real-device check of tr/ru/kk Android system strings ("Back up my data" etc.).
