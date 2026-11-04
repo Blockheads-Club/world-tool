@@ -6,12 +6,14 @@
 //! files (`docs/schematic-format.md`). [`view`] produces compact per-block tile data and overview images for the
 //! map renderer; [`atlas`] maps ids to cells of the game's own atlases (extracted from the user's APK).
 
+pub mod atlas;
 pub mod brush;
 pub mod error;
 pub mod geom;
 pub mod history;
 pub mod schematic;
 pub mod session;
+pub mod view;
 
 pub use brush::{Brush, Layer, Match};
 pub use error::{Error, Result};

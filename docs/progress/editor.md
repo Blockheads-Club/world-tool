@@ -45,3 +45,18 @@ undo/redo, schematics); (3) renderer data (tile → atlas table + colour fallbac
 - `bhw-content` got a `test-util` feature with the synthetic fixtures.
 - Coverage: 100 % lines in `bhw-content`; `bhw-editor` 100 % of lines in `--show-missing-lines`
   (the summary of the shared target dir counts 2 lines in `session.rs` that no report lists).
+
+## 2026-11-04 — step 3: render data and atlas table (draft)
+
+### Done
+- `bhw_editor::view`: `block_view` (4 bytes per tile: fg, back wall, contents, light), `region` (binary message for
+  up to 256 blocks), `overview` (whole world in plain colours at 1 px per n tiles, for the minimap).
+- `bhw_editor::atlas`: table `data/atlas.json` (tile/contents/item → atlas cell, `src` eye/game), validation,
+  `Catalog` (names, plain colours, cells, placeable contents) for the UI. `docs/editor-atlas.md` explains how the
+  table is made; current coverage: 31 tile types, 15 contents, 9 items, all by eye (not yet confirmed in the game).
+- Tried: the game's explored-map tiles (`map/default/*.png`) as colour reference — they are lit/darkened by the
+  game's light, useless for colour matching. The game's world thumbnail is smoothed and lit too.
+
+### Next
+- Step 4: `bhw-core` editor service + Tauri commands + editor UI (read-only viewer first).
+- Emulator calibration of the table (the emulator was in use by `feat/phase1` on 2026-11-04).
