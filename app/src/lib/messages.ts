@@ -967,6 +967,8 @@ export const en = {
   'edv.contentsSlots': '{n} of {of} slots used',
   'edv.teleport': 'Teleport…',
   'edv.teleportTitle': 'Move {name} to',
+  'edv.moveRefused': 'The blockhead can’t be moved there: the game hasn’t generated that area yet, or it’s lava. Pick a spot in explored land.',
+  'edv.editRefused': 'This change isn’t possible here.',
   'edv.removePlayer': 'Remove blockhead',
   'edv.removeTitle': 'Remove {name}?',
   'edv.removeText': 'The blockhead and its inventory are removed from the working copy. Undo brings it back.',

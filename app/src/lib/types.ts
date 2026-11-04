@@ -467,7 +467,7 @@ export interface IdInfo {
   name: string;
   color?: [number, number, number];
   cell?: [number, number];
-  /** Block items: the tile type that stands for the item. */
+  /** Block items: the tile type that stands for the item. Placeable contents: the tile type they are placed in. */
   tile?: number;
   placeable?: boolean;
 }

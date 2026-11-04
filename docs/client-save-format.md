@@ -59,6 +59,14 @@ Identical to Blockheads Server [obs]:
   (255 for every non-air tile in real saves, 0 for air), bytes 0x28–0x2f the id of the dynamic object that owns
   the tile (trees own their trunk and leaf tiles); all fields are named in `crates/bhw-content/src/tile.rs`.
   Tile type ids are listed in `crates/bhw-save/src/tiles.rs`.
+- Materials as the game generates them (all 15 PC worlds; the clean-room server's world generator agrees):
+  flint (contents 1) and clay (2) only in dirt (6) and grassy dirt (27); oil (64) only in limestone (12); copper,
+  tin, iron, coal, gold, platinum, titanium (61–63, 65, 77, 106, 107) in rock (1). Gems are never in the contents
+  byte: a cave tile (air or water, rock back wall) holds a gem **promise** in byte 0x0b (ruby 0x34, emerald 0x36,
+  sapphire 0x38, amethyst 0x3a, diamond 0x3c). When light reaches it or a blockhead comes within 4 tiles, the
+  game turns it into the gem (promise − 1) and adds a light object for it in `dw`. Placed this way by the editor,
+  all five showed in 1.7.6 (emulator); placed in a rock tile's contents byte they did not. Charcoal (45) is never
+  generated and does not show in a tile.
 - A block the editor creates where the game has not generated the world (filled with the world's sky tile, version
   0, counter 0) loads in 1.7.6; the game keeps its contents, raises the version to 8 and generates the blocks
   around it as usual (emulator, 2026-11-05).
@@ -90,6 +98,13 @@ gzip plist for containers. The last byte is 0x11 or 0xbc on the first item of ea
 the others; the game accepts 0 everywhere and writes 0 back for items it loaded that way (emulator), so it looks like
 uninitialised padding. Writers use 0. A blockhead's `state` data holds its needs as `f32` at 0x20 (health), 0x24
 (happiness), 0x28 (fullness), 0x2c (energy); the game lets fullness and energy go a little above 1.
+
+Moving a blockhead: the game opens a world at its saved camera (`translation` in `worldv2`), not at the
+blockheads, so a blockhead moved elsewhere seems to have vanished until it is selected. It pushes a blockhead
+put inside the ground up to the surface; one put high in the air falls (and may die), one in water drowns, one in
+an unlit cave is invisible in the dark (game behaviour). Areas the player never explored look dark. Checked on the
+emulator, including a move across the world's wrap (x 16383 → 1). `pos_x`, `pos_y` and `floatPos` (x + 0.5, y)
+are the only position fields; nothing in `dw` or `state` refers to a blockhead's position.
 
 The day: `worldTime` counts seconds; a day is **3600** of them and `worldTime` 0 is midnight (checked in the game:
 3600 shows night, 4500 dawn, 5400 noon).

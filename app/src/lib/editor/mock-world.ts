@@ -30,8 +30,9 @@ export function mockCatalog(): Catalog {
   const tiles: IdInfo[] = Array.from({ length: 78 }, (_, id) => ({ id, name: id === 0 ? 'none' : `tile_${id}` }));
   for (const [id, name, color] of TILES) tiles[id] = { id, name, color, ...(id === 1 ? { cell: [0, 1] as [number, number] } : {}) };
   const contents: IdInfo[] = Array.from({ length: 149 }, (_, id) => ({ id, name: id === 0 ? 'nothing' : `contents_${id}` }));
-  contents[61] = { id: 61, name: 'copper', color: [210, 120, 60], placeable: true };
-  contents[77] = { id: 77, name: 'gold', color: [240, 200, 40], placeable: true, cell: [20, 2] };
+  contents[61] = { id: 61, name: 'copper', color: [210, 120, 60], placeable: true, tile: 1 };
+  contents[77] = { id: 77, name: 'gold', color: [240, 200, 40], placeable: true, tile: 1, cell: [20, 2] };
+  contents[51] = { id: 51, name: 'ruby', color: [220, 40, 70], placeable: true, tile: 2 };
   contents[4] = { id: 4, name: 'apple_tree_trunk' };
   const items: IdInfo[] = [
     { id: 4, name: 'STICK', cell: [4, 0] },

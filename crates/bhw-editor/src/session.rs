@@ -7,6 +7,7 @@ use bhw_content::players::{Inventory, Stats};
 use bhw_content::tile::AIR;
 use bhw_content::{TileData, WorldContent};
 use bhw_lmdb::EnvContents;
+use plist::Value;
 use serde::Serialize;
 
 use crate::brush::{describe, is_open, is_protected, Brush, Match};
@@ -158,11 +159,7 @@ impl Session {
                 if let Some(occ) = occupied.as_mut() {
                     occ.remove(&(x, y));
                 }
-                let mut base = t;
-                base.clear_owner();
-                if !crate::brush::plain_contents(base.contents()) {
-                    base.set_contents(0);
-                }
+                let base = crate::brush::detached(&t);
                 n = f((x, y), &base).unwrap_or(base);
             }
             if changes.len() as u64 >= self.max_changes {
@@ -209,11 +206,7 @@ impl Session {
                     if ot.owner() != id {
                         continue;
                     }
-                    let mut nt = ot;
-                    nt.clear_owner();
-                    if !crate::brush::plain_contents(nt.contents()) {
-                        nt.set_contents(0);
-                    }
+                    let nt = crate::brush::detached(&ot);
                     self.world.blocks.set_tile(tx, ty, nt)?;
                     changes.push(Change::Tile { x: tx, y: ty, before: ot, after: nt });
                 }
@@ -352,20 +345,71 @@ impl Session {
     fn edit_blockhead(&mut self, player: &str, id: u64, f: &mut dyn FnMut(&mut Session) -> Result<()>) -> Result<()> {
         let before =
             self.world.players.dict(player, id).cloned().ok_or_else(|| Error::Invalid(format!("no blockhead {id}")))?;
+        let record = self.world.record.as_ref().map(|r| r.dict.clone());
         f(self)?;
         let after = self.world.players.dict(player, id).cloned().expect("still there");
         let name = self.blockhead_name(player, id);
-        let change = Change::Blockhead { player: player.into(), id, before, after };
-        self.history.push(Step { label: label(OpKind::Blockhead, name, None), changes: vec![change] });
+        let mut changes = vec![Change::Blockhead { player: player.into(), id, before, after }];
+        if let (Some(before), Some(r)) = (record, self.world.record.as_ref()) {
+            if r.dict != before {
+                changes.push(Change::Record { before, after: r.dict.clone() });
+            }
+        }
+        self.history.push(Step { label: label(OpKind::Blockhead, name, None), changes });
         Ok(())
     }
 
-    /// Moves a blockhead to tile `(x, y)`.
-    pub fn move_blockhead(&mut self, player: &str, id: u64, x: u32, y: u32) -> Result<()> {
+    /// Moves a blockhead to stand at tile `(x, y)` and points the game's camera at it; returns the tile used.
+    ///
+    /// Checked in the game (1.7.6): it opens a world where its camera was saved (`translation` in the world
+    /// record), not at the blockheads, so a blockhead moved away seemed to vanish; the camera is moved with it.
+    /// A blockhead put inside the ground is pushed up by the game, one put in the air falls (a long fall kills
+    /// it), one put in water drowns, and one put where the game has not generated the world lands wherever the
+    /// generated ground turns out to be. So the spot is corrected here: up out of solid ground and water to the
+    /// first air tile, then down to whatever is below; it must lie in stored blocks and not above lava.
+    pub fn move_blockhead(&mut self, player: &str, id: u64, x: u32, y: u32) -> Result<(u32, u32)> {
         if x >= self.width() || y >= self.height() {
             return Err(Error::Invalid("outside the world".into()));
         }
-        self.edit_blockhead(player, id, &mut |s| Ok(s.world.players.set_pos(player, id, x as i64, y as i64)?))
+        let (x, y) = self.standing_spot(x, y)?;
+        let mv: &mut dyn FnMut(&mut Session) -> Result<()> = &mut |s| {
+            s.world.players.set_pos(player, id, x as i64, y as i64)?;
+            if let Some(r) = s.world.record.as_mut() {
+                r.dict.insert(
+                    "translation".into(),
+                    Value::Array(vec![Value::Real(x as f64 + 0.5), Value::Real(y as f64)]),
+                );
+            }
+            Ok(())
+        };
+        self.edit_blockhead(player, id, mv).map(|_| (x, y))
+    }
+
+    /// Where a blockhead put at `(x, y)` comes to stand (see [`Session::move_blockhead`]).
+    fn standing_spot(&mut self, x: u32, mut y: u32) -> Result<(u32, u32)> {
+        let h = self.height();
+        let at = |s: &mut Session, y: u32| -> Result<TileData> {
+            s.world.blocks.tile(x, y)?.ok_or_else(|| Error::Invalid("the game has not generated this area yet".into()))
+        };
+        let mut t = at(self, y)?;
+        while t.fg() != AIR {
+            y += 1;
+            if y >= h {
+                return Err(Error::Invalid("no free tile above".into()));
+            }
+            t = at(self, y)?;
+        }
+        while y > 0 {
+            let below = at(self, y - 1)?;
+            if below.fg() == crate::brush::LAVA {
+                return Err(Error::Invalid("above lava".into()));
+            }
+            if below.fg() != AIR {
+                break;
+            }
+            y -= 1;
+        }
+        Ok((x, y))
     }
 
     /// Sets a blockhead's needs (each clamped to 0..1).

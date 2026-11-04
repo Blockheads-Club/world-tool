@@ -21,10 +21,8 @@ describe('geometry', () => {
     expect(linePoints([0, 0], [3, 1])).toEqual([[0, 0], [1, 0], [2, 1], [3, 1]]);
     expect(linePoints([3, 3], [0, 0]).length).toBe(4);
     expect(linePoints([0, 3], [0, 0]).length).toBe(4);
-    expect(oreBrush(1).tile).toBe(6);
-    expect(oreBrush(2).tile).toBe(6);
-    expect(oreBrush(64).tile).toBe(12);
-    expect(oreBrush(61)).toEqual({ layer: 'front', tile: 1, contents: 61 });
+    expect(oreBrush({ id: 51, name: 'ruby', tile: 2 })).toEqual({ layer: 'front', tile: 2, contents: 51 });
+    expect(oreBrush({ id: 61, name: 'copper' })).toEqual({ layer: 'front', tile: 1, contents: 61 });
   });
 });
 

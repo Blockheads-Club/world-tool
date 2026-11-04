@@ -6,7 +6,7 @@ use std::io::{Read, Write};
 use bhw_content::tile::{Face, TileData};
 use serde::{Deserialize, Serialize};
 
-use crate::brush::plain_contents;
+use crate::brush::{material, plain_contents, set_material};
 use crate::error::{Error, Result};
 
 /// File magic.
@@ -38,7 +38,7 @@ pub struct Cell {
 impl Cell {
     /// The cell for a world tile.
     pub fn from_tile(t: &TileData) -> Cell {
-        let contents = if plain_contents(t.contents()) && t.owner() == 0 { t.contents() } else { 0 };
+        let contents = if plain_contents(t.contents()) && t.owner() == 0 { material(t) } else { 0 };
         Cell { present: true, fg: t.fg(), bg: t.bg(), contents, paint: Face::ALL.map(|f| t.paint(f)) }
     }
 
@@ -47,7 +47,7 @@ impl Cell {
         let mut n = *t;
         n.set_fg(self.fg);
         n.set_bg(self.bg);
-        n.set_contents(self.contents);
+        set_material(&mut n, self.contents);
         for (f, p) in Face::ALL.iter().zip(self.paint) {
             n.set_paint(*f, p);
         }

@@ -22,7 +22,7 @@ import type { AppStore } from '../store.svelte';
 import { toast } from '../ui/toast.svelte';
 import { clampCam, tileAt, visibleBlocks, wrapX, zoomAt, type Camera, type Size } from './camera';
 import { key, parseOverview, parseRegion, type BlockData, type Overview } from './data';
-import { brushPoints, linePoints, rectOf } from './geom';
+import { brushPoints, linePoints, oreBrush, rectOf } from './geom';
 import { ALL_LAYERS, type Layers } from './paint';
 
 /** Most macro blocks requested at once (the backend accepts 256). */
@@ -337,8 +337,9 @@ export class EditorFlow {
     if (!b?.data) return;
     const i = ((y % 32) * 32 + (x % 32)) * 4;
     const [fg, bg, ct] = [b.data[i], b.data[i + 1], b.data[i + 2]];
-    const placeable = this.catalog?.contents[ct]?.placeable === true;
-    this.block = fg === 2 && bg !== 2 ? { layer: 'back', tile: bg, contents: 0 } : { layer: 'front', tile: fg, contents: placeable ? ct : 0 };
+    const info = this.catalog?.contents[ct];
+    if (info?.placeable) this.block = oreBrush(info);
+    else this.block = fg === 2 && bg !== 2 ? { layer: 'back', tile: bg, contents: 0 } : { layer: 'front', tile: fg, contents: 0 };
   }
 
   /** Tiles a stroke covers from `a` to `b` with the current tool. */
@@ -392,7 +393,9 @@ export class EditorFlow {
       await this.reload(r.blocks);
       return r.outcome;
     } catch (e) {
-      this.app.fail(e);
+      // a refused edit is not the phone's "allow this computer" error that shares its code
+      if (toAppError(e).code === 'not_allowed') toast(t(req.op === 'move_blockhead' ? 'edv.moveRefused' : 'edv.editRefused'), undefined, 8000);
+      else this.app.fail(e);
       return null;
     } finally {
       this.busy = false;

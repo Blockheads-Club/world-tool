@@ -965,6 +965,8 @@ export const tr: Record<Key, string> = {
   'edv.contentsSlots': '{of} yuvadan {n} dolu',
   'edv.teleport': 'Işınla…',
   'edv.teleportTitle': '{name} nereye ışınlansın?',
+  'edv.moveRefused': 'Blockhead oraya taşınamaz: oyun o bölgeyi henüz oluşturmadı ya da orası lav. Keşfedilmiş bir yer seçin.',
+  'edv.editRefused': 'Bu değişiklik burada yapılamıyor.',
   'edv.removePlayer': 'Blockhead’i kaldır',
   'edv.removeTitle': '{name} kaldırılsın mı?',
   'edv.removeText': 'Blockhead ve envanteri çalışma kopyasından kaldırılır. Geri al ile geri gelir.',

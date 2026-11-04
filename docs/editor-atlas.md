@@ -13,10 +13,15 @@ table, `crates/bhw-editor/data/atlas.json`, made by observation:
    the final match is checked by eye). Confirmed entries are marked `game`, wrong guesses were corrected.
    - Items: the icons follow a grid by id: column `id % 32`, row `id / 32` of `Items.png` (`items_grid`), seen for
      ids 3–38, 100–139 and 200–232. Items from 1024 on are blocks and show the cube of a tile (`item_tiles`).
-   - Ores in rock (copper, tin, iron, coal, gold) show their overlay cell; platinum and titanium are visible but
-     their cells are not identified yet. Gems, flint, clay, charcoal and oil placed in rock were **not visible** in
-     the game (gems probably need a different host or only show once uncovered), so those stay `eye`.
-   - Some tile types (flax mats, fallen leaves, plaster) do not draw a front face in that test and stay unconfirmed.
+   - Ores in rock (copper, tin, iron, coal, gold, platinum, titanium) show their overlay cell.
+   - Materials only show in the tile the game keeps them in (2026-11-05, see `client-save-format.md` §3): flint
+     and clay in dirt (full dirt cells with streaks, [0,9] and [2,9]), oil in limestone ([14,2]); gems are not
+     contents of a solid tile at all but crystals in the air of caves (cells [25..29,3]), shown once the game has
+     uncovered the gem promise. Charcoal (contents 45) placed in dirt or rock shows nothing and is not offered.
+   - Some tile types (flax mats 21–23, fallen leaves 66) draw no front face when placed on their own and stay
+     without a cell; iron/steel blocks (56, 57), plaster (76) and luminous plaster (77) are plain white cells the
+     game tints, so the editor draws them with plain colours. Ice (4) melted into water in the test (warm biome)
+     and water/lava are drawn specially by the game; they stay `eye`.
 
 Rules:
 
@@ -27,7 +32,10 @@ Rules:
   contents cell on top. Edge and corner variants, damage, lighting and animations are not reproduced.
 - The table is our own data (GPL); it never contains pixels from the game.
 
-## Coverage of the table (2026-11-05)
+## Coverage of the table (2026-11-05, evening)
 
-Tile types: 66 of 77 (63 confirmed in the game). Contents: 15 of 148 (5 confirmed). Items: every id below 512 by the
-grid rule (confirmed on samples), 33 block items (1024+) drawn as their tile.
+Tile types: 69 of 77 have a cell (66 confirmed in the game: all but water 3, ice 4 and flax mat 21; air needs
+none). Contents: 18 of 148 have a cell (15 confirmed), including every material the palette offers. The other
+contents are parts of objects (trees, plants, doors, torches…) that the game draws from `dw` objects; they are
+shown with the tile and the inspector names them. Items: every id below 512 by the grid rule (confirmed on
+samples), 33 block items (1024+) drawn as their tile.

@@ -113,6 +113,13 @@ describe('World editor (editing)', () => {
     await fireEvent.keyDown(window, { key: 'p' });
     await drag(map, [sx + 1, sy + 1], [sx + 1, sy + 1]);
     await waitFor(() => expect(toasts.items.some((x) => x.message.includes('Something went wrong'))).toBe(true));
+    // refused edits (code not_allowed) are toasts of their own, not the phone's "allow this computer" dialog
+    mock.fail.edit = undefined;
+    await ed().edit({ op: 'move_blockhead', player: '', id: 77, x: 1, y: 1 });
+    expect(toasts.items.some((x) => x.message.includes('can’t be moved there'))).toBe(true);
+    await ed().edit({ op: 'set_name', name: ' ' });
+    expect(toasts.items.some((x) => x.message === 'This change isn’t possible here.')).toBe(true);
+    expect(store.shown).toBeNull();
     // history errors too
     mock.editors.clear();
     await ed().history(0);

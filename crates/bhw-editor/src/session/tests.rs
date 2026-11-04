@@ -2,6 +2,7 @@ use super::*;
 use crate::brush::Layer;
 use crate::session::EditOptions;
 use bhw_content::fixtures::world_env;
+use plist::Value;
 
 fn session() -> Session {
     Session::new(WorldContent::load(world_env()).unwrap())
@@ -145,10 +146,14 @@ fn copy_cut_paste() {
 #[test]
 fn players_and_settings() {
     let mut s = session();
-    s.move_blockhead("", 9, 10, 600).unwrap();
+    open_column(&mut s, 10, 530);
+    // put inside the rock: pushed up to the first free tile; the camera follows
+    assert_eq!(s.move_blockhead("", 9, 10, 520).unwrap(), (10, 530));
+    let cam = s.world.record.as_ref().unwrap().dict.get("translation").cloned();
+    assert_eq!(cam, Some(Value::Array(vec![Value::Real(10.5), Value::Real(530.0)])));
     assert!(s.move_blockhead("", 9, 1000, 600).is_err());
     assert!(s.move_blockhead("", 77, 1, 1).is_err());
-    assert_eq!(s.world.players.list()[0].pos, (10, 600));
+    assert_eq!(s.world.players.list()[0].pos, (10, 530));
     assert_eq!(s.history().0[0].a.as_deref(), Some("ADA"));
     assert!(s.changed_tiles().is_empty(), "no tiles in a blockhead step");
     s.set_stats("", 9, Stats { health: 2.0, happiness: -1.0, fullness: f32::NAN, energy: 0.5 }).unwrap();
@@ -171,9 +176,10 @@ fn players_and_settings() {
     assert_eq!(s.world.players.list()[0].pos, (40, 530));
     assert_eq!(s.world.players.inventory("", 9).unwrap().slots[1].len(), 0);
     assert_eq!(s.world.record.as_ref().unwrap().name(), Some("TEST"));
+    assert!(!s.world.record.as_ref().unwrap().dict.contains_key("translation"), "camera back");
     s.go_to(6).unwrap();
     assert_eq!(s.world.record.as_ref().unwrap().name(), Some("NEW NAME"));
-    assert_eq!(s.world.players.list()[0].pos, (10, 600));
+    assert_eq!(s.world.players.list()[0].pos, (10, 530));
     // a world without a record has no settings
     let mut env = world_env();
     env.named.get_mut(&b"main"[..]).unwrap().entries.remove(0);
@@ -181,6 +187,46 @@ fn players_and_settings() {
     assert!(bare.set_name("x").is_err());
     assert!(bare.set_time_of_day(1.0).is_err());
     assert!(s.set_stats("", 77, Stats { health: 1.0, happiness: 1.0, fullness: 1.0, energy: 1.0 }).is_err());
+}
+
+/// Makes column `x` air from row `y` to the top of the stored rock block (no history step).
+fn open_column(s: &mut Session, x: u32, y: u32) {
+    for y in y..Y + 32 {
+        let t = Brush::eraser().apply(&s.world.blocks.tile(x, y).unwrap().unwrap());
+        s.world.blocks.set_tile(x, y, t).unwrap();
+    }
+}
+
+#[test]
+fn blockhead_spots() {
+    let mut s = session();
+    open_column(&mut s, 10, 530);
+    // put in the air: drops to the ground
+    assert_eq!(s.move_blockhead("", 9, 10, 540).unwrap(), (10, 530));
+    // water and lava: pushed up out of water; never above lava
+    let mut water = s.world.blocks.tile(10, 530).unwrap().unwrap();
+    water.set_fg(crate::brush::WATER);
+    s.world.blocks.set_tile(10, 530, water).unwrap();
+    assert_eq!(s.move_blockhead("", 9, 10, 530).unwrap(), (10, 531));
+    assert_eq!(s.move_blockhead("", 9, 10, 540).unwrap(), (10, 531));
+    water.set_fg(crate::brush::LAVA);
+    s.world.blocks.set_tile(10, 530, water).unwrap();
+    assert!(s.move_blockhead("", 9, 10, 540).unwrap_err().to_string().contains("lava"));
+    // falling out of the stored blocks, or rising out of them, is refused
+    assert!(s.move_blockhead("", 9, 40, 530).unwrap_err().to_string().contains("generated"));
+    assert!(s.move_blockhead("", 9, 5, 520).unwrap_err().to_string().contains("generated"));
+    assert!(s.move_blockhead("", 9, 100, 520).unwrap_err().to_string().contains("generated"));
+    // solid up to the top of the world
+    s.options = EditOptions { generate: true, objects: false };
+    s.paint(OpKind::Pencil, &[(5, 1023)], Brush::front(1), false).unwrap();
+    assert!(s.move_blockhead("", 9, 5, 1023).unwrap_err().to_string().contains("free"));
+    // without a world record the camera is left alone
+    let mut env = world_env();
+    env.named.get_mut(&b"main"[..]).unwrap().entries.remove(0);
+    let mut bare = Session::new(WorldContent::load(env).unwrap());
+    open_column(&mut bare, 10, 530);
+    assert_eq!(bare.move_blockhead("", 9, 10, 535).unwrap(), (10, 530));
+    assert_eq!(bare.history().0.len(), 1);
 }
 
 #[test]
