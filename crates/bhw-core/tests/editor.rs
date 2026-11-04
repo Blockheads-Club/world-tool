@@ -115,8 +115,10 @@ fn open_view_edit_save() {
     let (found, n) = core.editor_find(&s, Match { layer: Layer::Front, tile: 6, contents: None }, None, 2).unwrap();
     assert_eq!((found.len(), n), (2, 7));
     // undo everything, then redo all
-    assert_eq!(core.editor_history(&s, 0).unwrap().cursor, 0);
-    assert_eq!(core.editor_history(&s, 12).unwrap().cursor, 12);
+    let h = core.editor_history(&s, 0).unwrap();
+    assert_eq!(h.state.cursor, 0);
+    assert!(h.blocks.contains(&[0, 16]));
+    assert_eq!(core.editor_history(&s, 12).unwrap().state.cursor, 12);
     assert!(core.editor_history(&s, 99).is_err());
     assert_eq!(core.editor_state(&s).unwrap().unsaved, 12);
 

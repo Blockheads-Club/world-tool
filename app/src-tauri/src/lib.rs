@@ -504,7 +504,11 @@ async fn editor_find(
 }
 
 #[tauri::command]
-async fn editor_history(state: State<'_, AppState>, session: String, to: usize) -> Res<bhw_core::editor::EditorState> {
+async fn editor_history(
+    state: State<'_, AppState>,
+    session: String,
+    to: usize,
+) -> Res<bhw_core::editor::HistoryResult> {
     blocking(state, move |c| c.editor_history(&session, to)).await
 }
 
@@ -516,6 +520,71 @@ fn editor_changes(state: State<'_, AppState>, session: String) -> Res<Vec<[u32; 
 #[tauri::command]
 async fn editor_save(state: State<'_, AppState>, session: String, as_new: bool) -> Res<bhw_core::World> {
     blocking(state, move |c| c.editor_save(&session, as_new)).await
+}
+
+#[tauri::command]
+async fn editor_search(
+    state: State<'_, AppState>,
+    session: String,
+    kind: bhw_core::editor::SearchKind,
+    text: String,
+) -> Res<Vec<bhw_core::editor::EditorObject>> {
+    blocking(state, move |c| c.editor_search(&session, kind, &text)).await
+}
+
+#[tauri::command]
+async fn editor_schematics(state: State<'_, AppState>) -> Res<Vec<bhw_core::editor::SchematicInfo>> {
+    blocking(state, |c| c.editor_schematics()).await
+}
+
+#[tauri::command]
+async fn editor_save_schematic(
+    state: State<'_, AppState>,
+    session: String,
+    rect: Option<bhw_editor::Rect>,
+    name: String,
+) -> Res<bhw_core::editor::SchematicInfo> {
+    blocking(state, move |c| c.editor_save_schematic(&session, rect, &name)).await
+}
+
+#[tauri::command]
+async fn editor_use_schematic(
+    state: State<'_, AppState>,
+    session: String,
+    file: String,
+) -> Res<bhw_core::editor::EditorState> {
+    blocking(state, move |c| c.editor_use_schematic(&session, &file)).await
+}
+
+#[tauri::command]
+async fn editor_import_schematic(state: State<'_, AppState>, path: String) -> Res<bhw_core::editor::SchematicInfo> {
+    blocking(state, move |c| c.editor_import_schematic(&path)).await
+}
+
+#[tauri::command]
+async fn editor_export_schematic(state: State<'_, AppState>, file: String, dest: String) -> Res<()> {
+    blocking(state, move |c| c.editor_export_schematic(&file, &dest)).await
+}
+
+#[tauri::command]
+async fn editor_delete_schematic(state: State<'_, AppState>, file: String) -> Res<()> {
+    blocking(state, move |c| c.editor_delete_schematic(&file)).await
+}
+
+/// Picks a `.bhwschem` file to import, or (`save`) where to export one (named `name`).
+#[tauri::command]
+async fn pick_schematic(app: AppHandle, save: bool, name: Option<String>) -> Option<String> {
+    let d = app.dialog().file().add_filter("Schematic", &["bhwschem"]);
+    tauri::async_runtime::spawn_blocking(move || {
+        if save {
+            d.set_file_name(name.unwrap_or_default()).blocking_save_file().and_then(path_string)
+        } else {
+            d.blocking_pick_file().and_then(path_string)
+        }
+    })
+    .await
+    .ok()
+    .flatten()
 }
 
 /// Sends `devices-changed` whenever the device list changes (polled every few seconds).
@@ -635,6 +704,14 @@ pub fn run() {
             editor_history,
             editor_changes,
             editor_save,
+            editor_search,
+            editor_schematics,
+            editor_save_schematic,
+            editor_use_schematic,
+            editor_import_schematic,
+            editor_export_schematic,
+            editor_delete_schematic,
+            pick_schematic,
         ])
         .build(tauri::generate_context!())
         .expect("error while building BH World Tool")

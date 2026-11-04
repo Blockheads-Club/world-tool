@@ -56,6 +56,7 @@ pub struct Session {
     /// What edits may touch.
     pub options: EditOptions,
     history: History,
+    touched: std::collections::BTreeSet<(u32, u32)>,
     max_changes: u64,
 }
 
@@ -66,7 +67,13 @@ fn label(kind: OpKind, a: Option<String>, b: Option<String>) -> Label {
 impl Session {
     /// Starts a session on a loaded world.
     pub fn new(world: WorldContent) -> Session {
-        Session { world, options: EditOptions::default(), history: History::default(), max_changes: MAX_CHANGES }
+        Session {
+            world,
+            options: EditOptions::default(),
+            history: History::default(),
+            touched: Default::default(),
+            max_changes: MAX_CHANGES,
+        }
     }
 
     /// World width in tiles.
@@ -168,6 +175,7 @@ impl Session {
         out.changed = changes.iter().filter(|c| matches!(c, Change::Tile { .. })).count() as u64;
         if !changes.is_empty() {
             label.tiles = out.changed;
+            self.touch(&changes);
             self.history.push(Step { label, changes });
         }
         Ok(out)
@@ -458,7 +466,28 @@ impl Session {
         self.edit_record(&mut |r| Ok(r.set_time_of_day(hour)?))
     }
 
+    /// Notes the macro blocks `changes` touch.
+    fn touch(&mut self, changes: &[Change]) {
+        for c in changes {
+            match c {
+                Change::Tile { x, y, .. } => {
+                    self.touched.insert(bhw_content::blocks::split(*x, *y).0);
+                }
+                Change::BlockCreated { pos, .. } => {
+                    self.touched.insert(*pos);
+                }
+                _ => {}
+            }
+        }
+    }
+
+    /// The macro blocks changed by edits, undo and redo since the last call (the map redraws them).
+    pub fn take_touched(&mut self) -> Vec<(u32, u32)> {
+        std::mem::take(&mut self.touched).into_iter().collect()
+    }
+
     fn apply_change(&mut self, c: &Change, forward: bool) -> Result<()> {
+        self.touch(std::slice::from_ref(c));
         match c {
             Change::Tile { x, y, before, after } => {
                 self.world.blocks.set_tile(*x, *y, if forward { *after } else { *before })?;

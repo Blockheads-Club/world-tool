@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-editor-use-schematic"
+description = "Enables the editor_use_schematic command without any pre-configured scope."
+commands.allow = ["editor_use_schematic"]
+
+[[permission]]
+identifier = "deny-editor-use-schematic"
+description = "Denies the editor_use_schematic command without any pre-configured scope."
+commands.deny = ["editor_use_schematic"]

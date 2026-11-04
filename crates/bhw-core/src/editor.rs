@@ -236,6 +236,19 @@ pub enum EditRequest {
 pub struct EditResult {
     pub outcome: Outcome,
     pub state: EditorState,
+    /// Macro blocks whose tiles changed (to redraw).
+    pub blocks: Vec<[u32; 2]>,
+}
+
+/// History moved: the new state and the macro blocks to redraw.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct HistoryResult {
+    pub state: EditorState,
+    pub blocks: Vec<[u32; 2]>,
+}
+
+fn touched(o: &mut Open) -> Vec<[u32; 2]> {
+    o.session.take_touched().into_iter().map(|(x, y)| [x, y]).collect()
 }
 
 fn blockheads(s: &Session) -> Vec<EditorBlockhead> {
@@ -483,7 +496,7 @@ impl Core {
                 none
             }
         };
-        Ok(EditResult { outcome, state: state(&o) })
+        Ok(EditResult { outcome, state: state(&o), blocks: touched(&mut o) })
     }
 
     /// Finds tiles: at most `limit` positions and the total count.
@@ -495,11 +508,11 @@ impl Core {
     }
 
     /// Undoes or redoes until `to` history steps are applied.
-    pub fn editor_history(&self, id: &str, to: usize) -> Result<EditorState> {
+    pub fn editor_history(&self, id: &str, to: usize) -> Result<HistoryResult> {
         let o = self.editor(id)?;
         let mut o = lock(&o);
         o.session.go_to(to)?;
-        Ok(state(&o))
+        Ok(HistoryResult { state: state(&o), blocks: touched(&mut o) })
     }
 
     /// Tiles changed by the applied steps (for the compare view).

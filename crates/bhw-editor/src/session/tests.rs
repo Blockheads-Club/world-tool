@@ -32,6 +32,8 @@ fn paint_undo_redo() {
     assert_eq!(labels[0].a.as_deref(), Some("dirt"));
     assert_eq!(labels[0].tiles, 3);
     assert_eq!(s.changed_tiles(), vec![(1, Y), (2, Y), (3, Y), (40, Y)]);
+    assert_eq!(s.take_touched(), vec![(0, 16), (1, 16)]);
+    assert!(s.take_touched().is_empty());
     assert_eq!(s.undo().unwrap().unwrap().kind, OpKind::Brush);
     assert_eq!(s.tile(3, Y).unwrap().unwrap().fg(), 1);
     assert_eq!(s.redo().unwrap().unwrap().kind, OpKind::Brush);
@@ -194,7 +196,9 @@ fn generate_and_objects() {
     assert_eq!((o.changed, o.created, o.missing), (2, 1, 1));
     assert_eq!(s.tile(70, Y).unwrap().unwrap().fg(), 6);
     assert_eq!(s.tile(75, Y).unwrap().unwrap().fg(), 2);
+    s.take_touched();
     s.undo().unwrap();
+    assert_eq!(s.take_touched(), vec![(2, 16)]);
     assert_eq!(s.tile(70, Y).unwrap(), None);
     s.redo().unwrap();
     assert_eq!(s.tile(71, Y).unwrap().unwrap().fg(), 6);
