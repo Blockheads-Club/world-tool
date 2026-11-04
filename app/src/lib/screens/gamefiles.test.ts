@@ -107,6 +107,6 @@ describe('Game files (APK) before the editor', () => {
     store.editing = null;
     store.screen = 'editor';
     store.gameFiles.close();
-    expect(await screen.findByText('Viewing a copy · from Worlds')).toBeInTheDocument();
+    expect(await screen.findByText('Editing a copy · from Worlds')).toBeInTheDocument();
   });
 });

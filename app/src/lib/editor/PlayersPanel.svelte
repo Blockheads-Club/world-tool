@@ -2,13 +2,21 @@
   import { t } from '../i18n.svelte';
   import { store } from '../store.svelte';
   import Button from '../ui/Button.svelte';
-  import { itemName } from './names';
-  import Swatch from './Swatch.svelte';
+  import Slots from './Slots.svelte';
 
-  /** Players: the blockheads saved in the world, their needs and inventory (read-only for now). */
+  /** Players: the blockheads saved in the world — needs, inventory, move, remove. */
   const ed = $derived(store.editor);
   const b = $derived(ed.picked === null ? null : ed.blockheads[ed.picked]);
   const STATS = ['edv.health', 'edv.happiness', 'edv.food', 'edv.energy'] as const;
+
+  function setStat(i: number, v: string) {
+    const bh = b!;
+    const pct = Number(v);
+    if (!Number.isFinite(pct)) return;
+    const stats = [...(bh.stats as [number, number, number, number])] as [number, number, number, number];
+    stats[i] = Math.max(0, Math.min(100, pct)) / 100;
+    void ed.edit({ op: 'set_stats', player: bh.player, id: bh.id, stats });
+  }
 </script>
 
 <section aria-labelledby="pp-h">
@@ -26,29 +34,23 @@
   {#if b}
     <h3>{b.name}</h3>
     {#if b.stats}
-      <dl class="kv">
-        {#each STATS as k, i (k)}<dt>{t(k)}</dt><dd>{`${Math.round(b.stats[i] * 100)}%`}</dd>{/each}
-      </dl>
+      <div class="stats">
+        {#each STATS as k, i (k)}
+          <label>{t(k)}<input class="input mono" type="number" min="0" max="100" value={Math.round(b.stats[i] * 100)} onchange={(e) => setStat(i, (e.currentTarget as HTMLInputElement).value)} /></label>
+        {/each}
+      </div>
     {/if}
     <h3>{t('edv.inventory')}</h3>
     {#if b.inventory}
-      <div class="inv">
-        {#each b.inventory as [item, count], i (i)}
-          {#if count > 0}
-            {@const name = itemName(ed.catalog, item)}
-            <div class="it" title={name}>
-              <Swatch info={ed.catalog?.items.find((x) => x.id === item)} atlas={ed.itemsAtlas} size={26} label={name} />
-              <span>{`${count}`}</span>
-            </div>
-          {:else}
-            <div class="it empty"><span class="sr">{t('edv.emptySlot')}</span></div>
-          {/if}
-        {/each}
-      </div>
+      <Slots slots={b.inventory} title={b.name} onset={(slot, item, count) => ed.edit({ op: 'set_stack', player: b.player, id: b.id, slot, item, count })} />
     {:else}
       <p class="hint">{t('edv.noInventory')}</p>
     {/if}
-    <div><Button size="sm" icon="target" onclick={() => ed.goTo(b.x, b.y, false)}>{t('edv.show')}</Button></div>
+    <div class="acts">
+      <Button size="sm" icon="target" onclick={() => ed.goTo(b.x, b.y, false)}>{t('edv.show')}</Button>
+      <Button size="sm" icon="portal" onclick={() => (ed.teleport = ed.picked)}>{t('edv.teleport')}</Button>
+      <Button size="sm" variant="quiet-bad" icon="trash" onclick={() => (ed.removeAsk = ed.picked)}>{t('edv.removePlayer')}</Button>
+    </div>
   {/if}
 </section>
 
@@ -58,10 +60,8 @@
   .list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
   .hrow { display: flex; gap: 10px; align-items: center; justify-content: space-between; padding: 8px 10px; border-radius: 10px; font-size: 14px; width: 100%; border: 0; background: transparent; color: inherit; cursor: pointer; text-align: left; }
   .hrow.cur { background: var(--primary-soft); color: var(--primary-ink); }
-  .kv { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; margin: 0; font-size: 14px; }
-  .kv dt { color: var(--text-2); }
-  .kv dd { margin: 0; font-family: var(--f-mono); }
-  .inv { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
-  .it { aspect-ratio: 1; border-radius: 10px; background: var(--surface-2); border: 2px solid var(--line); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; font: 700 12px var(--f-mono); }
+  .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .stats label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; font-weight: 700; color: var(--text-2); }
+  .acts { display: flex; flex-wrap: wrap; gap: 6px; }
   .hint { font-size: 13.5px; color: var(--text-3); }
 </style>

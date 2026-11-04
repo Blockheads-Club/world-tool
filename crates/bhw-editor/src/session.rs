@@ -389,7 +389,7 @@ impl Session {
         after.set_stack(slot, item, count)?;
         self.apply_inventory(player, id, &after);
         let name = self.blockhead_name(player, id);
-        let item_name = bhw_content::names::item_name(item).map(str::to_string);
+        let item_name = Some(crate::brush::describe_item(item));
         let change = Change::Inventory { player: player.into(), id, before, after };
         self.history.push(Step { label: label(OpKind::Inventory, name, item_name), changes: vec![change] });
         Ok(())
@@ -432,7 +432,7 @@ impl Session {
         };
         target.insert("saveItemSlots".into(), inv.to_value());
         self.world.objects.set(key, index, after.clone())?;
-        let item_name = bhw_content::names::item_name(item).map(str::to_string);
+        let item_name = Some(crate::brush::describe_item(item));
         let change = Change::Object { key: key.into(), index, before: Some(before), after: Some(after) };
         self.history.push(Step { label: label(OpKind::Container, None, item_name), changes: vec![change] });
         Ok(())

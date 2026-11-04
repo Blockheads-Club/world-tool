@@ -33,7 +33,7 @@
   </button>
 {/snippet}
 
-<nav class="wside" aria-label={t('nav.aria')}>
+<nav class={['wside', store.screen === 'editor' && 'mini']} aria-label={t('nav.aria')}>
   <div class="brand">
     <img src="/wt-icon.svg" alt="" width="36" height="36" />
     <span><small>Blockheads Club</small><b>World Tool</b></span>
@@ -67,6 +67,11 @@
   .dn { display: flex; gap: 8px; align-items: center; font-weight: 700; overflow-wrap: anywhere; }
   .ok { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; font: 700 12.5px/1.4 var(--f-body); background: var(--ok-soft); color: var(--ok); }
   .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+  /* The editor needs the width: icon rail, as in small windows. */
+  .wside.mini { width: 76px; padding: 14px 10px; }
+  .wside.mini :is(.lbl, .brand span, .dcard, .badge) { display: none; }
+  .wside.mini .nv { justify-content: center; padding: 0; }
+  .wside.mini .brand { justify-content: center; padding: 2px 0 14px; }
   /* Small windows (1024 × 640): icon rail. */
   @media (max-width: 1100px) {
     .wside { width: 76px; padding: 14px 10px; }

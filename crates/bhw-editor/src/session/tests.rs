@@ -29,7 +29,7 @@ fn paint_undo_redo() {
     assert_eq!(o.changed, 0);
     let (labels, cur) = s.history();
     assert_eq!((labels.len(), cur), (2, 2));
-    assert_eq!(labels[0].a.as_deref(), Some("dirt"));
+    assert_eq!(labels[0].a.as_deref(), Some("t:6"));
     assert_eq!(labels[0].tiles, 3);
     assert_eq!(s.changed_tiles(), vec![(1, Y), (2, Y), (3, Y), (40, Y)]);
     assert_eq!(s.take_touched(), vec![(0, 16), (1, 16)]);
@@ -64,7 +64,7 @@ fn areas() {
     assert_eq!(s.fill(r, Brush::front(6)).unwrap().changed, 8);
     let back = Brush { layer: Layer::Back, tile: 6, contents: 0 };
     assert_eq!(s.fill(r, back).unwrap().changed, 8);
-    assert_eq!(s.history().0[1].a.as_deref(), Some("back wall dirt"));
+    assert_eq!(s.history().0[1].a.as_deref(), Some("b:6"));
     assert_eq!(s.clear(r).unwrap().changed, 8);
     assert!(s.fill(Rect { x: 0, y: 0, w: 0, h: 1 }, Brush::front(6)).is_err());
     assert!(s.fill(Rect { x: 0, y: 0, w: 4096, h: 1024 }, Brush::front(6)).is_err());
@@ -92,7 +92,7 @@ fn replace_and_find() {
         .unwrap();
     assert_eq!(o.changed, 2);
     let l = &s.history().0[0];
-    assert_eq!((l.a.as_deref(), l.b.as_deref()), (Some("rock"), Some("rock + copper")));
+    assert_eq!((l.a.as_deref(), l.b.as_deref()), (Some("t:1"), Some("t:1:61")));
     let o = s.replace(rock, Brush::front(6), None).unwrap();
     assert_eq!((o.changed, o.protected), (1023, 1), "the chest's tile is protected");
     assert!(s.replace(rock, Brush::front(0), None).is_err());
@@ -156,7 +156,7 @@ fn players_and_settings() {
     assert_eq!((st.health, st.happiness, st.fullness, st.energy), (1.0, 0.0, 0.0, 0.5));
     s.set_stack("", 9, 1, 21, 5).unwrap();
     assert_eq!(s.world.players.inventory("", 9).unwrap().slots[1].len(), 5);
-    assert_eq!(s.history().0[2].b.as_deref(), Some("APPLE"));
+    assert_eq!(s.history().0[2].b.as_deref(), Some("i:21"));
     s.set_stack("", 9, 1, 0, 0).unwrap();
     assert!(s.set_stack("", 9, 1, 21, 1000).is_err());
     assert!(s.set_stack("", 9, 1, 0, 1).is_err());
@@ -281,7 +281,7 @@ fn blockheads_and_containers() {
     s.undo().unwrap();
     assert!(s.container(&key, 0).unwrap().unwrap().slots[1].is_empty());
     s.redo().unwrap();
-    assert_eq!(s.history().0.last().unwrap().b.as_deref(), Some("APPLE"));
+    assert_eq!(s.history().0.last().unwrap().b.as_deref(), Some("i:21"));
     let mut top = plist::Dictionary::new();
     top.insert("saveItemSlots".into(), slots);
     s.world.objects.insert(&key, 1, top).unwrap();

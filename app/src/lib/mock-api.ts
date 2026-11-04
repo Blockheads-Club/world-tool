@@ -17,9 +17,15 @@ import type {
   Source,
   TransferPlan,
   Unlisten,
-  World
+  World,
+  EditRequest,
+  Rect,
+  SchematicInfo,
+  SearchKind,
+  TileMatch
 } from './types';
-import { mockBlockheads, mockCatalog, mockOverview, mockRegion, mockTileInfo, mockWorld } from './editor/mock-world';
+import { mockCatalog, mockOverview, mockWorld } from './editor/mock-world';
+import { MockSession } from './editor/mock-session';
 
 /**
  * In-memory backend for development (`bun run dev` outside Tauri), the unit tests and the e2e tests. It behaves like
@@ -72,7 +78,9 @@ type FailKey =
   | 'ios'
   | 'adb'
   | 'verify'
-  | 'editor';
+  | 'editor'
+  | 'edit'
+  | 'save';
 
 export class MockBackend implements Backend {
   tick: number;
@@ -125,7 +133,9 @@ export class MockBackend implements Backend {
       auto_update: true,
       pc_folder: null,
       skipped_version: null,
-      last_update_check: t - 6 * 3_600_000
+      last_update_check: t - 6 * 3_600_000,
+      editor_generate: false,
+      editor_objects: true
     };
     const dev = (d: Partial<Device> & Pick<Device, 'id' | 'name' | 'kind'>): Device => ({
       model: '', os_version: null, status: 'ready', connection: 'usb', address: null, game_version: '1.7.6', root: false,
@@ -713,7 +723,7 @@ export class MockBackend implements Backend {
   // ------------------------------------------------------------ pickers
 
   /** What the next picker returns (tests); by default a fixed example. */
-  picks: { folder?: string | null; files?: string[]; apk?: string | null } = {};
+  picks: { folder?: string | null; files?: string[]; apk?: string | null; schematic?: string | null } = {};
 
   async pickFolder(start: string | null) {
     return 'folder' in this.picks ? (this.picks.folder as string | null) : (start ?? '/home/ada/Documents/Blockheads worlds');
@@ -748,17 +758,24 @@ export class MockBackend implements Backend {
 
   // ------------------------------------------------------------ world editor
 
-  /** Open editor sessions → library world id. */
-  editors = new Map<string, string>();
+  /** Open editor sessions. */
+  editors = new Map<string, { world: string; s: MockSession }>();
   /** Dev / tests: macro blocks (`"x,y"`) the mock reports as damaged. */
   damagedBlocks: string[] = [];
   /** Dev / tests: an atlas image for `editor_atlas` (empty = no game files). */
   atlas: ArrayBuffer = new ArrayBuffer(0);
+  /** Saved schematics. */
+  schematics: SchematicInfo[] = [
+    { file: 'Small house.bhwschem', name: 'Small house', width: 11, height: 9, source_world: 'SUNNY ISLE', created: 1_760_000_000 },
+    { file: 'Farm plot.bhwschem', name: 'Farm plot', width: 8, height: 3, source_world: null, created: 1_750_000_000 }
+  ];
 
-  private editorSession(session: string): string {
-    const w = this.editors.get(session);
-    if (!w) throw err('not_found', { detail: session });
-    return w;
+  private ed(session: string): MockSession {
+    const e = this.editors.get(session);
+    if (!e) throw err('not_found', { detail: session });
+    e.s.generate = this.settings.editor_generate;
+    e.s.objectsEditable = this.settings.editor_objects;
+    return e.s;
   }
 
   async editorOpen(id: string) {
@@ -766,7 +783,7 @@ export class MockBackend implements Backend {
     this.failing('editor');
     const w = this.world(id);
     const session = this.id('ed');
-    this.editors.set(session, id);
+    this.editors.set(session, { world: id, s: new MockSession(w.name) });
     return mockWorld(session, id, w.name);
   }
 
@@ -775,19 +792,18 @@ export class MockBackend implements Backend {
   }
 
   async editorRegion(session: string, rect: [number, number, number, number]) {
-    this.editorSession(session);
+    const s = this.ed(session);
     await this.sleep();
-    return mockRegion(rect, this.damagedBlocks);
+    return s.region(rect, this.damagedBlocks);
   }
 
   async editorOverview(session: string, scale: number) {
-    this.editorSession(session);
+    this.ed(session);
     return mockOverview(scale);
   }
 
   async editorTile(session: string, x: number, y: number) {
-    this.editorSession(session);
-    return mockTileInfo(x, y);
+    return this.ed(session).info(x, y);
   }
 
   async editorCatalog() {
@@ -799,13 +815,98 @@ export class MockBackend implements Backend {
   }
 
   async editorState(session: string) {
-    this.editorSession(session);
-    return { history: [], cursor: 0, unsaved: 0, clipboard: null };
+    return this.ed(session).state();
   }
 
   async editorBlockheads(session: string) {
-    this.editorSession(session);
-    return mockBlockheads();
+    return structuredClone(this.ed(session).blockheads);
+  }
+
+  async editorEdit(session: string, req: EditRequest) {
+    const s = this.ed(session);
+    await this.sleep();
+    this.failing('edit');
+    return s.edit(req);
+  }
+
+  async editorFind(session: string, target: TileMatch, area: Rect | null, limit: number) {
+    return this.ed(session).find(target, area, limit);
+  }
+
+  async editorHistory(session: string, to: number) {
+    return this.ed(session).goTo(to);
+  }
+
+  async editorChanges(session: string) {
+    return this.ed(session).changes();
+  }
+
+  async editorSave(session: string, asNew: boolean) {
+    const s = this.ed(session);
+    await this.sleep();
+    this.failing('save');
+    const e = this.editors.get(session) as { world: string };
+    let w = this.world(e.world);
+    if (asNew) {
+      w = { ...w, id: this.id('w') + '.bhworld', world_id: this.id('wid'), name: `${w.name} (2)`, added: this.now };
+      this.worlds.unshift(w);
+    } else s.markSaved();
+    w.name = asNew ? w.name : s.name.charAt(0) + s.name.slice(1).toLowerCase();
+    w.edited = this.now;
+    return { ...w };
+  }
+
+  async editorSearch(session: string, kind: SearchKind, text: string) {
+    return this.ed(session).search(kind, text);
+  }
+
+  /** A file name not taken yet (`Name.bhwschem`, `Name (2).bhwschem`…). */
+  private schematicFile(name: string): string {
+    let n = 1;
+    const f = () => (n === 1 ? `${name}.bhwschem` : `${name} (${n}).bhwschem`);
+    while (this.schematics.some((x) => x.file === f())) n++;
+    return f();
+  }
+
+  async editorSchematics() {
+    return this.schematics.map((x) => ({ ...x }));
+  }
+
+  async editorSaveSchematic(session: string, rect: Rect | null, name: string) {
+    const s = this.ed(session);
+    const size = rect ? [rect.w, rect.h] : s.state().clipboard;
+    if (!size) throw err('not_allowed', { detail: 'nothing copied' });
+    const info: SchematicInfo = { file: this.schematicFile(name.trim() || 'Schematic'), name: name.trim(), width: size[0], height: size[1], source_world: s.name, created: Math.floor(this.now / 1000) };
+    this.schematics.unshift(info);
+    return info;
+  }
+
+  async editorUseSchematic(session: string, file: string) {
+    const s = this.ed(session);
+    const info = this.schematics.find((x) => x.file === file);
+    if (!info) throw err('not_found', { detail: file });
+    s.clipboard = { w: info.width, h: info.height, cells: new Array(info.width * info.height).fill([11, 11, 0, 255]) };
+    return s.state();
+  }
+
+  async editorImportSchematic(path: string) {
+    this.failing('import');
+    const name = path.split('/').pop()!.replace(/\.bhwschem$/, '');
+    const info: SchematicInfo = { file: this.schematicFile(name), name, width: 4, height: 4, source_world: null, created: Math.floor(this.now / 1000) };
+    this.schematics.unshift(info);
+    return info;
+  }
+
+  async editorExportSchematic(file: string, _dest: string) {
+    if (!this.schematics.some((x) => x.file === file)) throw err('not_found', { detail: file });
+  }
+
+  async editorDeleteSchematic(file: string) {
+    this.schematics = this.schematics.filter((x) => x.file !== file);
+  }
+
+  async pickSchematic(_save: boolean, name: string | null) {
+    return this.picks.schematic === undefined ? `/home/ada/${name ?? 'Tower'}.bhwschem` : this.picks.schematic;
   }
 
   // ------------------------------------------------------------ OS integration

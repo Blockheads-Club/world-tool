@@ -110,6 +110,7 @@ fn open_view_edit_save() {
     let st = last.unwrap().state;
     assert_eq!((st.history.len(), st.cursor, st.unsaved), (12, 12, 12));
     assert_eq!(st.clipboard, Some([1, 1]));
+    assert_eq!((st.name.as_deref(), st.time_of_day), (Some("EDITED"), Some(8.0)));
     assert_eq!(core.editor_blockheads(&s).unwrap()[0].x, 10);
     assert!(core.editor_changes(&s).unwrap().contains(&[1, Y]));
     let (found, n) = core.editor_find(&s, Match { layer: Layer::Front, tile: 6, contents: None }, None, 2).unwrap();
@@ -283,7 +284,7 @@ fn schematics_search_and_options() {
         &s,
         EditRequest::SetContainerStack { key: chests[0].key.clone(), index: 0, slot: 1, item: 21, count: 2 },
     );
-    assert_eq!(r.unwrap().state.history[0].b.as_deref(), Some("APPLE"));
+    assert_eq!(r.unwrap().state.history[0].b.as_deref(), Some("i:21"));
     assert_eq!(core.editor_tile(&s, 41, 520).unwrap().objects[0].slots.as_ref().unwrap()[1], [21, 2]);
 
     // options from the settings: ungenerated areas only when allowed

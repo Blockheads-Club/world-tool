@@ -3,8 +3,8 @@
  * over rock with ores, a lake, a cave with a back wall and a small brick house. Our own data, no game files.
  */
 
-import type { Catalog, EditorBlockhead, EditorTile, EditorWorld, IdInfo } from '../types';
-import { BLOCK_BYTES, MACRO, encodeOverview, encodeRegion, type BlockState } from './data';
+import type { Catalog, EditorBlockhead, EditorWorld, IdInfo } from '../types';
+import { BLOCK_BYTES, MACRO, encodeOverview } from './data';
 
 export const MOCK_W_MACROS = 16;
 export const MOCK_LOW = 12;
@@ -72,16 +72,9 @@ export function mockStored(mx: number, my: number): boolean {
   return mx >= 0 && mx < MOCK_W_MACROS && my >= MOCK_LOW && my < MOCK_HIGH;
 }
 
-export function mockRegion(rect: [number, number, number, number], damaged: string[] = []): ArrayBuffer {
-  const [x0, y0, x1, y1] = rect;
-  const blocks: { mx: number; my: number; state: BlockState; data?: Uint8Array }[] = [];
-  for (let my = y0; my < Math.min(y1, 32); my++)
-    for (let mx = x0; mx < Math.min(x1, MOCK_W_MACROS); mx++) {
-      if (damaged.includes(`${mx},${my}`)) blocks.push({ mx, my, state: 2 });
-      else if (mockStored(mx, my)) blocks.push({ mx, my, state: 1, data: mockBlock(mx, my) });
-      else blocks.push({ mx, my, state: 0 });
-    }
-  return encodeRegion(blocks);
+/** The spawn portal of the mock world. */
+export function mockSpawn(): [number, number] {
+  return [205, surface(205) + 1];
 }
 
 export function mockOverview(scale: number): ArrayBuffer {
@@ -119,7 +112,7 @@ export function mockWorld(session: string, libId: string, name: string): EditorW
     game_version: '1.7.6',
     width: MOCK_W_MACROS * MACRO,
     height: 1024,
-    spawn: [205, surface(205) + 1],
+    spawn: mockSpawn(),
     blocks,
     damaged_blocks: 0,
     expert: false,
@@ -127,25 +120,5 @@ export function mockWorld(session: string, libId: string, name: string): EditorW
     time_of_day: 14,
     server: false,
     blockheads: mockBlockheads()
-  };
-}
-
-export function mockTileInfo(x: number, y: number): EditorTile {
-  const stored = mockStored(Math.floor(x / MACRO), Math.floor(y / MACRO));
-  const [fg, bg, contents, light] = stored ? mockTile(x, y) : [0, 0, 0, 0];
-  const chest = x === 205 && y === surface(205) + 1;
-  return {
-    x,
-    y,
-    stored,
-    fg,
-    bg,
-    contents,
-    light,
-    sun_light: light,
-    paint: [0, 0, 0, 0, 0],
-    owner: chest ? 77 : 0,
-    protected: chest,
-    objects: chest ? [{ kind: 46, kind_name: 'chest', id: 77, x, y, text: null }, { kind: 99, kind_name: null, id: null, x: x + 1, y, text: 'Ada’s home' }] : []
   };
 }

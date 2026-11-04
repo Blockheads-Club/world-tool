@@ -6,6 +6,7 @@ import { setup } from '../test-utils';
 import { toasts } from '../ui/toast.svelte';
 import { images } from './flow.svelte';
 import { mockWorld } from './mock-world';
+import { MockSession } from './mock-session';
 
 const decode = images.decode;
 beforeEach(() => {
@@ -123,16 +124,16 @@ describe('World editor (viewer)', () => {
     await fireEvent.click(screen.getByRole('radio', { name: 'Players' }));
     expect(screen.getByText('Players · 2 blockheads')).toBeInTheDocument();
     await fireEvent.click(screen.getByRole('button', { name: /ADA/ }));
-    expect(screen.getByText('72%')).toBeInTheDocument();
+    expect(screen.getByRole('spinbutton', { name: 'Food' })).toHaveValue(72);
     expect(screen.getByRole('img', { name: 'Stick' })).toBeInTheDocument();
-    expect(screen.getByText('Empty slot')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Empty slot' })).toBeInTheDocument();
     await fireEvent.click(screen.getByRole('button', { name: 'Show on the map' }));
     await fireEvent.click(screen.getByRole('button', { name: /BEN/ }));
     expect(screen.getByText('No inventory is saved for this blockhead.')).toBeInTheDocument();
     await fireEvent.click(screen.getByRole('button', { name: 'Objects' }));
     await fireEvent.click(screen.getByRole('radio', { name: 'World' }));
     expect(screen.getByText('Normal')).toBeInTheDocument();
-    expect(screen.getByText('14:00')).toBeInTheDocument();
+    expect(screen.getByText('Time of day · 14:00')).toBeInTheDocument();
     expect(screen.getByText('512 × 1024 tiles')).toBeInTheDocument();
     // leaving closes the session
     await fireEvent.click(screen.getByRole('button', { name: 'Back to Worlds' }));
@@ -205,7 +206,7 @@ describe('World editor (viewer)', () => {
     // open again while open: the first session is closed
     const first = store.editor.world!.session;
     mock.editorOpen = async (id: string) => {
-      mock.editors.set('ed99', id);
+      mock.editors.set('ed99', { world: id, s: new MockSession('x') });
       const w = mockWorld('ed99', id, 'x');
       return { ...w, spawn: null, blockheads: [], blocks: [], game_version: '1.5.0', damaged_blocks: 0 };
     };
@@ -217,7 +218,7 @@ describe('World editor (viewer)', () => {
     expect(screen.queryByText(/damaged block/)).toBeNull();
     // no spawn: the view starts at the first blockhead
     mock.editorOpen = async (id: string) => {
-      mock.editors.set('ed98', id);
+      mock.editors.set('ed98', { world: id, s: new MockSession('x') });
       return { ...mockWorld('ed98', id, 'x'), spawn: null, damaged_blocks: 1, game_version: null };
     };
     await store.editor.open(store.editing!);

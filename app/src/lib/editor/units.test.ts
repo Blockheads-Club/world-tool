@@ -3,9 +3,10 @@ import { images } from './flow.svelte';
 import type { FakeCtx } from '../../test-setup';
 import { setLang } from '../i18n.svelte';
 import type { Catalog } from '../types';
-import { clampCam, tileAt, toScreen, toWorld, viewTiles, visibleBlocks, zoomAt, zoomPercent, type Camera } from './camera';
+import { clampCam, tileAt, toScreen, toWorld, viewTiles, visibleBlocks, wrapX, zoomAt, zoomPercent, type Camera } from './camera';
 import { BLOCK_BYTES, encodeOverview, encodeRegion, key, parseOverview, parseRegion, pretty } from './data';
-import { mockBlock, mockCatalog, mockOverview, mockRegion, mockTileInfo } from './mock-world';
+import { mockBlock, mockCatalog, mockOverview } from './mock-world';
+import { MockSession } from './mock-session';
 import { contentsName, itemName, tileName } from './names';
 import { ALL_LAYERS, BlockCache, blockRes, colorOf, drawBlock, layerKey, type Ctx } from './paint';
 import { EditorFlow } from './flow.svelte';
@@ -39,12 +40,13 @@ describe('editor data', () => {
   });
 
   it('mock world', () => {
-    expect(parseRegion(mockRegion([15, 11, 17, 13], ['15,12'])).size).toBe(2);
-    expect(parseRegion(mockRegion([0, 31, 1, 40])).size).toBe(1);
+    const ms = new MockSession('m');
+    expect(parseRegion(ms.region([15, 11, 17, 13], ['15,12'])).size).toBe(2);
+    expect(parseRegion(ms.region([0, 31, 1, 40], [])).size).toBe(1);
     expect(mockBlock(3, 16).length).toBe(BLOCK_BYTES);
     expect(parseOverview(mockOverview(8))?.width).toBe(64);
-    expect(mockTileInfo(5, 5).stored).toBe(false);
-    expect(mockTileInfo(5, 450).fg).toBe(1);
+    expect(ms.info(5, 5).stored).toBe(false);
+    expect(ms.info(5, 450).fg).toBe(1);
   });
 });
 
@@ -71,8 +73,10 @@ describe('camera', () => {
 
   it('finds visible blocks and keeps the camera in the world', () => {
     expect(visibleBlocks(c, s, 4096, 1024)).toEqual([0, 14, 3, 17]);
-    expect(visibleBlocks({ x: 5000, y: 2000, zoom: 1 }, s, 4096, 1024, 0)).toEqual([128, 32, 128, 32]);
-    expect(clampCam({ x: -5, y: 5000, zoom: 4 }, 100, 1024)).toEqual({ x: 0, y: 1024, zoom: 4 });
+    expect(visibleBlocks({ x: 5000, y: 2000, zoom: 1 }, s, 4096, 1024, 0)).toEqual([153, 32, 160, 32]);
+    expect(visibleBlocks({ x: 50, y: 500, zoom: 1 }, { w: 9000, h: 100 }, 4096, 1024, 0)[2]).toBe(-140 + 128);
+    expect(wrapX(-1, 10)).toBe(9);
+    expect(clampCam({ x: -5, y: 5000, zoom: 4 }, 100, 1024)).toEqual({ x: 95, y: 1024, zoom: 4 });
   });
 
   it('zooms around a point', () => {

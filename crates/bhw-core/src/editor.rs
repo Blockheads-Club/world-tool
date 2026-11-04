@@ -149,6 +149,9 @@ pub struct EditorTile {
 /// The state shown in the editor's header and history panel.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct EditorState {
+    /// World name and time of day as they are now (settings edits, undo).
+    pub name: Option<String>,
+    pub time_of_day: Option<f64>,
     pub history: Vec<Label>,
     pub cursor: usize,
     pub unsaved: usize,
@@ -273,7 +276,10 @@ fn blockheads(s: &Session) -> Vec<EditorBlockhead> {
 
 fn state(o: &Open) -> EditorState {
     let (history, cursor) = o.session.history();
+    let rec = o.session.world.record.as_ref();
     EditorState {
+        name: rec.and_then(|r| r.name()).map(str::to_string),
+        time_of_day: rec.and_then(|r| r.time_of_day()),
         history,
         cursor,
         unsaved: o.session.unsaved(),

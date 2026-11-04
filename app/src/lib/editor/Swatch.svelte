@@ -3,7 +3,7 @@
   import { CELL, UNKNOWN, colorOf } from './paint';
 
   /** A small picture of a tile, contents or item: its atlas cell when the game files are there, else its colour. */
-  let { info, atlas, size, label }: { info: IdInfo | undefined; atlas: CanvasImageSource | null; size: number; label: string } = $props();
+  let { info, atlas, size, label, decorative = false }: { info: IdInfo | undefined; atlas: CanvasImageSource | null; size: number; label: string; decorative?: boolean } = $props();
   let canvas: HTMLCanvasElement | undefined = $state();
 
   $effect(() => {
@@ -18,7 +18,7 @@
   });
 </script>
 
-<span class="sw" role="img" aria-label={label} style:width="{size}px" style:height="{size}px"><canvas bind:this={canvas} width={size} height={size} aria-hidden="true"></canvas></span>
+<span class="sw" role={decorative ? undefined : 'img'} aria-label={decorative ? undefined : label} aria-hidden={decorative || undefined} style:width="{size}px" style:height="{size}px"><canvas bind:this={canvas} width={size} height={size} aria-hidden="true"></canvas></span>
 
 <style>
   .sw { display: inline-block; border-radius: 6px; overflow: hidden; flex: none; border: 1px solid var(--line-strong); }
