@@ -64,6 +64,7 @@ impl WorldContent {
         let blocks = self.blocks.entries();
         let dw = self.objects.entries()?;
         let mut main_changes = self.players.take_changed()?;
+        let removed = self.players.take_removed();
         if let Some(r) = &self.record {
             if Some(r) != self.record_saved.as_ref() {
                 main_changes.push((b"worldv2".to_vec(), r.encode()?));
@@ -73,10 +74,11 @@ impl WorldContent {
         let base = &mut self.base;
         replace_all(base, "blocks", blocks);
         replace_all(base, "dw", dw);
-        if main_changes.is_empty() {
+        if main_changes.is_empty() && removed.is_empty() {
             return Ok(self.base.clone());
         }
         let main = base.named.entry(b"main".to_vec()).or_default();
+        main.entries.retain(|(k, _)| !removed.iter().any(|r| r.as_bytes() == k.as_slice()));
         for (k, v) in main_changes {
             match main.entries.iter_mut().find(|(key, _)| *key == k) {
                 Some(e) => e.1 = v,
@@ -158,6 +160,11 @@ pub(crate) mod tests {
         assert_eq!(out.named[&b"dw"[..]].entries.len(), 2);
         assert_eq!(out.named[&b"blocks"[..]].entries[1], original.named[&b"blocks"[..]].entries[1]);
         let mut back = WorldContent::load(out).unwrap();
+        // removing a blockhead deletes its inventory record
+        let mut gone = back.clone();
+        gone.players.remove("", 9).unwrap();
+        let e = gone.to_env().unwrap();
+        assert!(!e.named[&b"main"[..]].entries.iter().any(|(k, _)| k == b"blockhead_9_inventory"));
         assert_eq!(back.record.as_ref().unwrap().name(), Some("OTHER"));
         assert_eq!(back.blocks.tile(1, 512).unwrap().unwrap().fg(), 6);
         assert_eq!(back.players.list()[0].pos, (1, 2));
