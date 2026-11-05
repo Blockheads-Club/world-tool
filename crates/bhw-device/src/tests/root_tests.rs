@@ -156,6 +156,10 @@ fn pushes_with_tar_and_fixes_owner() {
     assert!(names.contains(&"x/world_db/data.mdb".to_string()), "{names:?}");
     let fin = calls[2].line();
     assert!(fin.contains("chown -R 10234:10234") && fin.contains("restorecon -R") && fin.contains("chcon -R"));
+    // `exec-in` can return before the phone has unpacked everything: tar's exit code is awaited before moving.
+    assert!(calls[1].line().contains("echo $? > ") && calls[1].line().contains(".bhw-incoming.done"));
+    let (wait, mv) = (fin.find("while [ ! -s ").unwrap(), fin.find("mv ").unwrap());
+    assert!(wait < mv && fin.contains("= 0 ] ||"), "{fin}");
     // Failures.
     assert!(matches!(push(&r, &src.path().join("missing")), Err(DeviceError::PathNotFound(_))));
     let r2 = ScriptedRunner::new();

@@ -151,7 +151,12 @@ impl Adb {
         let support = sh_quote(support_dir);
         let owner = self.root_shell(serial, root, &format!("stat -c %u:%g {support}"))?.trim().to_string();
         let tmp = sh_quote(&format!("{support_dir}/.bhw-incoming"));
-        let cmd = root.wrap(&format!("rm -rf {tmp} && mkdir -p {tmp} && tar -C {tmp} -xf - 2>/dev/null"));
+        // `tar` writes its exit code here when it is done: `adb exec-in` can return while the phone is still unpacking
+        // (seen over Wi-Fi and through Magisk's `su`, which relays stdin), so the next step waits for it.
+        let done = sh_quote(&format!("{support_dir}/.bhw-incoming.done"));
+        let cmd = root.wrap(&format!(
+            "rm -rf {tmp} {done} && mkdir -p {tmp} && {{ tar -C {tmp} -xf - 2>/dev/null; echo $? > {done}; }}"
+        ));
         let child = self
             .runner()
             .spawn(self.program(), &Adb::device_args(serial, &["exec-in", &cmd]), true)
@@ -174,16 +179,20 @@ impl Adb {
         sent?;
         code.ok_or(DeviceError::Disconnected)?;
         let dest = sh_quote(&format!("{support_dir}/{rel}"));
-        // The support dir's SELinux context (with the app's MLS categories) is read before anything below it is
-        // relabelled: files root creates get the creating process's level, so `chcon` copies the context back.
+        // Waits up to the confirm timeout for `tar` to finish. The support dir's SELinux context (with the app's MLS
+        // categories) is read before anything below it is relabelled: files root creates get the creating process's
+        // level, so `chcon` copies the context back.
+        let tries = self.timeouts.confirm.as_secs().max(1) * 5;
         let finish = format!(
-            "ctx=$(ls -Zd {support} | cut -d' ' -f1); \
+            "i=0; while [ ! -s {done} ] && [ $i -lt {tries} ]; do sleep 0.2; i=$((i+1)); done; \
+             [ \"$(cat {done} 2>/dev/null)\" = 0 ] || {{ echo \"unpacking on the phone did not finish\"; exit 1; }}; \
+             rm -f {done}; ctx=$(ls -Zd {support} | cut -d' ' -f1); \
              [ -d {tmp}/x ] && rm -rf {dest} && mkdir -p \"$(dirname {dest})\" && mv {tmp}/x {dest} && rm -rf {tmp} \
              && chown -R {owner} {support} && chmod -R u+rwX {dest} \
              && {{ restorecon -R {support} 2>/dev/null; \
              [ -n \"$ctx\" ] && chcon -R \"$ctx\" {support} 2>/dev/null; true; }}"
         );
-        match self.shell_timeout(serial, &root.wrap(&finish), self.timeouts.confirm)? {
+        match self.shell_timeout(serial, &root.wrap(&finish), self.timeouts.confirm * 2)? {
             out if out.code == 0 => Ok(moved),
             out => Err(DeviceError::Command { code: out.code, message: out.stdout.trim().to_string() }),
         }

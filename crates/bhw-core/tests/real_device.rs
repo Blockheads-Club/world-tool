@@ -11,7 +11,8 @@
 //! `adb shell input tap` on the `com.android.backupconfirm` allow button, so this needs an unlocked screen and
 //! **changes the device's game data**: use a test device or emulator. `BHW_DEVICE_SCREENSHOT=<file.png>` also opens
 //! the game after the copy and saves a screenshot (its world list should show the copy); `BHW_DEVICE_KEEP_COPY=1`
-//! skips the final restore so the copies can be played. Every copy also checks the restore with one more backup, and
+//! skips the final restore so the copies can be played. `BHW_DEVICE_WORLD=<name>` picks the world copied back
+//! (default `ROCKY OCEAN`, the emulator test world); with a single world its server export is copied back too. Every copy also checks the restore with one more backup, and
 //! one copy is declined on purpose ("Do not restore") to see that reported. `BHW_DEVICE_ROOT=1` then repeats a read,
 //! copy and restore through root (`adb root`; see `root_phase`).
 
@@ -34,8 +35,18 @@ fn allow_button(serial: &str) -> (u32, u32) {
     confirm_button(serial, "button_allow").unwrap_or((810, 2074))
 }
 
-/// Bounds centre of a backupconfirm button (`button_allow` / `button_deny`) from a UI dump.
+/// Bounds centre of a backupconfirm button (`button_allow` / `button_deny`) from a UI dump (a few tries: a dump
+/// taken while the screen is still drawing can miss it).
 fn confirm_button(serial: &str, id: &str) -> Option<(u32, u32)> {
+    (0..5).find_map(|_| {
+        confirm_button_once(serial, id).or_else(|| {
+            std::thread::sleep(Duration::from_millis(500));
+            None
+        })
+    })
+}
+
+fn confirm_button_once(serial: &str, id: &str) -> Option<(u32, u32)> {
     adb_out(serial, &["shell", "uiautomator", "dump", "/sdcard/bhw-ui.xml"]);
     let xml = adb_out(serial, &["shell", "cat", "/sdcard/bhw-ui.xml"]);
     let at = xml.find(&format!("com.android.backupconfirm:id/{id}")).and_then(|i| {
@@ -117,6 +128,18 @@ fn names(core: &Core, serial: &str) -> (String, Vec<String>) {
     (r.read_id, n)
 }
 
+/// A PNG of the screen. Phones with several displays (foldables) print a warning before the image: it is cut off.
+fn screenshot(serial: &str) -> Vec<u8> {
+    let out = Command::new("adb").args(["-s", serial, "exec-out", "screencap", "-p"]).output().unwrap().stdout;
+    let start = out.windows(8).position(|w| w == b"\x89PNG\r\n\x1a\n").unwrap_or(0);
+    out[start..].to_vec()
+}
+
+/// The world copied back: `BHW_DEVICE_WORLD` (a world name on the device), else the emulator test world.
+fn picked_world() -> String {
+    std::env::var("BHW_DEVICE_WORLD").unwrap_or_else(|_| "ROCKY OCEAN".into())
+}
+
 fn adb() -> Adb {
     let mut adb = Adb::locate(None).expect("adb not found");
     adb.timeouts.confirm = Duration::from_secs(120);
@@ -160,7 +183,8 @@ fn read_copy_and_restore() {
     // 1. Read.
     let (read_id, before) = names(&core, &serial);
     eprintln!("worlds on the device: {before:?}");
-    assert!(before.contains(&"ROCKY OCEAN".to_string()), "ROCKY OCEAN missing: {before:?}");
+    let pick = picked_world();
+    assert!(before.contains(&pick), "{pick} missing: {before:?}");
 
     // 2. Library + exports.
     let ids: Vec<String> =
@@ -180,7 +204,7 @@ fn read_copy_and_restore() {
     }
 
     // 3a. "Do not restore" on the phone: the check backup finds no copy and says so.
-    let rocky = saved.iter().find(|w| w.base.name == "ROCKY OCEAN").unwrap();
+    let rocky = saved.iter().find(|w| w.base.name == pick).unwrap();
     {
         let plan = core.transfer_plan(&Source::Library, std::slice::from_ref(&rocky.base.id), &serial).unwrap();
         let req = TransferRequest { plan_id: plan.plan_id, choices: Default::default() };
@@ -192,7 +216,7 @@ fn read_copy_and_restore() {
     let (_, unchanged) = names(&core, &serial);
     assert_eq!(unchanged, before);
 
-    // 3. Copy ROCKY OCEAN back as a second copy.
+    // 3. Copy the picked world back as a second copy.
     let plan = core.transfer_plan(&Source::Library, std::slice::from_ref(&rocky.base.id), &serial).unwrap();
     eprintln!("plan: {plan:?}");
     let copy_name = plan.items.iter().find(|i| i.key == rocky.base.id).unwrap().copy_name.clone().unwrap();
@@ -210,7 +234,7 @@ fn read_copy_and_restore() {
 
     // 3b. The Blockheads Server folder exported from the other world goes back too (server → game conversion; same
     // world id, so it becomes a "keep both" copy as well).
-    let other = saved.iter().find(|w| w.base.name != "ROCKY OCEAN").unwrap();
+    let other = saved.iter().find(|w| w.base.name != pick).unwrap_or(rocky);
     let folder = tmp.path().join("export-Server").join(&other.world_id).display().to_string();
     let src = Source::Files { paths: vec![folder.clone()] };
     let plan = core.transfer_plan(&src, std::slice::from_ref(&folder), &serial).unwrap();
@@ -230,7 +254,7 @@ fn read_copy_and_restore() {
             &["shell", "monkey", "-p", "com.noodlecake.blockheads", "-c", "android.intent.category.LAUNCHER", "1"],
         );
         std::thread::sleep(Duration::from_secs(30));
-        let png = Command::new("adb").args(["-s", &serial, "exec-out", "screencap", "-p"]).output().unwrap().stdout;
+        let png = screenshot(&serial);
         std::fs::write(&shot, png).unwrap();
         adb_out(&serial, &["shell", "input", "keyevent", "HOME"]);
         std::thread::sleep(Duration::from_secs(2));
@@ -265,13 +289,24 @@ fn read_copy_and_restore() {
 
 const SUPPORT: &str = "/data/data/com.noodlecake.blockheads/files/Library/Application Support";
 
-/// `BHW_DEVICE_ROOT=1`: the same through root (`adb root`, so an emulator or userdebug build): read, copy, check the
+/// A root shell command: `su -c` with `BHW_DEVICE_ROOT=su` (a rooted phone), else plain (`adb root` already ran).
+fn root_sh(serial: &str, cmd: &str) -> String {
+    let su = std::env::var("BHW_DEVICE_ROOT").is_ok_and(|v| v == "su");
+    let cmd = if su { format!("su -c \"{}\"", cmd.replace('"', "\\\"")) } else { cmd.to_string() };
+    adb_out(serial, &["shell", &cmd])
+}
+
+/// `BHW_DEVICE_ROOT=1`: the same through root (`adb root`, so an emulator or userdebug build; `BHW_DEVICE_ROOT=su`
+/// skips that and uses the phone's `su`, e.g. Magisk): read, copy, check the
 /// files belong to the app again, open the game, restore. No confirm screen may appear (no tapper runs).
 fn root_phase(serial: &str, before: &[String]) {
-    let root = Command::new("adb").args(["-s", serial, "root"]).output().unwrap();
-    eprintln!("adb root: {}", String::from_utf8_lossy(&root.stdout).trim());
-    std::thread::sleep(Duration::from_secs(3));
-    Command::new("adb").args(["-s", serial, "wait-for-device"]).status().unwrap();
+    let adb_root = std::env::var("BHW_DEVICE_ROOT").map_or(true, |v| v != "su");
+    if adb_root {
+        let root = Command::new("adb").args(["-s", serial, "root"]).output().unwrap();
+        eprintln!("adb root: {}", String::from_utf8_lossy(&root.stdout).trim());
+        std::thread::sleep(Duration::from_secs(3));
+        Command::new("adb").args(["-s", serial, "wait-for-device"]).status().unwrap();
+    }
     let tmp = tempfile::tempdir().unwrap();
     let core = core_in(tmp.path(), "auto");
     let stages = Arc::new(std::sync::Mutex::new(Vec::new()));
@@ -288,7 +323,7 @@ fn root_phase(serial: &str, before: &[String]) {
     got.sort();
     assert_eq!(got, before);
     assert!(core.list_devices().iter().any(|d| d.id == serial && d.root), "root not detected");
-    let rocky = r.worlds.iter().find(|w| w.name == "ROCKY OCEAN").unwrap().id.clone();
+    let rocky = r.worlds.iter().find(|w| w.name == picked_world()).unwrap().id.clone();
     let src = Source::Device { device_id: serial.into() };
     let plan = core.transfer_plan(&src, std::slice::from_ref(&rocky), serial).unwrap();
     assert!(!plan.needs_phone);
@@ -300,10 +335,10 @@ fn root_phase(serial: &str, before: &[String]) {
     assert!(!st.contains(&bhw_core::Stage::PhoneBackup) && !st.contains(&bhw_core::Stage::PhoneRestore));
 
     // Owner and SELinux context of everything below the support dir equal the support dir's.
-    let ctx = adb_out(serial, &["shell", &format!("ls -Zd '{SUPPORT}'")]);
+    let ctx = root_sh(serial, &format!("ls -Zd '{SUPPORT}'"));
     let ctx = ctx.split_whitespace().next().unwrap().to_string();
-    let listing = adb_out(serial, &["shell", &format!("ls -lnZR '{SUPPORT}/saves' '{SUPPORT}/game_db'")]);
-    let uid = adb_out(serial, &["shell", &format!("stat -c %u '{SUPPORT}'")]).trim().to_string();
+    let listing = root_sh(serial, &format!("ls -lnZR '{SUPPORT}/saves' '{SUPPORT}/game_db'"));
+    let uid = root_sh(serial, &format!("stat -c %u '{SUPPORT}'")).trim().to_string();
     let entries: Vec<&str> = listing.lines().filter(|l| l.starts_with('-') || l.starts_with('d')).collect();
     assert!(!entries.is_empty());
     for l in &entries {
@@ -322,7 +357,7 @@ fn root_phase(serial: &str, before: &[String]) {
     std::thread::sleep(Duration::from_secs(20));
     assert!(!adb_out(serial, &["shell", "pidof", "com.noodlecake.blockheads"]).trim().is_empty(), "game died");
     if let Ok(shot) = std::env::var("BHW_DEVICE_SCREENSHOT") {
-        let png = Command::new("adb").args(["-s", serial, "exec-out", "screencap", "-p"]).output().unwrap().stdout;
+        let png = screenshot(serial);
         std::fs::write(shot.replace(".png", "-root.png"), png).unwrap();
     }
     adb_out(serial, &["shell", "input", "keyevent", "HOME"]);
@@ -331,8 +366,10 @@ fn root_phase(serial: &str, before: &[String]) {
     core.restore_backup("root-restore", &backup_id, serial, &mut log("root restore")).expect("root restore");
     let (_, restored) = names(&core, serial);
     assert_eq!(restored, before);
-    let unroot = Command::new("adb").args(["-s", serial, "unroot"]).output().unwrap();
-    eprintln!("adb unroot: {}", String::from_utf8_lossy(&unroot.stdout).trim());
-    std::thread::sleep(Duration::from_secs(3));
-    Command::new("adb").args(["-s", serial, "wait-for-device"]).status().unwrap();
+    if adb_root {
+        let unroot = Command::new("adb").args(["-s", serial, "unroot"]).output().unwrap();
+        eprintln!("adb unroot: {}", String::from_utf8_lossy(&unroot.stdout).trim());
+        std::thread::sleep(Duration::from_secs(3));
+        Command::new("adb").args(["-s", serial, "wait-for-device"]).status().unwrap();
+    }
 }

@@ -36,9 +36,25 @@ Build with `CARGO_TARGET_DIR=<repo>/target` (also for `app/src-tauri`).
   functions/lines, svelte-check 0 errors.
 
 ### Next
-- Real (non-emulator) rooted phone with Magisk (`su -c`): check the grant dialog during the background probe and the
-  `chcon` path; Android 6 toybox may lack `tar` (falls back? no: root then fails → backup method only if it fails
-  before writing).
+- ~~Real (non-emulator) rooted phone with Magisk~~ (done 2026-11-05, see "Real phone run" below). Android 6 toybox
+  may lack `tar` (root then fails → backup method only if it fails before writing).
 - The emulator check backup after restore needs a third tap on the phone; consider `bu`/root alternatives later.
 - App vitest suite is timing-sensitive under heavy machine load (default 1 s `findBy` timeouts); `--maxWorkers=2`
   passes reliably.
+
+## Real phone run (2026-11-05)
+
+Galaxy Z Fold4 (SM-F936B), Android 14, game 1.7.6, Magisk root, over Wi-Fi adb. `tests/real_device.rs` with
+`BHW_DEVICE_WORLD="MY FIRST WORLD" BHW_DEVICE_ROOT=su` (new: `su` instead of `adb root`; `BHW_DEVICE_WORLD` picks the
+world; a single copyable world is enough). Backup method: read, exports, declined restore reported, two "keep both"
+copies (one from a server export), copies open in the game, restore to the start. Root: read, copy, owner/SELinux
+context of 34 entries match, game starts, restore. Afterwards the phone's saves were checked against a backup taken
+before the run (same files; LMDB contents equal key by key, root restores repack the pages).
+
+Found and fixed: `adb exec-in` returns before the phone has unpacked the tar stream (3 MB sent, ~1.1 MB written when
+the next command ran; Magisk's `su` relays stdin, Wi-Fi adds to it). The root write moved a half-unpacked folder,
+so a new world was missing and the check after writing failed (`Io`). `root_push` now has `tar` write its exit code
+to `.bhw-incoming.done` and the move step waits for it (up to the confirm timeout) and refuses unless it is 0.
+
+Seen: the game lists joined multiplayer worlds (`remoteGame`) as "ONLINE WORLD – <host>" with a Join button; the
+tool hides them (they are local caches of a server's world). Foldables print a warning before `screencap` output.

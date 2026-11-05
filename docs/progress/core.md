@@ -66,7 +66,7 @@ Branch `feat/core`. Build with `CARGO_TARGET_DIR=<repo>/target`
 - Updater (`tauri-plugin-updater`) for check/download_update; CI workflow; ~~ship adb~~ (adb download done in `feat/phase1`).
 - ~~Root read/write path~~ (done in `feat/phase1`, `docs/progress/phase1.md`).
 - Progress `elapsed` while waiting on the phone is sent once (no ticker yet).
-- Real phone (not emulator) and real iPhone backup runs.
+- ~~Real phone run~~ (2026-11-05, `docs/progress/phase1.md`); real iPhone backup run.
 
 ### Open questions
 - (Resolved in `feat/phase1`: every restore is checked with a fresh backup.) Restores are not verified by reading the phone again (Android gives no signal when "Restore my data" is
