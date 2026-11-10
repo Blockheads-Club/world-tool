@@ -31,6 +31,7 @@ describe('buildUpdaterManifest', () => {
   const v = '0.2.0';
   const required = {
     [`BH.World.Tool_${v}_x64-setup.exe`]: { signature: 'win\n', size: 10 },
+    [`BH.World.Tool_${v}_arm64-setup.exe`]: { signature: 'winarm', size: 11 },
     [`BH.World.Tool_${v}_amd64.AppImage`]: { signature: 'lin', size: 20 },
     [`BH.World.Tool_${v}_x64.app.tar.gz`]: { signature: 'macx', size: 30 },
     [`BH.World.Tool_${v}_aarch64.app.tar.gz`]: { signature: 'maca', size: 40 }
@@ -52,6 +53,8 @@ describe('buildUpdaterManifest', () => {
       url: `https://github.com/Blockheads-Club/world-tool/releases/download/v0.2.0/BH.World.Tool_${v}_x64-setup.exe`
     });
     expect(m.platforms['windows-x86_64-nsis']).toEqual(m.platforms['windows-x86_64']!);
+    expect(m.platforms['windows-aarch64']!.signature).toBe('winarm');
+    expect(m.platforms['windows-aarch64-msi']).toBeUndefined();
     expect(m.platforms['linux-x86_64-deb']!.size).toBe(5);
     expect(m.platforms['linux-x86_64-rpm']).toBeUndefined();
     expect(m.platforms['darwin-aarch64']!.signature).toBe('maca');

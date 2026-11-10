@@ -60,7 +60,8 @@ release workflows, semantic-release, Tauri updater) and blockheads-server (works
 - macOS bundles are not signed/notarised (Gatekeeper warns; "Open" via right-click). Needs Apple Developer ID
   secrets (`APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY`, `APPLE_ID`,
   `APPLE_PASSWORD`, `APPLE_TEAM_ID`) if wanted. Windows installers are not Authenticode-signed (SmartScreen).
-- No arm64 Windows/Linux builds (patcher has them; add matrix rows + `UPDATER_PLATFORMS` entries if wanted).
+- No arm64 Linux build (patcher has one; add a matrix row + `UPDATER_PLATFORMS` entries if wanted). Windows arm64
+  (`windows-11-arm`, nsis + msi, updater keys `windows-aarch64*`) added 2026-11-10.
 - src-tauri coverage gate (lib.rs is untested command glue; needs mock-runtime tests first).
 - First real release run not done (nothing pushed from this stream).
 - 2026-11-04 (lead): per user decisions, adb is never bundled (removed scripts/fetch-adb.sh and the release step;

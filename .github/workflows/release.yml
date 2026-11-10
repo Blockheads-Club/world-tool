@@ -79,6 +79,10 @@ jobs:
             os: windows-latest
             triple: x86_64-pc-windows-msvc
             bundles: nsis,msi
+          - name: windows-arm64
+            os: windows-11-arm
+            triple: aarch64-pc-windows-msvc
+            bundles: nsis,msi
           # 22.04 (glibc 2.35) so the bundles run on older distros too. adb is never bundled: the app finds it on
           # PATH/ANDROID_HOME or downloads Google's Platform-Tools on first run (docs/adb-sidecar.md).
           - name: linux-x64
